@@ -23,7 +23,10 @@ library
     base,
     dependent-sum,
     mtl,
+    primitive,
+    ref-tf,
     reflex,
+    time,
     vty
   hs-source-dirs: src
   default-language: Haskell2010

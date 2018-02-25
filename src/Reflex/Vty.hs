@@ -1,21 +1,30 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Reflex.Vty where
 
 import Reflex
 import Reflex.Host.Class
+import Reflex.PerformEvent.Base
+import Reflex.PerformEvent.Class
 import Control.Concurrent (forkIO)
 import Control.Monad (forever)
 import Control.Monad.Fix
 import Control.Monad.Identity (Identity(..))
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class
 import Data.IORef (readIORef)
 import Data.Dependent.Sum (DSum ((:=>)))
 import System.IO (hSetEcho, hSetBuffering, stdin, BufferMode (NoBuffering))
 
+import Data.Time
 import qualified Graphics.Vty as V
+import Control.Monad.Ref (Ref)
+import Data.IORef (IORef)
+import Control.Monad.Primitive (PrimMonad)
 
 data VtyResult t = VtyResult
   { _vtyResult_picture :: Behavior t V.Picture
@@ -23,7 +32,15 @@ data VtyResult t = VtyResult
   , _vtyResult_shutdown :: Event t ()
   }
 
-type VtyApp t m = (Reflex t, MonadHold t m, MonadFix m) => Event t (V.Event) -> m (VtyResult t)
+type VtyApp t m = ( Reflex t
+                  , MonadHold t m
+                  , MonadFix m
+                  , PrimMonad (HostFrame t)
+                  , ReflexHost t
+                  , MonadIO (HostFrame t)
+                  , Ref m ~ IORef
+                  )
+               => Event t (V.Event) -> {-PostBuildT t m-} PerformEventT t m (VtyResult t)
 
 host
   :: (forall t m. VtyApp t m)
@@ -33,29 +50,40 @@ host vtyGuest = runSpiderHost $ do
   vty <- liftIO $ V.mkVty cfg
 
   (e, eTriggerRef) <- newEventWithTriggerRef
-  r <- runHostFrame $ vtyGuest e
+  -- (pb, pbTriggerRef) <- newEventWithTriggerRef
+  (r, fireCommand) <- hostPerformEventT $ {- flip runPostBuildT pb $ -} do
+    r <- vtyGuest e
+    return r
+
+  -- fireEventRef pbTriggerRef ()
+
   shutdown <- subscribeEvent $ _vtyResult_shutdown r
 
   fix $ \loop -> do
     vtyEvent <- liftIO $ V.nextEvent vty
     mETrigger <- liftIO $ readIORef eTriggerRef
-    next <- case mETrigger of
-      Nothing -> return loop
+    stop <- case mETrigger of
+      Nothing -> return []
       Just eTrigger ->
-        fireEventsAndRead [eTrigger :=> Identity vtyEvent] $ do
+        runFireCommand fireCommand [eTrigger :=> Identity vtyEvent] $ do
           readEvent shutdown >>= \case
-            Nothing -> return loop
-            Just _ -> return $ liftIO $ V.shutdown vty
+            Nothing -> return False
+            Just _ -> return True
     output <- runHostFrame $ sample $ _vtyResult_picture r
     liftIO $ V.update vty output
-    next
+    case or stop of
+      True -> liftIO $ V.shutdown vty
+      False -> loop
 
 guest :: VtyApp t m
 guest e = do
+  now <- performEvent $ fmap (\_ -> liftIO getCurrentTime) e
+  -- now <- liftIO getCurrentTime
+  -- ticks <- fmap show <$> tickLossy 1 now
   let shutdown = fforMaybe e $ \case
         V.EvKey V.KEsc _ -> Just ()
         _ -> Nothing
-  picture <- hold V.emptyPicture $ V.picForImage . V.string mempty . show <$> e
+  picture <- hold V.emptyPicture $ V.picForImage . V.string mempty <$> leftmost [show <$> e, show <$> now]
   return $ VtyResult
     { _vtyResult_picture = picture
     , _vtyResult_refresh = never
