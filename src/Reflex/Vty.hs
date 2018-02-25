@@ -9,10 +9,7 @@ module Reflex.Vty where
 
 import Reflex
 import Reflex.Host.Class
-import Reflex.PerformEvent.Base
-import Reflex.PerformEvent.Class
 import Control.Concurrent (forkIO)
-import Control.Monad (forever)
 import Control.Monad.Fix
 import Control.Monad.Identity (Identity(..))
 import Control.Monad.IO.Class
@@ -22,9 +19,12 @@ import System.IO (hSetEcho, hSetBuffering, stdin, BufferMode (NoBuffering))
 
 import Data.Time
 import qualified Graphics.Vty as V
-import Control.Monad.Ref (Ref)
+import Control.Monad.Ref
 import Data.IORef (IORef)
 import Control.Monad.Primitive (PrimMonad)
+import Control.Concurrent.Chan
+import Control.Monad
+import Data.Maybe
 
 data VtyResult t = VtyResult
   { _vtyResult_picture :: Behavior t V.Picture
@@ -39,8 +39,11 @@ type VtyApp t m = ( Reflex t
                   , ReflexHost t
                   , MonadIO (HostFrame t)
                   , Ref m ~ IORef
+                  , Ref (HostFrame t) ~ IORef
+                  , MonadRef (HostFrame t)
                   )
-               => Event t (V.Event) -> {-PostBuildT t m-} PerformEventT t m (VtyResult t)
+               => Event t (V.Event)
+               -> TriggerEventT t (PostBuildT t (PerformEventT t m)) (VtyResult t)
 
 host
   :: (forall t m. VtyApp t m)
@@ -50,13 +53,21 @@ host vtyGuest = runSpiderHost $ do
   vty <- liftIO $ V.mkVty cfg
 
   (e, eTriggerRef) <- newEventWithTriggerRef
-  -- (pb, pbTriggerRef) <- newEventWithTriggerRef
-  (r, fireCommand) <- hostPerformEventT $ {- flip runPostBuildT pb $ -} do
+  (pb, pbTriggerRef) <- newEventWithTriggerRef
+
+  someEvents <- liftIO newChan
+
+  (r, fc@(FireCommand fire)) <- hostPerformEventT $ flip runPostBuildT pb $ flip runTriggerEventT someEvents $ do
     r <- vtyGuest e
     return r
 
-  -- fireEventRef pbTriggerRef ()
+  liftIO $ processAsyncEvents someEvents fc
 
+  mPostBuildTrigger <- readRef pbTriggerRef
+  forM_ mPostBuildTrigger $ \postBuildTrigger -> fire [postBuildTrigger :=> Identity ()] $ return ()
+  vtyPostBuild <- sample $ _vtyResult_picture r
+  liftIO $ V.update vty vtyPostBuild
+    
   shutdown <- subscribeEvent $ _vtyResult_shutdown r
 
   fix $ \loop -> do
@@ -65,7 +76,7 @@ host vtyGuest = runSpiderHost $ do
     stop <- case mETrigger of
       Nothing -> return []
       Just eTrigger ->
-        runFireCommand fireCommand [eTrigger :=> Identity vtyEvent] $ do
+        fire [eTrigger :=> Identity vtyEvent] $ do
           readEvent shutdown >>= \case
             Nothing -> return False
             Just _ -> return True
@@ -75,20 +86,34 @@ host vtyGuest = runSpiderHost $ do
       True -> liftIO $ V.shutdown vty
       False -> loop
 
-guest :: VtyApp t m
+guest :: forall t m. VtyApp t m
 guest e = do
-  now <- performEvent $ fmap (\_ -> liftIO getCurrentTime) e
-  -- now <- liftIO getCurrentTime
-  -- ticks <- fmap show <$> tickLossy 1 now
+  pb <- getPostBuild
+  now <- liftIO getCurrentTime
+  ticks <- fmap show <$> tickLossy 1 now
   let shutdown = fforMaybe e $ \case
         V.EvKey V.KEsc _ -> Just ()
         _ -> Nothing
-  picture <- hold V.emptyPicture $ V.picForImage . V.string mempty <$> leftmost [show <$> e, show <$> now]
+  picture <- hold (V.picForImage $ V.string mempty "Initial") $ V.picForImage . V.string mempty <$> leftmost [show <$> e, show <$> ticks]
   return $ VtyResult
     { _vtyResult_picture = picture
     , _vtyResult_refresh = never
     , _vtyResult_shutdown = shutdown
     }
+
+processAsyncEvents
+  :: Chan [DSum (EventTriggerRef t) TriggerInvocation]
+  -> FireCommand t (SpiderHost Global)
+  -> IO ()
+processAsyncEvents events (FireCommand fire) = void $ forkIO $ forever $ do
+  ers <- readChan events
+  _ <- runSpiderHost $ do
+    mes <- liftIO $ forM ers $ \(EventTriggerRef er :=> TriggerInvocation a _) -> do
+      me <- readIORef er
+      return $ fmap (\e -> e :=> Identity a) me
+    _ <- fire (catMaybes mes) $ return ()
+    liftIO $ forM_ ers $ \(_ :=> TriggerInvocation _ cb) -> cb
+  return ()
 
 main :: IO ()
 main = do
