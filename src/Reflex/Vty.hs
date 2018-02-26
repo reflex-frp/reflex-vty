@@ -7,26 +7,23 @@
 
 module Reflex.Vty where
 
+import Control.Concurrent (forkIO, killThread)
+import Control.Concurrent.Chan (newChan, readChan, writeChan)
+import Control.Monad (forM, forM_, forever)
+import Control.Monad.Fix (MonadFix, fix)
+import Control.Monad.IO.Class (liftIO, MonadIO)
+import Control.Monad.Identity (Identity(..))
+import Control.Monad.Primitive (PrimMonad)
+import Control.Monad.Ref (MonadRef, Ref, readRef)
+import Data.Dependent.Sum (DSum ((:=>)))
+import Data.IORef (IORef)
+import Data.IORef (readIORef)
+import Data.Maybe (catMaybes)
+import Data.Time (getCurrentTime)
+
 import Reflex
 import Reflex.Host.Class
-import Control.Concurrent (forkIO)
-import Control.Monad.Fix
-import Control.Monad.Identity (Identity(..))
-import Control.Monad.IO.Class
-import Data.IORef (readIORef)
-import Data.Dependent.Sum (DSum ((:=>)))
-import System.IO (hSetEcho, hSetBuffering, stdin, BufferMode (NoBuffering))
-
-import Control.Concurrent.STM.TChan
-import Control.Monad.STM (atomically)
-import Data.Time
 import qualified Graphics.Vty as V
-import Control.Monad.Ref
-import Data.IORef (IORef)
-import Control.Monad.Primitive (PrimMonad)
-import Control.Concurrent.Chan
-import Control.Monad
-import Data.Maybe
 
 data VtyResult t = VtyResult
   { _vtyResult_picture :: Behavior t V.Picture
@@ -57,16 +54,15 @@ host vtyGuest = runSpiderHost $ do
   (e, eTriggerRef) <- newEventWithTriggerRef
   (pb, pbTriggerRef) <- newEventWithTriggerRef
 
-  someEvents <- liftIO newChan
+  events <- liftIO newChan
 
   (r, fc@(FireCommand fire)) <- hostPerformEventT $
     flip runPostBuildT pb $
-      flip runTriggerEventT someEvents $
+      flip runTriggerEventT events $
         vtyGuest e
 
   let updateVty = sample (_vtyResult_picture r) >>= liftIO . V.update vty
 
-  liftIO $ processAsyncEvents someEvents fc updateVty -- TODO is this the right way to handle screen updates for async events?
 
   mPostBuildTrigger <- readRef pbTriggerRef
   forM_ mPostBuildTrigger $ \postBuildTrigger ->
@@ -75,25 +71,24 @@ host vtyGuest = runSpiderHost $ do
 
   shutdown <- subscribeEvent $ _vtyResult_shutdown r
 
-  vtyEvent <- liftIO newTChanIO
-  void $ liftIO $ forkIO $ forever $ atomically . writeTChan vtyEvent =<< V.nextEvent vty
+  nextEventThread <- liftIO $ forkIO $ forever $ do
+    ne <- V.nextEvent vty
+    writeChan events $ [EventTriggerRef eTriggerRef :=> TriggerInvocation ne (return ())]
 
   fix $ \loop -> do
-    mvtyEvent <- liftIO $ atomically $ tryReadTChan vtyEvent
-    mETrigger <- liftIO $ readIORef eTriggerRef
-    stop <- case (mvtyEvent, mETrigger) of
-      (Just vtyInput, Just eTrigger) -> do
-        x <- fire [eTrigger :=> Identity vtyInput] $ do
-          readEvent shutdown >>= \case
-            Nothing -> return False
-            Just _ -> return True
-        updateVty -- TODO should this happen outside the readphase? why?
-        return x
-      _ -> return []
-    case or stop of
-      True -> liftIO $ V.shutdown vty
-      False -> loop
-      -- TODO should this loop have a cooldown?
+    ers <- liftIO $ readChan events
+    stop <- do
+      fireEventTriggerRefs fc ers $ do
+        readEvent shutdown >>= \case
+          Nothing -> return False
+          Just _ -> return True
+    if or stop
+      then liftIO $ do
+        killThread nextEventThread
+        V.shutdown vty
+      else do
+        updateVty
+        loop
 
 guest :: forall t m. VtyApp t m
 guest e = do
@@ -102,34 +97,29 @@ guest e = do
   let shutdown = fforMaybe e $ \case
         V.EvKey V.KEsc _ -> Just ()
         _ -> Nothing
-  picture <- hold (V.picForImage $ V.string mempty "Initial") $ V.picForImage . V.string mempty <$> leftmost [show <$> e, show <$> ticks]
+  picture <- hold (V.picForImage $ V.string mempty "Initial") $ V.picForImage . V.string mempty <$>
+    leftmost [show <$> e, show <$> ticks]
   return $ VtyResult
     { _vtyResult_picture = picture
     , _vtyResult_refresh = never
     , _vtyResult_shutdown = shutdown
     }
 
-processAsyncEvents
-  :: Chan [DSum (EventTriggerRef t) TriggerInvocation]
-  -> FireCommand t (SpiderHost Global)
-  -> SpiderHost Global ()
-  -> IO ()
-processAsyncEvents events (FireCommand fire) updateHost = void $ forkIO $ forever $ do
-  ers <- readChan events
-  _ <- runSpiderHost $ do
-    mes <- liftIO $ forM ers $ \(EventTriggerRef er :=> TriggerInvocation a _) -> do
-      me <- readIORef er
-      return $ fmap (\e -> e :=> Identity a) me
-    let es = catMaybes mes
-    _ <- fire es $ return ()
-    case es of
-      [] -> return ()
-      _ -> updateHost
-    liftIO $ forM_ ers $ \(_ :=> TriggerInvocation _ cb) -> cb
-  return ()
+-- TODO Some part of this is probably general enough to belong in reflex
+fireEventTriggerRefs
+  :: (Monad (ReadPhase m), MonadIO m)
+  => FireCommand t m
+  -> [DSum (EventTriggerRef t) TriggerInvocation]
+  -> ReadPhase m a
+  -> m [a]
+fireEventTriggerRefs (FireCommand fire) ers rcb = do
+  mes <- liftIO $ forM ers $ \(EventTriggerRef er :=> TriggerInvocation a _) -> do
+    me <- readIORef er
+    return $ fmap (\e -> e :=> Identity a) me
+  let es = catMaybes mes
+  a <- fire es rcb
+  liftIO $ forM_ ers $ \(_ :=> TriggerInvocation _ cb) -> cb
+  return a
 
 main :: IO ()
-main = do
-  hSetEcho stdin False
-  hSetBuffering stdin NoBuffering
-  host guest
+main = host guest
