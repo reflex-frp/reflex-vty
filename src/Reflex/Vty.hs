@@ -74,7 +74,7 @@ host vtyGuest = runSpiderHost $ do
   updateVty
 
   shutdown <- subscribeEvent $ _vtyResult_shutdown r
-  
+
   vtyEvent <- liftIO newTChanIO
   void $ liftIO $ forkIO $ forever $ atomically . writeTChan vtyEvent =<< V.nextEvent vty
 
