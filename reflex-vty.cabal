@@ -26,6 +26,7 @@ library
     primitive,
     ref-tf,
     reflex,
+    stm,
     time,
     vty
   hs-source-dirs: src

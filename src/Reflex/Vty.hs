@@ -17,6 +17,8 @@ import Data.IORef (readIORef)
 import Data.Dependent.Sum (DSum ((:=>)))
 import System.IO (hSetEcho, hSetBuffering, stdin, BufferMode (NoBuffering))
 
+import Control.Concurrent.STM.TChan
+import Control.Monad.STM (atomically)
 import Data.Time
 import qualified Graphics.Vty as V
 import Control.Monad.Ref
@@ -57,38 +59,44 @@ host vtyGuest = runSpiderHost $ do
 
   someEvents <- liftIO newChan
 
-  (r, fc@(FireCommand fire)) <- hostPerformEventT $ flip runPostBuildT pb $ flip runTriggerEventT someEvents $ do
-    r <- vtyGuest e
-    return r
+  (r, fc@(FireCommand fire)) <- hostPerformEventT $
+    flip runPostBuildT pb $
+      flip runTriggerEventT someEvents $
+        vtyGuest e
 
-  liftIO $ processAsyncEvents someEvents fc
+  let updateVty = sample (_vtyResult_picture r) >>= liftIO . V.update vty
+
+  liftIO $ processAsyncEvents someEvents fc updateVty -- TODO is this the right way to handle screen updates for async events?
 
   mPostBuildTrigger <- readRef pbTriggerRef
-  forM_ mPostBuildTrigger $ \postBuildTrigger -> fire [postBuildTrigger :=> Identity ()] $ return ()
-  vtyPostBuild <- sample $ _vtyResult_picture r
-  liftIO $ V.update vty vtyPostBuild
-    
+  forM_ mPostBuildTrigger $ \postBuildTrigger ->
+    fire [postBuildTrigger :=> Identity ()] $ return ()
+  updateVty
+
   shutdown <- subscribeEvent $ _vtyResult_shutdown r
+  
+  vtyEvent <- liftIO newTChanIO
+  void $ liftIO $ forkIO $ forever $ atomically . writeTChan vtyEvent =<< V.nextEvent vty
 
   fix $ \loop -> do
-    vtyEvent <- liftIO $ V.nextEvent vty
+    mvtyEvent <- liftIO $ atomically $ tryReadTChan vtyEvent
     mETrigger <- liftIO $ readIORef eTriggerRef
-    stop <- case mETrigger of
-      Nothing -> return []
-      Just eTrigger ->
-        fire [eTrigger :=> Identity vtyEvent] $ do
+    stop <- case (mvtyEvent, mETrigger) of
+      (Just vtyInput, Just eTrigger) -> do
+        x <- fire [eTrigger :=> Identity vtyInput] $ do
           readEvent shutdown >>= \case
             Nothing -> return False
             Just _ -> return True
-    output <- runHostFrame $ sample $ _vtyResult_picture r
-    liftIO $ V.update vty output
+        updateVty -- TODO should this happen outside the readphase? why?
+        return x
+      _ -> return []
     case or stop of
       True -> liftIO $ V.shutdown vty
       False -> loop
+      -- TODO should this loop have a cooldown?
 
 guest :: forall t m. VtyApp t m
 guest e = do
-  pb <- getPostBuild
   now <- liftIO getCurrentTime
   ticks <- fmap show <$> tickLossy 1 now
   let shutdown = fforMaybe e $ \case
@@ -104,14 +112,19 @@ guest e = do
 processAsyncEvents
   :: Chan [DSum (EventTriggerRef t) TriggerInvocation]
   -> FireCommand t (SpiderHost Global)
+  -> SpiderHost Global ()
   -> IO ()
-processAsyncEvents events (FireCommand fire) = void $ forkIO $ forever $ do
+processAsyncEvents events (FireCommand fire) updateHost = void $ forkIO $ forever $ do
   ers <- readChan events
   _ <- runSpiderHost $ do
     mes <- liftIO $ forM ers $ \(EventTriggerRef er :=> TriggerInvocation a _) -> do
       me <- readIORef er
       return $ fmap (\e -> e :=> Identity a) me
-    _ <- fire (catMaybes mes) $ return ()
+    let es = catMaybes mes
+    _ <- fire es $ return ()
+    case es of
+      [] -> return ()
+      _ -> updateHost
     liftIO $ forM_ ers $ \(_ :=> TriggerInvocation _ cb) -> cb
   return ()
 
