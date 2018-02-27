@@ -52,16 +52,21 @@ type VtyApp t m =
   , Ref m ~ IORef
   , Ref (HostFrame t) ~ IORef
   , MonadRef (HostFrame t)
-  , NotReady t (PerformEventT t m)
+  , NotReady t m
+  , TriggerEvent t m
+  , PostBuild t m
+  , PerformEvent t m
+  , MonadIO m
+  , MonadIO (Performable m)
   )
   => Event t (V.Event)
   -- ^ Vty input events.
-  -> TriggerEventT t (PostBuildT t (PerformEventT t m)) (VtyResult t)
-  -- ^ The output of the 'VtyApp'. The application runs in a context that
-  -- allows new events to be created and triggered ('TriggerEventT'), provides
-  -- access to an event that fires immediately upon app instantiation
-  -- ('PostBuildT'), and allows actions to be run upon occurrences
-  -- of events ('PerformEventT').
+  -> m (VtyResult t)
+  -- ^ The output of the 'VtyApp'. The application runs in a context that,
+  -- among other things, allows new events to be created and triggered
+  -- ('TriggerEvent'), provides access to an event that fires immediately upon
+  -- app instantiation ('PostBuild'), and allows actions to be run upon
+  -- occurrences of events ('PerformEvent').
 
 -- | Runs a 'VtyApp' in a given 'Vty'.
 runVtyAppWith
@@ -72,9 +77,10 @@ runVtyAppWith
   -> IO ()
 runVtyAppWith vty vtyGuest =
   -- We are using the 'Spider' implementation of reflex. Running the host
-  -- allows us to take actions on the FRP timeline. For more information, see
-  -- 'Reflex.Spider.Internal.runSpiderHost'.
-  runSpiderHost $ do
+  -- allows us to take actions on the FRP timeline. The scoped type signature
+  -- specifies that our host runs on the Global timeline.
+  -- For more information, see 'Reflex.Spider.Internal.runSpiderHost'.
+  (runSpiderHost :: SpiderHost Global a -> IO a) $ do
 
     -- Create an 'Event' and a "trigger" reference for that event. The trigger
     -- reference can be used to determine whether anyone is "subscribed" to
