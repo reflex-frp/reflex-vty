@@ -19,7 +19,6 @@ import Data.Dependent.Sum (DSum ((:=>)))
 import Data.IORef (IORef)
 import Data.IORef (readIORef)
 import Data.Maybe (catMaybes)
-import Data.Time (getCurrentTime)
 
 import Reflex
 import Reflex.Host.Class
@@ -63,7 +62,6 @@ host vtyGuest = runSpiderHost $ do
 
   let updateVty = sample (_vtyResult_picture r) >>= liftIO . V.update vty
 
-
   mPostBuildTrigger <- readRef pbTriggerRef
   forM_ mPostBuildTrigger $ \postBuildTrigger ->
     fire [postBuildTrigger :=> Identity ()] $ return ()
@@ -90,21 +88,6 @@ host vtyGuest = runSpiderHost $ do
         updateVty
         loop
 
-guest :: forall t m. VtyApp t m
-guest e = do
-  now <- liftIO getCurrentTime
-  ticks <- fmap show <$> tickLossy 1 now
-  let shutdown = fforMaybe e $ \case
-        V.EvKey V.KEsc _ -> Just ()
-        _ -> Nothing
-  picture <- hold (V.picForImage $ V.string mempty "Initial") $ V.picForImage . V.string mempty <$>
-    leftmost [show <$> e, show <$> ticks]
-  return $ VtyResult
-    { _vtyResult_picture = picture
-    , _vtyResult_refresh = never
-    , _vtyResult_shutdown = shutdown
-    }
-
 -- TODO Some part of this is probably general enough to belong in reflex
 fireEventTriggerRefs
   :: (Monad (ReadPhase m), MonadIO m)
@@ -120,6 +103,3 @@ fireEventTriggerRefs (FireCommand fire) ers rcb = do
   a <- fire es rcb
   liftIO $ forM_ ers $ \(_ :=> TriggerInvocation _ cb) -> cb
   return a
-
-main :: IO ()
-main = host guest
