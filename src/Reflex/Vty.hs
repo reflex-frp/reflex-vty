@@ -29,7 +29,7 @@ import Reflex
 import Reflex.Host.Class
 import qualified Graphics.Vty as V
 
--- | The output of a 'VtyApp'
+-- | The output of a 'VtyApp'.
 data VtyResult t = VtyResult
   { _vtyResult_picture :: Behavior t V.Picture
   -- ^ The current vty output. 'runVtyAppWith' samples this value every time an
@@ -38,7 +38,7 @@ data VtyResult t = VtyResult
   -- ^ An event that requests application termination.
   }
 
--- | A functional reactive vty application
+-- | A functional reactive vty application.
 type VtyApp t m =
   ( Reflex t
   , MonadHold t m
@@ -51,7 +51,7 @@ type VtyApp t m =
   , MonadRef (HostFrame t)
   )
   => Event t (V.Event)
-  -- ^ Vty input events
+  -- ^ Vty input events.
   -> TriggerEventT t (PostBuildT t (PerformEventT t m)) (VtyResult t)
   -- ^ The output of the 'VtyApp'. The application runs in a context that
   -- allows new events to be created and triggered ('TriggerEventT'), provides
@@ -59,12 +59,12 @@ type VtyApp t m =
   -- ('PostBuildT'), and allows actions to be run upon occurrences
   -- of events ('PerformEventT').
 
--- | Runs a 'VtyApp' in a given 'Vty'
+-- | Runs a 'VtyApp' in a given 'Vty'.
 runVtyAppWith
   :: V.Vty
-  -- ^ A 'Vty' handle
+  -- ^ A 'Vty' handle.
   -> (forall t m. VtyApp t m)
-  -- ^ A functional reactive vty application
+  -- ^ A functional reactive vty application.
   -> IO ()
 runVtyAppWith vty vtyGuest =
   -- We are using the 'Spider' implementation of reflex. Running the host
@@ -91,21 +91,22 @@ runVtyAppWith vty vtyGuest =
     -- result is a 'VtyResult', and a 'FireCommand' that will be used to
     -- trigger events.
     (vtyResult, fc@(FireCommand fire)) <- do
-      hostPerformEventT $                 -- TODO document
+      hostPerformEventT $                 -- Allows the guest app to run
+                                          -- 'performEvent', so that actions
+                                          -- (e.g., IO actions) can be run when
+                                          -- 'Event's fire.
 
-        flip runPostBuildT postBuild $    -- Runs the guest app in a context
-                                          -- that provides access to a
-                                          -- "post-build" 'Event'
+        flip runPostBuildT postBuild $    -- Allows the guest app to access to
+                                          -- a "post-build" 'Event'
 
-          flip runTriggerEventT events $  -- Runs the guest app in a context
-                                          -- that allows new events and
-                                          -- triggers to be created and writes
+          flip runTriggerEventT events $  -- Allows the guest app to create new
+                                          -- events and triggers and writes
                                           -- those triggers to a channel from
                                           -- which they will be read and
-                                          -- triggered.
+                                          -- processed.
 
             vtyGuest vtyEvent             -- The guest app is provided an
-                                          -- 'Event' of vty inputs
+                                          -- 'Event' of vty inputs.
 
     -- Reads the current value of the 'Picture' behavior and updates the
     -- display with it. This will be called whenever we determine that a
@@ -152,7 +153,7 @@ runVtyAppWith vty vtyGuest =
     -- have subscribers, and update the display. If we detect a shutdown
     -- request, the application terminates.
     fix $ \loop -> do
-      -- Read the next event (blocking)
+      -- Read the next event (blocking).
       ers <- liftIO $ readChan events
       stop <- do
         -- Fire events that have subscribers.
@@ -166,7 +167,7 @@ runVtyAppWith vty vtyGuest =
           killThread nextEventThread -- then stop reading input events and
           V.shutdown vty             -- call the 'Vty's shutdown command.
 
-        else do                      -- Otherwise, update the display and loop
+        else do                      -- Otherwise, update the display and loop.
           updateVty
           loop
   where
