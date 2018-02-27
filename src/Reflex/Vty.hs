@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
@@ -27,6 +28,8 @@ import Data.Maybe (catMaybes)
 
 import Reflex
 import Reflex.Host.Class
+import Reflex.NotReady.Class
+import Reflex.Spider.Orphans ()
 import qualified Graphics.Vty as V
 
 -- | The output of a 'VtyApp'.
@@ -49,6 +52,7 @@ type VtyApp t m =
   , Ref m ~ IORef
   , Ref (HostFrame t) ~ IORef
   , MonadRef (HostFrame t)
+  , NotReady t (PerformEventT t m)
   )
   => Event t (V.Event)
   -- ^ Vty input events.

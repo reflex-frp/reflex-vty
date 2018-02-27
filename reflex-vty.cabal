@@ -12,6 +12,7 @@ cabal-version: >=1.10
 
 library
   exposed-modules: Reflex.Vty
+  other-modules: Reflex.Spider.Orphans
   build-depends:
     base,
     dependent-sum,
