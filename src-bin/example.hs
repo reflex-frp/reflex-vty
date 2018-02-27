@@ -20,9 +20,8 @@ guest e = do
     leftmost [show <$> e, show <$> ticks]
   return $ VtyResult
     { _vtyResult_picture = picture
-    , _vtyResult_refresh = never
     , _vtyResult_shutdown = shutdown
     }
 
 main :: IO ()
-main = host guest
+main = runVtyApp guest
