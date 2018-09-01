@@ -21,6 +21,7 @@ library
     ref-tf,
     reflex,
     stm,
+    transformers,
     time,
     vty
   hs-source-dirs: src
@@ -34,5 +35,6 @@ executable example
     reflex,
     reflex-vty,
     time,
+    transformers,
     vty
   default-language: Haskell2010

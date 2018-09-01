@@ -11,6 +11,7 @@ module Reflex.Vty
   , VtyResult(..)
   , runVtyApp
   , runVtyAppWith
+  , HasDisplayRegion(..)
   ) where
 
 import Control.Concurrent (forkIO, killThread)
@@ -21,6 +22,7 @@ import Control.Monad.IO.Class (liftIO, MonadIO)
 import Control.Monad.Identity (Identity(..))
 import Control.Monad.Primitive (PrimMonad)
 import Control.Monad.Ref (MonadRef, Ref, readRef)
+import Control.Monad.Trans.Reader
 import Data.Dependent.Sum (DSum ((:=>)))
 import Data.IORef (IORef)
 import Data.IORef (readIORef)
@@ -41,6 +43,12 @@ data VtyResult t = VtyResult
   -- ^ An event that requests application termination.
   }
 
+class HasDisplayRegion m where
+  displayRegion :: m V.DisplayRegion
+
+instance Monad m => HasDisplayRegion (ReaderT V.DisplayRegion m)  where
+  displayRegion = ask
+
 -- | A functional reactive vty application.
 type VtyApp t m =
   ( Reflex t
@@ -58,6 +66,8 @@ type VtyApp t m =
   , PerformEvent t m
   , MonadIO m
   , MonadIO (Performable m)
+
+  , HasDisplayRegion m
   )
   => Event t (V.Event)
   -- ^ Vty input events.
@@ -97,6 +107,8 @@ runVtyAppWith vty vtyGuest =
     -- processed.
     events <- liftIO newChan
 
+    displayRegion0 <- V.displayBounds $ V.outputIface vty
+
     -- Run the vty "guest" application, providing the appropriate context. The
     -- result is a 'VtyResult', and a 'FireCommand' that will be used to
     -- trigger events.
@@ -115,7 +127,8 @@ runVtyAppWith vty vtyGuest =
                                           -- which they will be read and
                                           -- processed.
 
-            vtyGuest vtyEvent             -- The guest app is provided an
+            flip runReaderT displayRegion0 $
+              vtyGuest vtyEvent           -- The guest app is provided an
                                           -- 'Event' of vty inputs.
 
     -- Reads the current value of the 'Picture' behavior and updates the
@@ -205,5 +218,5 @@ runVtyApp
   -> IO ()
 runVtyApp app = do
   cfg <- liftIO V.standardIOConfig
-  vty <- liftIO $ V.mkVty cfg
+  vty <- liftIO $ V.mkVty $ cfg { V.mouseMode = Just True }
   runVtyAppWith vty app
