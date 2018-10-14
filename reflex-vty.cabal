@@ -30,6 +30,7 @@ library
 executable example
   hs-source-dirs: src-bin
   main-is: example.hs
+  ghc-options: -threaded
   build-depends:
     base,
     reflex,
