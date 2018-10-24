@@ -8,6 +8,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE RecursiveDo #-}
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -18,16 +19,20 @@ module Reflex.Vty
   , runVtyApp
   , runVtyAppWith
   , HasDisplaySize(..)
+  , displayWidth
+  , displayHeight
   , HasFocus(..)
   , HasVtyInput(..)
   , Region(..)
-  , regionToDisplayRegion
-  , region
-  , box
+  , regionSize
+  , regionBlankImage
+  , boxImages
   , runVtyWidget
   , VtyWidgetCtx(..)
   , VtyWidget(..)
   , VtyWidgetOut(..)
+  , Drag (..)
+  , drag
   , pane
   , modifyImages
   , mainVtyWidget
@@ -35,6 +40,10 @@ module Reflex.Vty
   , tellImages
   , tellShutdown
   , wrapString
+  , splitV
+  , fractionSz
+  , box
+  , string
   ) where
 
 import Control.Applicative
@@ -258,40 +267,39 @@ data Region = Region
   }
   deriving (Show, Read, Eq, Ord)
 
-regionToDisplayRegion :: Region -> DisplayRegion
-regionToDisplayRegion (Region _ _ w h) = (w, h)
+regionSize :: Region -> (Int, Int)
+regionSize (Region _ _ w h) = (w, h)
 
-region :: Region -> (DisplayRegion -> Image) -> [Image]
-region r@(Region _ _ width height) i =
-  [ within r $ V.resize width height $ i (width, height)
-  , within r $ wrapString width V.defAttr $ replicate (width * height) ' '
-  ]
+regionBlankImage :: Region -> Image
+regionBlankImage r@(Region _ _ width height) =
+  withinImage r $ wrapString width V.defAttr $ replicate (width * height) ' '
 
-within :: Region -> Image -> Image
-within (Region left top width height) =
-  V.translate left top . V.crop width height
+withinImage :: Region -> Image -> Image
+withinImage (Region left top width height)
+  | width < 0 || height < 0 = withinImage (Region left top 0 0)
+  | otherwise = V.translate left top . V.crop width height
 
 wrapString :: Int -> Attr -> String -> Image
 wrapString maxWidth attrs = V.vertCat . concatMap (fmap (V.string attrs) . fmap (take maxWidth) . takeWhile (not . null) . iterate (drop maxWidth)) . lines
 
-box :: Region -> (DisplayRegion -> Image) -> [Image]
-box r@(Region left top width height) i =
+boxImages :: Region -> [Image]
+boxImages r@(Region left top width height) =
   let hBorder = V.string mempty $ replicate width '-'
       vBorder = wrapString 1 mempty $ replicate (height - 2) '|'
-      internal = Region
-        { _region_left = left + 1
-        , _region_top = top + 1
-        , _region_width = width - 2
-        , _region_height = height - 2
-        }
-  in  [ within (r { _region_height = 1 }) hBorder
-      , within (Region left (top + 1) 1 (height - 2)) vBorder
-      , within (Region (left + width - 1) (top + 1) 1 (height - 2)) vBorder
-      , within (r { _region_top = top + height - 1 }) hBorder
-      ] ++ region internal i
+  in  [ withinImage (r { _region_height = 1 }) hBorder
+      , withinImage (Region left (top + 1) 1 (height - 2)) vBorder
+      , withinImage (Region (left + width - 1) (top + 1) 1 (height - 2)) vBorder
+      , withinImage (r { _region_top = top + height - 1 }) hBorder
+      ]
 
-class HasDisplaySize t m | m -> t where
+class (Reflex t, Monad m) => HasDisplaySize t m | m -> t where
   displaySize :: m (Dynamic t (Int, Int))
+
+displayWidth :: HasDisplaySize t m => m (Dynamic t Int)
+displayWidth = fmap fst <$> displaySize
+
+displayHeight :: HasDisplaySize t m => m (Dynamic t Int)
+displayHeight = fmap snd <$> displaySize
 
 class HasVtyInput t m | m -> t where
   input :: m (Event t VtyEvent)
@@ -324,9 +332,9 @@ instance (Reflex t) => Monoid (VtyWidgetOut t) where
   mappend wo wo' = wo <> wo'
 
 newtype VtyWidget t m a = VtyWidget { unVtyWidget :: WriterT (VtyWidgetOut t) (ReaderT (VtyWidgetCtx t) m) a }
-  deriving (Functor, Applicative, Monad, MonadSample t, MonadHold t)
+  deriving (Functor, Applicative, Monad, MonadSample t, MonadHold t, MonadFix)
 
-runVtyWidget :: (MonadFix m, Reflex t)
+runVtyWidget :: (Reflex t)
   => VtyWidgetCtx t
   -> VtyWidget t m a
   -> m (a, VtyWidgetOut t)
@@ -345,7 +353,7 @@ mainVtyWidget child =
           }
     ((), wo) <- runVtyWidget ctx child
     return $ VtyResult
-      { _vtyResult_picture = fmap V.picForLayers (_vtyWidgetOut_images wo)
+      { _vtyResult_picture = fmap (V.picForLayers . reverse) (_vtyWidgetOut_images wo)
       , _vtyResult_shutdown = _vtyWidgetOut_shutdown wo
       }
 
@@ -370,38 +378,133 @@ tellImages imgs = VtyWidget $ tell (mempty { _vtyWidgetOut_images = imgs })
 tellShutdown :: (Reflex t, Monad m) => Event t () -> VtyWidget t m ()
 tellShutdown sd = VtyWidget $ tell (mempty { _vtyWidgetOut_shutdown = sd })
 
-pane :: (MonadFix m, Reflex t)
+data Drag = Drag
+  { _drag_from :: (Int, Int) -- ^ Where the drag began
+  , _drag_to :: (Int, Int) -- ^ Where the mouse currently is
+  , _drag_button :: V.Button -- ^ Which mouse button is dragging
+  , _drag_modifiers :: [V.Modifier] -- ^ What modifiers are held
+  , _drag_end :: Bool -- ^ Whether the drag ended (the mouse button was released)
+  }
+  deriving (Eq, Ord, Show)
+
+drag :: (Reflex t, MonadFix m, MonadHold t m) => V.Button -> VtyWidget t m (Event t Drag)
+drag btn = do
+  inp <- input
+  let f :: Drag -> V.Event -> Maybe Drag
+      f (Drag from _ _ mods end) = \case
+        V.EvMouseDown x y btn' mods'
+          | end         -> Just $ Drag (x,y) (x,y) btn' mods' False
+          | btn == btn' -> Just $ Drag from (x,y) btn mods' False
+          | otherwise   -> Nothing -- Ignore other buttons.
+        V.EvMouseUp x y (Just btn')
+          | end         -> Nothing
+          | btn == btn' -> Just $ Drag from (x,y) btn mods True
+          | otherwise   -> Nothing
+        V.EvMouseUp x y Nothing -- Terminal doesn't specify mouse up button,
+                                -- assume it's the right one.
+          | end       -> Nothing
+          | otherwise -> Just $ Drag from (x,y) btn mods True
+        _ -> Nothing
+  rec let newDrag = attachWithMaybe f (current dragD) inp
+      dragD <- holdDyn (Drag (0,0) (0,0) V.BLeft [] True) -- gross, but ok.
+                       newDrag
+  return (updated dragD)
+
+pane :: (Reflex t, Monad m)
      => Dynamic t Region -- ^ Region into which we should draw the widget (in coordinates relative to our own)
-     -> Dynamic t Bool -- ^ Whether the widget is focused
+     -> Dynamic t Bool -- ^ Whether the widget should be focused when the parent is.
      -> VtyWidget t m a
      -> VtyWidget t m a
-pane reg foc w = VtyWidget $ do
+pane reg foc child = VtyWidget $ do
   ctx <- lift ask
   let ctx' = VtyWidgetCtx
-        { _vtyWidgetCtx_input = fmapMaybe id $
-            attachWith (\(r,f) e -> filterInput r f e)
-              (liftA2 (,) (current reg) (current foc))
-              (_vtyWidgetCtx_input ctx)
-        , _vtyWidgetCtx_focus = foc
-        , _vtyWidgetCtx_size = fmap regionToDisplayRegion reg }
-  (result, wo) <- lift . lift $ runVtyWidget ctx' w
+        { _vtyWidgetCtx_input = leftmost -- TODO: think about this leftmost more.
+            [ ffor (updated reg) $ \(Region _ _ w h) -> V.EvResize w h
+            , fmapMaybe id $
+                attachWith (\(r,f) e -> filterInput r f e)
+                  (liftA2 (,) (current reg) (current foc))
+                  (_vtyWidgetCtx_input ctx)
+            ]
+        , _vtyWidgetCtx_focus = liftA2 (&&) (_vtyWidgetCtx_focus ctx) foc
+        , _vtyWidgetCtx_size = fmap regionSize reg }
+  (result, wo) <- lift . lift $ runVtyWidget ctx' child
   let images = _vtyWidgetOut_images wo
-      images' = liftA2 (\r is -> map (within r) is) (current reg) images
+      images' = liftA2 (\r is -> map (withinImage r) is) (current reg) images
       wo' = wo { _vtyWidgetOut_images = images' }
   tell wo'
   return result
 
 filterInput :: Region -> Bool -> VtyEvent -> Maybe VtyEvent
-filterInput r focused e = case e of
+filterInput (Region l t w h) focused e = case e of
   V.EvKey _ _ | not focused -> Nothing
   V.EvMouseDown x y btn m -> mouse (\u v -> V.EvMouseDown u v btn m) x y
   V.EvMouseUp x y btn -> mouse (\u v -> V.EvMouseUp u v btn) x y
   _ -> Just e
   where
     mouse con x y
-      | or [ x < 0
-           , y < 0
-           , x >= _region_width r
-           , y >= _region_height r ] = Nothing
+      | or [ x < l
+           , y < t
+           , x >= l + w
+           , y >= t + h ] = Nothing
       | otherwise =
-        Just (con (x + _region_left r) (y + _region_top r))
+        Just (con (x - l) (y - t))
+
+-- | A plain split of the available space into vertically stacked panes.
+-- No visual separator is built in here.
+splitV :: (Reflex t, Monad m)
+       => Dynamic t (Int -> Int)
+       -- ^ Function used to determine size of first pane based on available size
+       -> Dynamic t (Bool, Bool)
+       -- ^ How to focus the two sub-panes, given that we are focused.
+       -> VtyWidget t m a
+       -- ^ Widget for first pane
+       -> VtyWidget t m b
+       -- ^ Widget for second pane
+       -> VtyWidget t m (a,b)
+splitV sizeFunD focD wA wB = do
+  sz <- displaySize
+  let regA = (\f (w,h) -> Region 0 0 w (f h)) <$> sizeFunD <*> sz
+      regB = (\(w,h) (Region _ _ _ hA) -> Region 0 hA w (h - hA)) <$> sz <*> regA
+  ra <- pane regA (fst <$> focD) wA
+  rb <- pane regB (snd <$> focD) wB
+  return (ra,rb)
+
+
+
+-- | A split of the available space into two parts with a draggable separator.
+-- Starts with half the space allocated to each, and the first pane has focus.
+-- Clicking in a pane switches focus.
+{- 
+splitVDrag :: (Reflex t, Monad m)
+  => VtyWidget t m a
+  -> VtyWidget t m b
+  -> VtyWidget t m (a,b)
+splitVDrag wA wB = do
+  sz <- displaySize
+  let splitterPos = ffor sz $ \(_,h) -> h `div` 2
+      regA = (\(w,_) sp -> Region 0 0 w sp) <$> sz <*> splitterPos
+      regS = (\(w,h) sp -> Region 0 sp w 1) <$> sz <*> splitterPos
+      regB = (\(w,h) sp -> Region 0 (sp + 1) w (h - sp - 1)) <$> sz <*> splitterPos
+  foc <- holdDyn False []
+  (rA, inpA) <- pane wA 
+-}
+
+fractionSz :: Double -> Int -> Int
+fractionSz x h = round (fromIntegral h * x)
+
+box :: (Monad m, Reflex t)
+    => VtyWidget t m a
+    -> VtyWidget t m a
+box child = do
+  sz <- displaySize
+  let boxReg = ffor (current sz) $ \(w,h) -> Region 0 0 w h
+      innerReg = ffor sz $ \(w,h) -> Region 1 1 (w - 2) (h - 2)
+  tellImages (fmap boxImages boxReg)
+  tellImages (fmap (\r -> [regionBlankImage r]) (current innerReg))
+  pane innerReg (pure True) child
+
+string :: (Reflex t, Monad m) => Behavior t String -> VtyWidget t m ()  
+string msg = do
+  dw <- displayWidth
+  let img = (\w s -> [wrapString w mempty s]) <$> current dw <*> msg
+  tellImages img

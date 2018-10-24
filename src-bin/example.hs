@@ -7,10 +7,10 @@
 {-# OPTIONS_GHC -threaded #-}
 
 import Control.Monad
+import Control.Monad.Fix
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
 import Data.Time
-import Graphics.Vty as V hiding (Event)
 import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Vty
@@ -52,21 +52,30 @@ main =
       V.EvKey V.KEsc _ -> Just ()
       _ -> Nothing
 
-    size <- displaySize
-    let region = fmap (\(w,h) -> Region 0 0 w h) size
-        region1 = fmap (\(w,h) -> Region (w `div` 5) (h `div` 5) (w `div` 2) (h `div` 2)) size
-        region2 = fmap (\(w,h) -> Region (w `div` 4) (h `div` 4) (2 * (w `div` 3)) (2*(h `div` 3))) size
-        debugRegion = fmap (\(w, _) -> Region 0 0 w 3) size
+    debugInput
+    testBoxes
+    return ()
 
-    forM_ [region1, region2] $ \r -> pane r (constDyn False) $ testStringBox
-    pane debugRegion (constDyn True) $ do
-      lastEvent <- hold "" . fmap show =<< input
-      tellImages . ffor (liftM2 (,) (current debugRegion) lastEvent) $ \(r, le) ->
-        box r (\(w,_) -> wrapString w mempty le)
+testBoxes :: (Reflex t, MonadHold t m, MonadFix m) => VtyWidget t m ()
+testBoxes = do 
+  size <- displaySize
+  let region1 = fmap (\(w,h) -> Region (w `div` 6) (h `div` 6) (w `div` 2) (h `div` 2)) size
+      region2 = fmap (\(w,h) -> Region (w `div` 4) (h `div` 4) (2 * (w `div` 3)) (2*(h `div` 3))) size
+  pane region1 (constDyn False) . box $ debugInput
+  pane region2 (constDyn True) . box $
+    splitV (pure $ fractionSz 0.5) (pure (True, True)) (box debugInput) (box dragTest)
+  return ()
 
+debugInput :: (Reflex t, MonadHold t m) => VtyWidget t m ()
+debugInput = do
+  lastEvent <- hold "No event yet" . fmap show =<< input
+  string lastEvent
+
+dragTest :: (Reflex t, MonadHold t m, MonadFix m) => VtyWidget t m ()
+dragTest = do
+  lastEvent <- hold "No event yet" . fmap show =<< drag V.BLeft
+  string lastEvent
 
 testStringBox :: (Reflex t, Monad m) => VtyWidget t m ()
-testStringBox = do
-  size <- displaySize
-  tellImages . ffor (current size) $ \(w,h) ->
-    box (Region 0 0 w h) (\_ -> wrapString w mempty . take 500 $ cycle ('\n' : ['a'..'z']))
+testStringBox = box .
+  string . pure . take 500 $ cycle ('\n' : ['a'..'z'])
