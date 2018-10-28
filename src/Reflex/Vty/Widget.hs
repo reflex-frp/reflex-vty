@@ -35,6 +35,13 @@ module Reflex.Vty.Widget
   , fractionSz
   , box
   , string
+  , hyphenBoxStyle
+  , singleBoxStyle
+  , roundedBoxStyle
+  , thickBoxStyle
+  , doubleBoxStyle
+  , fill
+  , hRule
   ) where
 
 import Control.Applicative (liftA2)
@@ -96,9 +103,12 @@ mainWidgetWithHandle vty child =
     size <- holdDyn dr0 $ fforMaybe inp $ \case
       V.EvResize w h -> Just (w, h)
       _ -> Nothing
+    let inp' = fforMaybe inp $ \case
+          V.EvResize {} -> Nothing
+          x -> Just x
     let ctx = VtyWidgetCtx
           { _vtyWidgetCtx_size = size
-          , _vtyWidgetCtx_input = inp
+          , _vtyWidgetCtx_input = inp'
           , _vtyWidgetCtx_focus = constDyn True
           }
     ((), wo) <- runVtyWidget ctx child
@@ -170,8 +180,7 @@ pane reg foc child = VtyWidget $ do
   ctx <- lift ask
   let ctx' = VtyWidgetCtx
         { _vtyWidgetCtx_input = leftmost -- TODO: think about this leftmost more.
-            [ ffor (updated reg) $ \(Region _ _ w h) -> V.EvResize w h
-            , fmapMaybe id $
+            [ fmapMaybe id $
                 attachWith (\(r,f) e -> filterInput r f e)
                   (liftA2 (,) (current reg) (current foc))
                   (_vtyWidgetCtx_input ctx)
@@ -236,7 +245,7 @@ drag btn = do
           | otherwise -> Just $ Drag from (x,y) btn mods True
         _ -> Nothing
   rec let newDrag = attachWithMaybe f (current dragD) inp
-      dragD <- holdDyn (Drag (0,0) (0,0) V.BLeft [] True) -- gross, but ok.
+      dragD <- holdDyn (Drag (0,0) (0,0) btn [] True) -- gross, but ok because it'll never be produced.
                        newDrag
   return (updated dragD)
 
@@ -274,27 +283,33 @@ splitV sizeFunD focD wA wB = do
 -- Starts with half the space allocated to each, and the first pane has focus.
 -- Clicking in a pane switches focus.
 splitVDrag :: (Reflex t, MonadFix m, MonadHold t m)
-  => VtyWidget t m a
+  => VtyWidget t m ()
+  -> VtyWidget t m a
   -> VtyWidget t m b
   -> VtyWidget t m (a,b)
-splitVDrag wA wB = do
+splitVDrag wS wA wB = do
   sz <- displaySize
   (_, h0) <- sample $ current sz
   dragE <- drag V.BLeft
   let splitter0 = h0 `div` 2
-  rec splitterCheckpoint <- holdDyn splitter0 $ fst <$> ffilter snd dragSplitter
-      splitterPos <- holdDyn splitter0 $ fst <$> dragSplitter
-      let dragSplitter = fforMaybe (attach (current splitterCheckpoint) dragE) $ \(splitterY, Drag (_, fromY) (_, toY) _ _ end) ->
-            if splitterY == fromY then Just (toY, end) else Nothing
+  rec splitterCheckpoint <- holdDyn splitter0 $ leftmost [fst <$> ffilter snd dragSplitter, resizeSplitter]
+      splitterPos <- holdDyn splitter0 $ leftmost [fst <$> dragSplitter, resizeSplitter]
+      splitterFrac <- holdDyn (1/2) $ ffor (attach (current sz) (fst <$> dragSplitter)) $ \((_,h),x) ->
+        fromIntegral x / fromIntegral h
+      let dragSplitter = fforMaybe (attach (current splitterCheckpoint) dragE) $
+            \(splitterY, Drag (_, fromY) (_, toY) _ _ end) ->
+              if splitterY == fromY then Just (toY, end) else Nothing
           regA = (\(w,_) sp -> Region 0 0 w sp) <$> sz <*> splitterPos
           regS = (\(w,_) sp -> Region 0 sp w 1) <$> sz <*> splitterPos
           regB = (\(w,h) sp -> Region 0 (sp + 1) w (h - sp - 1)) <$> sz <*> splitterPos
+          resizeSplitter = ffor (attach (current splitterFrac) (updated sz)) $
+            \(frac, (_,h)) -> round (frac * fromIntegral h)
       focA <- holdDyn True $ leftmost
         [ True <$ mA
         , False <$ mB
         ]
       (mA, rA) <- pane regA focA $ withMouseDown wA
-      tellImages $ ffor (current regS) $ \r -> [withinImage r (V.string mempty (replicate (_region_width r) '='))]
+      pane regS (pure False) wS
       (mB, rB) <- pane regB (not <$> focA) $ withMouseDown wB
   return (rA, rB)
   where
@@ -302,6 +317,17 @@ splitVDrag wA wB = do
       m <- mouseDown V.BLeft
       x' <- x
       return (m, x')
+
+-- | Fill the background with a particular character.
+fill :: (Reflex t, Monad m) => Char -> VtyWidget t m ()
+fill c = do
+  sz <- displaySize
+  let fillImg = ffor (current sz) $ \(w,h) -> [V.charFill mempty c w h]
+  tellImages fillImg
+
+-- | Fill the background with the bottom 
+hRule :: (Reflex t, Monad m) => BoxStyle -> VtyWidget t m ()
+hRule boxStyle = fill (_boxStyle_s boxStyle)
 
 fractionSz :: Double -> Int -> Int
 fractionSz x h = round (fromIntegral h * x)
@@ -314,10 +340,37 @@ modifyImages
 modifyImages f (VtyWidget w) = VtyWidget $ flip censor w $ \wo -> 
   wo { _vtyWidgetOut_images = f <*> (_vtyWidgetOut_images wo) }
 
+data BoxStyle = BoxStyle
+  { _boxStyle_nw :: Char
+  , _boxStyle_n :: Char
+  , _boxStyle_ne :: Char
+  , _boxStyle_e :: Char
+  , _boxStyle_se :: Char
+  , _boxStyle_s :: Char
+  , _boxStyle_sw :: Char
+  , _boxStyle_w :: Char
+  }
+
+hyphenBoxStyle :: BoxStyle
+hyphenBoxStyle = BoxStyle '-' '-' '-' '|' '-' '-' '-' '|'
+
+singleBoxStyle :: BoxStyle
+singleBoxStyle = BoxStyle '┌' '─' '┐' '│' '┘' '─' '└' '│'
+
+thickBoxStyle :: BoxStyle
+thickBoxStyle = BoxStyle '┏' '━' '┓' '┃' '┛' '━' '┗' '┃'
+
+doubleBoxStyle :: BoxStyle
+doubleBoxStyle = BoxStyle '╔' '═' '╗' '║' '╝' '═' '╚' '║'
+
+roundedBoxStyle :: BoxStyle
+roundedBoxStyle = BoxStyle '╭' '─' '╮' '│' '╯' '─' '╰' '│'
+
 box :: (Monad m, Reflex t)
-    => VtyWidget t m a
+    => BoxStyle
     -> VtyWidget t m a
-box child = do
+    -> VtyWidget t m a
+box style child = do
   sz <- displaySize
   let boxReg = ffor (current sz) $ \(w,h) -> Region 0 0 w h
       innerReg = ffor sz $ \(w,h) -> Region 1 1 (w - 2) (h - 2)
@@ -327,13 +380,29 @@ box child = do
   where
     boxImages :: Region -> [Image]
     boxImages r@(Region left top width height) =
-      let hBorder = V.string mempty $ replicate width '-'
-          vBorder = wrapString 1 mempty $ replicate (height - 2) '|'
-      in  [ withinImage (r { _region_height = 1 }) hBorder
-          , withinImage (Region left (top + 1) 1 (height - 2)) vBorder
-          , withinImage (Region (left + width - 1) (top + 1) 1 (height - 2)) vBorder
-          , withinImage (r { _region_top = top + height - 1 }) hBorder
-          ]
+      let right = left + width - 1
+          bottom = top + height - 1
+          sides = 
+            [ withinImage (Region (left + 1) top (width - 2) 1) $
+                V.charFill mempty (_boxStyle_n style) (width - 2) 1
+            , withinImage (Region right (top + 1) 1 (height - 2)) $
+                V.charFill mempty (_boxStyle_e style) 1 (height - 2)
+            , withinImage (Region (left + 1) bottom (width - 2) 1) $
+                V.charFill mempty (_boxStyle_s style) (width - 2) 1
+            , withinImage (Region left (top + 1) 1 (height - 2)) $
+                V.charFill mempty (_boxStyle_w style) 1 (height - 2)
+            ]
+          corners =
+            [ withinImage (Region left top 1 1) $
+                V.char mempty (_boxStyle_nw style)
+            , withinImage (Region right top 1 1) $
+                V.char mempty (_boxStyle_ne style)
+            , withinImage (Region right bottom 1 1) $
+                V.char mempty (_boxStyle_se style)
+            , withinImage (Region left bottom 1 1) $
+                V.char mempty (_boxStyle_sw style)
+            ]
+      in sides ++ if width > 1 && height > 1 then corners else []
 
 string :: (Reflex t, Monad m) => Behavior t String -> VtyWidget t m ()  
 string msg = do
