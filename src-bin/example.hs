@@ -14,6 +14,7 @@ import Data.Time
 import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Vty
+import Reflex.Vty.Widget
 
 {-
 guest :: forall t m. VtyApp t m
@@ -46,7 +47,7 @@ guest e = do
 
 main :: IO ()
 main =
-  mainVtyWidget $ do
+  mainWidget $ do
     inp <- input
     tellShutdown . fforMaybe inp $ \case
       V.EvKey V.KEsc _ -> Just ()
@@ -63,8 +64,13 @@ testBoxes = do
       region2 = fmap (\(w,h) -> Region (w `div` 4) (h `div` 4) (2 * (w `div` 3)) (2*(h `div` 3))) size
   pane region1 (constDyn False) . box $ debugInput
   pane region2 (constDyn True) . box $
-    splitV (pure $ fractionSz 0.5) (pure (True, True)) (box debugInput) (box dragTest)
+    splitVDrag (box debugInput) (box dragTest)
   return ()
+
+debugFocus :: (Reflex t, Monad m) => VtyWidget t m ()
+debugFocus = do
+  f <- focus
+  string $ show <$> current f
 
 debugInput :: (Reflex t, MonadHold t m) => VtyWidget t m ()
 debugInput = do
