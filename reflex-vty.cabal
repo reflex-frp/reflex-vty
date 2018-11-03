@@ -39,6 +39,7 @@ executable example
     base,
     reflex,
     reflex-vty,
+    text,
     time,
     transformers,
     vty

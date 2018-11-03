@@ -30,12 +30,12 @@ module Reflex.Vty.Widget
   , modifyImages
   , tellImages
   , tellShutdown
-  , wrapString
+  , wrapText
   , splitV
   , splitVDrag
   , fractionSz
   , box
-  , string
+  , text
   , hyphenBoxStyle
   , singleBoxStyle
   , roundedBoxStyle
@@ -417,25 +417,30 @@ box style child = do
             ]
       in sides ++ if width > 1 && height > 1 then corners else []
 
-string :: (Reflex t, Monad m) => Behavior t String -> VtyWidget t m ()
-string msg = do
+text :: (Reflex t, Monad m) => Behavior t Text -> VtyWidget t m ()
+text msg = do
   dw <- displayWidth
-  let img = (\w s -> [wrapString w V.defAttr s]) <$> current dw <*> msg
+  let img = (\w s -> [wrapText w V.defAttr s]) <$> current dw <*> msg
   tellImages img
 
 regionBlankImage :: Region -> Image
-regionBlankImage r@(Region _ _ width height) =
-  withinImage r $ wrapString width V.defAttr $ replicate (width * height) ' '
+regionBlankImage r@(Region left top width height) =
+  withinImage r $ V.charFill V.defAttr ' ' width height
 
 withinImage :: Region -> Image -> Image
 withinImage (Region left top width height)
   | width < 0 || height < 0 = withinImage (Region left top 0 0)
   | otherwise = V.translate left top . V.crop width height
 
-wrapString :: Int -> Attr -> String -> Image
-wrapString maxWidth attrs = V.vertCat
-  . concatMap (fmap (V.string attrs) . fmap (take maxWidth) . takeWhile (not . null) . iterate (drop maxWidth))
-  . lines
+wrapText :: Int -> Attr -> Text -> Image
+wrapText maxWidth attrs = V.vertCat
+  . concatMap (fmap (V.string attrs . T.unpack) . wrapWithOffset maxWidth 0)
+  . T.split (=='\n')
+
+wrapWithOffset :: Int -> Int -> Text -> [Text]
+wrapWithOffset maxWidth n xs =
+  let (firstLine, rest) = T.splitAt (maxWidth - n) xs
+  in firstLine : (fmap (T.take maxWidth) . takeWhile (not . T.null) . iterate (T.drop maxWidth) $ rest)
 
 wrapInputState
   :: Int -- ^ Maximum line length
@@ -462,7 +467,7 @@ wrapInputState maxWidth attrs cursorAttrs (InputState before after) =
       (midBeforeTop, midBefore') = fromMaybe ([], "") $ initLast $ wrap [midBefore]
       (midAfter', midAfterBottom) =
         let offset = if T.length midBefore' == maxWidth then 1 else T.length midBefore' + 1
-        in  case wrapWithOffset offset midAfter of
+        in  case wrapWithOffset maxWidth offset midAfter of
               [] -> ("", [])
               x:xs -> (x, xs)
       cursor = V.char cursorAttrs cursorChar
@@ -491,12 +496,8 @@ wrapInputState maxWidth attrs cursorAttrs (InputState before after) =
     before' = T.split (=='\n') before
     after' = T.split (=='\n') after
     vstring = V.string attrs . T.unpack
-    wrapWithOffset :: Int -> Text -> [Text]
-    wrapWithOffset n xs =
-      let (firstLine, rest) = T.splitAt (maxWidth - n) xs
-      in firstLine : (fmap (T.take maxWidth) . takeWhile (not . T.null) . iterate (T.drop maxWidth) $ rest)
     wrap :: [Text] -> [Text]
-    wrap = concatMap (wrapWithOffset 0)
+    wrap = concatMap (wrapWithOffset maxWidth 0)
     headTail :: [a] -> Maybe (a, [a])
     headTail = \case
       [] -> Nothing

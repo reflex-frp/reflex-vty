@@ -10,6 +10,7 @@ import Control.Monad
 import Control.Monad.Fix
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
+import qualified Data.Text as T
 import Data.Time
 import qualified Graphics.Vty as V
 import Reflex
@@ -35,24 +36,24 @@ testBoxes = do
       region2 = fmap (\(w,h) -> Region (w `div` 4) (h `div` 4) (2 * (w `div` 3)) (2*(h `div` 3))) size
   pane region1 (constDyn False) . box singleBoxStyle $ debugInput
   pane region2 (constDyn True) . box singleBoxStyle $
-    splitVDrag (hRule doubleBoxStyle) (box roundedBoxStyle debugInput) (box roundedBoxStyle dragTest)
+    splitVDrag (hRule doubleBoxStyle) (box roundedBoxStyle $ multilineTextInput def) (box roundedBoxStyle dragTest)
   return ()
 
 debugFocus :: (Reflex t, Monad m) => VtyWidget t m ()
 debugFocus = do
   f <- focus
-  string $ show <$> current f
+  text $ T.pack . show <$> current f
 
 debugInput :: (Reflex t, MonadHold t m) => VtyWidget t m ()
 debugInput = do
   lastEvent <- hold "No event yet" . fmap show =<< input
-  string lastEvent
+  text $ T.pack <$> lastEvent
 
 dragTest :: (Reflex t, MonadHold t m, MonadFix m) => VtyWidget t m ()
 dragTest = do
   lastEvent <- hold "No event yet" . fmap show =<< drag V.BLeft
-  string lastEvent
+  text $ T.pack <$> lastEvent
 
 testStringBox :: (Reflex t, Monad m) => VtyWidget t m ()
 testStringBox = box singleBoxStyle .
-  string . pure . take 500 $ cycle ('\n' : ['a'..'z'])
+  text . pure . T.pack . take 500 $ cycle ('\n' : ['a'..'z'])
