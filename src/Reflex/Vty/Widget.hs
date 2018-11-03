@@ -101,7 +101,8 @@ newtype VtyWidget t m a = VtyWidget { unVtyWidget :: WriterT (VtyWidgetOut t) (R
   deriving (Functor, Applicative, Monad, MonadSample t, MonadHold t, MonadFix)
 
 -- | Runs a 'VtyWidget' with a given context
-runVtyWidget :: (Reflex t)
+runVtyWidget
+  :: Reflex t
   => VtyWidgetCtx t
   -> VtyWidget t m a
   -> m (a, VtyWidgetOut t)
