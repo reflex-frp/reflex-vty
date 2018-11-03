@@ -443,6 +443,7 @@ wrapText maxWidth attrs = V.vertCat
   . T.split (=='\n')
 
 wrapWithOffset :: Int -> Int -> Text -> [Text]
+wrapWithOffset maxWidth _ _ | maxWidth <= 0 = []
 wrapWithOffset maxWidth n xs =
   let (firstLine, rest) = T.splitAt (maxWidth - n) xs
   in firstLine : (fmap (T.take maxWidth) . takeWhile (not . T.null) . iterate (T.drop maxWidth) $ rest)
