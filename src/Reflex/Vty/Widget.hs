@@ -43,7 +43,7 @@ module Reflex.Vty.Widget
   , doubleBoxStyle
   , fill
   , hRule
-
+  , TextInputConfig(..)
   , textInput
   , multilineTextInput
   , def
@@ -539,16 +539,17 @@ updateInputState ev i@(InputState before after) = case ev of
   _ -> i
 
 data TextInputConfig t = TextInputConfig
-  { _textInputConfig_modifyInputState :: Event t (InputState -> InputState)
+  { _textInputConfig_initialValue :: Text
+  , _textInputConfig_modifyInputState :: Event t (InputState -> InputState)
   }
 
 instance Reflex t => Default (TextInputConfig t) where
-  def = TextInputConfig never
+  def = TextInputConfig "" never
 
 textInput :: (Reflex t, MonadHold t m, MonadFix m) => TextInputConfig t -> VtyWidget t m (Dynamic t Text)
 textInput cfg = do
   i <- input
-  v <- foldDyn ($) (InputState mempty mempty) $ mergeWith (.)
+  v <- foldDyn ($) (InputState (_textInputConfig_initialValue cfg) mempty) $ mergeWith (.)
     [ updateInputState <$> i
     , _textInputConfig_modifyInputState cfg
     ]
@@ -562,9 +563,11 @@ textInput cfg = do
 multilineTextInput :: (Reflex t, MonadHold t m, MonadFix m) => TextInputConfig t -> VtyWidget t m (Dynamic t Text)
 multilineTextInput cfg = do
   i <- input
-  textInput $ TextInputConfig $ mergeWith (.)
-    [ fforMaybe i $ \case
-        V.EvKey V.KEnter [] -> Just $ \(InputState before after) -> InputState (T.snoc before '\n') after
-        _ -> Nothing
-    , _textInputConfig_modifyInputState cfg
-    ]
+  textInput $ cfg
+    { _textInputConfig_modifyInputState = mergeWith (.)
+      [ fforMaybe i $ \case
+          V.EvKey V.KEnter [] -> Just $ \(InputState before after) -> InputState (T.snoc before '\n') after
+          _ -> Nothing
+      , _textInputConfig_modifyInputState cfg
+      ]
+    }
