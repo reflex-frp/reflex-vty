@@ -424,7 +424,7 @@ text msg = do
   tellImages img
 
 regionBlankImage :: Region -> Image
-regionBlankImage r@(Region left top width height) =
+regionBlankImage r@(Region _ _ width height) =
   withinImage r $ V.charFill V.defAttr ' ' width height
 
 withinImage :: Region -> Image -> Image
@@ -518,7 +518,7 @@ inputValue :: InputState -> Text
 inputValue (InputState a b) = a <> b
 
 updateInputState :: V.Event -> InputState -> InputState
-updateInputState k i@(InputState before after) = case k of
+updateInputState ev i@(InputState before after) = case ev of
   -- Regular characters
   V.EvKey (V.KChar k) [] -> InputState (T.snoc before k) after
   -- Deletion buttons
