@@ -536,7 +536,7 @@ updateInputState ev i@(InputState before after) = case ev of
   -- Key combinations
   V.EvKey (V.KChar 'u') [V.MCtrl] -> InputState mempty mempty
   V.EvKey (V.KChar 'w') [V.MCtrl] -> InputState (T.dropWhileEnd (not . isSpace) $ T.dropWhileEnd isSpace $ before) after
-  -- Navigation
+  -- Arrow keys
   V.EvKey V.KRight [] -> case T.uncons after of
     Nothing -> i
     Just (a, as) -> InputState (T.snoc before a) as
@@ -556,8 +556,14 @@ updateInputState ev i@(InputState before after) = case ev of
         (nextLine, rest) = T.breakOn "\n" (T.drop 1 post)
         (nextLineBefore, nextLineAfter) = T.splitAt offset nextLine
     in if T.null post
-          then i
-          else InputState (before <> pre <> "\n" <> nextLineBefore) (nextLineAfter <> rest)
+         then i
+         else InputState (before <> pre <> "\n" <> nextLineBefore) (nextLineAfter <> rest)
+  V.EvKey V.KHome [] ->
+    let (pre, post) = T.breakOnEnd "\n" before
+    in InputState pre (post <> after)
+  V.EvKey V.KEnd [] ->
+    let (pre, post) = T.breakOn "\n" after
+    in InputState (before <> pre) post
   _ -> i
 
 data TextInputConfig t = TextInputConfig
