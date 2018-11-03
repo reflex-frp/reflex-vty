@@ -36,6 +36,7 @@ module Reflex.Vty.Widget
   , fractionSz
   , box
   , text
+  , display
   , hyphenBoxStyle
   , singleBoxStyle
   , roundedBoxStyle
@@ -423,6 +424,9 @@ text msg = do
   let img = (\w s -> [wrapText w V.defAttr s]) <$> current dw <*> msg
   tellImages img
 
+display :: (Reflex t, Monad m, Show a) => Behavior t a -> VtyWidget t m ()
+display a = text $ T.pack . show <$> a
+
 regionBlankImage :: Region -> Image
 regionBlankImage r@(Region _ _ width height) =
   withinImage r $ V.charFill V.defAttr ' ' width height
@@ -447,7 +451,7 @@ wrapInputState
   -> Attr -- ^ Normal string attributes
   -> Attr -- ^ Cursor character attributes
   -> InputState -- ^ The input to render
-  -> Image
+  -> ([Image], Int)
 wrapInputState maxWidth attrs cursorAttrs (InputState before after) =
   let -- Break up the InputState into:
       -- * A top section of lines before the line containing the cursor
@@ -465,16 +469,17 @@ wrapInputState maxWidth attrs cursorAttrs (InputState before after) =
           Nothing -> (top', midB, ' ', "", bottom')
           Just (c, rest) -> (top', midB, c, rest, bottom')
       (midBeforeTop, midBefore') = fromMaybe ([], "") $ initLast $ wrap [midBefore]
+      cursorAfterEOL = T.length midBefore' == maxWidth
       (midAfter', midAfterBottom) =
-        let offset = if T.length midBefore' == maxWidth then 1 else T.length midBefore' + 1
+        let offset = if cursorAfterEOL then 1 else T.length midBefore' + 1
         in  case wrapWithOffset maxWidth offset midAfter of
               [] -> ("", [])
               x:xs -> (x, xs)
       cursor = V.char cursorAttrs cursorChar
-  in  V.vertCat $ mconcat
+      images = mconcat
         [ vstring <$> wrap top
         , vstring <$> midBeforeTop
-        , if T.length midBefore' == maxWidth
+        , if cursorAfterEOL
             then
               [ vstring midBefore'
               , V.horizCat
@@ -492,6 +497,8 @@ wrapInputState maxWidth attrs cursorAttrs (InputState before after) =
         , vstring <$> midAfterBottom
         , vstring <$> bottom
         ]
+      cursorY = length top + length midBeforeTop + if cursorAfterEOL then 1 else 0
+  in (images, cursorY)
   where
     before' = T.split (=='\n') before
     after' = T.split (=='\n') after
@@ -536,6 +543,21 @@ updateInputState ev i@(InputState before after) = case ev of
   V.EvKey V.KLeft [] -> case T.unsnoc before of
     Nothing -> i
     Just (bs, b) -> InputState bs (T.cons b after)
+  V.EvKey V.KUp [] ->
+    let (pre, post) = T.breakOnEnd "\n" before
+        (top, previousLine) =  T.breakOnEnd "\n" (T.dropEnd 1 pre)
+        (previousLineBefore, previousLineAfter) = T.splitAt (T.length post) previousLine
+    in if T.null pre
+         then i
+         else InputState (top <> previousLineBefore) (previousLineAfter <> "\n" <> post <> after)
+  V.EvKey V.KDown [] ->
+    let offset = T.length $ T.takeWhileEnd (/='\n') before
+        (pre, post) = T.breakOn "\n" after
+        (nextLine, rest) = T.breakOn "\n" (T.drop 1 post)
+        (nextLineBefore, nextLineAfter) = T.splitAt offset nextLine
+    in if T.null post
+          then i
+          else InputState (before <> pre <> "\n" <> nextLineBefore) (nextLineAfter <> rest)
   _ -> i
 
 data TextInputConfig t = TextInputConfig
@@ -554,10 +576,18 @@ textInput cfg = do
     , _textInputConfig_modifyInputState cfg
     ]
   dw <- displayWidth
-  let img = (\w s -> [wrapInputState w V.defAttr (V.withStyle V.defAttr V.reverseVideo) s]) -- TODO cursor ought to blink
-        <$> current dw
-        <*> current v
-  tellImages img
+  dh <- displayHeight
+  let img = (\w s -> wrapInputState w V.defAttr (V.withStyle V.defAttr V.reverseVideo) s) -- TODO cursor ought to blink
+        <$> dw
+        <*> v
+  y <- holdUniqDyn $ snd <$> img
+  let newScrollTop st (h, cursorY)
+        | cursorY < st = cursorY
+        | cursorY >= st + h = cursorY - h + 1
+        | otherwise = st
+  rec let hy = attachWith newScrollTop (current scrollTop) $ updated $ zipDyn dh y
+      scrollTop <- holdDyn 0 hy
+  tellImages $ (\(imgs, _) st -> (:[]) . V.vertCat $ drop st imgs) <$> current img <*> current scrollTop
   return $ inputValue <$> v
 
 multilineTextInput :: (Reflex t, MonadHold t m, MonadFix m) => TextInputConfig t -> VtyWidget t m (Dynamic t Text)
