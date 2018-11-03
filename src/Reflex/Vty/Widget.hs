@@ -4,6 +4,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -42,6 +43,10 @@ module Reflex.Vty.Widget
   , doubleBoxStyle
   , fill
   , hRule
+
+  , textInput
+  , multilineTextInput
+  , def
   ) where
 
 import Control.Applicative (liftA2)
@@ -49,8 +54,13 @@ import Control.Monad.Fix (MonadFix)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, asks, ask)
 import Control.Monad.Trans.Writer (WriterT, runWriterT, censor, tell)
+import Data.Char
+import Data.Default
+import Data.Maybe (fromMaybe)
+import Data.Text (Text)
+import qualified Data.Text as T
 import Graphics.Vty (Image, Attr)
-import qualified Graphics.Vty as V 
+import qualified Graphics.Vty as V
 import Reflex
 
 import Reflex.Vty.Host
@@ -63,7 +73,7 @@ data VtyWidgetCtx t = VtyWidgetCtx
     -- ^ Whether the widget should behave as if it has focus for keyboard input.
   , _vtyWidgetCtx_input :: Event t VtyEvent
     -- ^ User input events that the widget's parent chooses to share. These will generally
-    -- be filtered for relevance: 
+    -- be filtered for relevance:
     --  * Keyboard inputs are restricted to focused widgets
     --  * Mouse inputs are restricted to the region in which the widget resides and are
     --  translated into its internal coordinates.
@@ -294,7 +304,7 @@ splitVDrag wS wA wB = do
   let splitter0 = h0 `div` 2
   rec splitterCheckpoint <- holdDyn splitter0 $ leftmost [fst <$> ffilter snd dragSplitter, resizeSplitter]
       splitterPos <- holdDyn splitter0 $ leftmost [fst <$> dragSplitter, resizeSplitter]
-      splitterFrac <- holdDyn (1/2) $ ffor (attach (current sz) (fst <$> dragSplitter)) $ \((_,h),x) ->
+      splitterFrac <- holdDyn ((1::Double) / 2) $ ffor (attach (current sz) (fst <$> dragSplitter)) $ \((_,h),x) ->
         fromIntegral x / fromIntegral h
       let dragSplitter = fforMaybe (attach (current splitterCheckpoint) dragE) $
             \(splitterY, Drag (_, fromY) (_, toY) _ _ end) ->
@@ -322,10 +332,10 @@ splitVDrag wS wA wB = do
 fill :: (Reflex t, Monad m) => Char -> VtyWidget t m ()
 fill c = do
   sz <- displaySize
-  let fillImg = ffor (current sz) $ \(w,h) -> [V.charFill mempty c w h]
+  let fillImg = ffor (current sz) $ \(w,h) -> [V.charFill V.defAttr c w h]
   tellImages fillImg
 
--- | Fill the background with the bottom 
+-- | Fill the background with the bottom
 hRule :: (Reflex t, Monad m) => BoxStyle -> VtyWidget t m ()
 hRule boxStyle = fill (_boxStyle_s boxStyle)
 
@@ -337,7 +347,7 @@ modifyImages
   => Behavior t ([Image] -> [Image])
   -> VtyWidget t m a
   -> VtyWidget t m a
-modifyImages f (VtyWidget w) = VtyWidget $ flip censor w $ \wo -> 
+modifyImages f (VtyWidget w) = VtyWidget $ flip censor w $ \wo ->
   wo { _vtyWidgetOut_images = f <*> (_vtyWidgetOut_images wo) }
 
 data BoxStyle = BoxStyle
@@ -350,6 +360,9 @@ data BoxStyle = BoxStyle
   , _boxStyle_sw :: Char
   , _boxStyle_w :: Char
   }
+
+instance Default BoxStyle where
+  def = singleBoxStyle
 
 hyphenBoxStyle :: BoxStyle
 hyphenBoxStyle = BoxStyle '-' '-' '-' '|' '-' '-' '-' '|'
@@ -379,35 +392,35 @@ box style child = do
   pane innerReg (pure True) child
   where
     boxImages :: Region -> [Image]
-    boxImages r@(Region left top width height) =
+    boxImages (Region left top width height) =
       let right = left + width - 1
           bottom = top + height - 1
-          sides = 
+          sides =
             [ withinImage (Region (left + 1) top (width - 2) 1) $
-                V.charFill mempty (_boxStyle_n style) (width - 2) 1
+                V.charFill V.defAttr (_boxStyle_n style) (width - 2) 1
             , withinImage (Region right (top + 1) 1 (height - 2)) $
-                V.charFill mempty (_boxStyle_e style) 1 (height - 2)
+                V.charFill V.defAttr (_boxStyle_e style) 1 (height - 2)
             , withinImage (Region (left + 1) bottom (width - 2) 1) $
-                V.charFill mempty (_boxStyle_s style) (width - 2) 1
+                V.charFill V.defAttr (_boxStyle_s style) (width - 2) 1
             , withinImage (Region left (top + 1) 1 (height - 2)) $
-                V.charFill mempty (_boxStyle_w style) 1 (height - 2)
+                V.charFill V.defAttr (_boxStyle_w style) 1 (height - 2)
             ]
           corners =
             [ withinImage (Region left top 1 1) $
-                V.char mempty (_boxStyle_nw style)
+                V.char V.defAttr (_boxStyle_nw style)
             , withinImage (Region right top 1 1) $
-                V.char mempty (_boxStyle_ne style)
+                V.char V.defAttr (_boxStyle_ne style)
             , withinImage (Region right bottom 1 1) $
-                V.char mempty (_boxStyle_se style)
+                V.char V.defAttr (_boxStyle_se style)
             , withinImage (Region left bottom 1 1) $
-                V.char mempty (_boxStyle_sw style)
+                V.char V.defAttr (_boxStyle_sw style)
             ]
       in sides ++ if width > 1 && height > 1 then corners else []
 
-string :: (Reflex t, Monad m) => Behavior t String -> VtyWidget t m ()  
+string :: (Reflex t, Monad m) => Behavior t String -> VtyWidget t m ()
 string msg = do
   dw <- displayWidth
-  let img = (\w s -> [wrapString w mempty s]) <$> current dw <*> msg
+  let img = (\w s -> [wrapString w V.defAttr s]) <$> current dw <*> msg
   tellImages img
 
 regionBlankImage :: Region -> Image
@@ -420,4 +433,137 @@ withinImage (Region left top width height)
   | otherwise = V.translate left top . V.crop width height
 
 wrapString :: Int -> Attr -> String -> Image
-wrapString maxWidth attrs = V.vertCat . concatMap (fmap (V.string attrs) . fmap (take maxWidth) . takeWhile (not . null) . iterate (drop maxWidth)) . lines
+wrapString maxWidth attrs = V.vertCat
+  . concatMap (fmap (V.string attrs) . fmap (take maxWidth) . takeWhile (not . null) . iterate (drop maxWidth))
+  . lines
+
+wrapInputState
+  :: Int -- ^ Maximum line length
+  -> Attr -- ^ Normal string attributes
+  -> Attr -- ^ Cursor character attributes
+  -> InputState -- ^ The input to render
+  -> Image
+wrapInputState maxWidth attrs cursorAttrs (InputState before after) =
+  let -- Break up the InputState into:
+      -- * A top section of lines before the line containing the cursor
+      -- * A part of the line containing the cursor that comes immediately before the cursor
+      -- * The cursor character (i.e., the character the cursor is on top of)
+      -- * The remainder of the line containing the cursor
+      -- * The bottom section of lines after the line containing the cursor
+      (top, midBefore, cursorChar, midAfter, bottom) = case (initLast before', headTail after') of
+        (Nothing, Nothing) -> ([], "", ' ', "", [])
+        (Just (top', mid), Nothing) -> (top', mid, ' ', "", [])
+        (Nothing, Just (mid, bottom')) -> case T.uncons mid of
+          Nothing -> ([], "", ' ', "", bottom')
+          Just (c, rest) -> ([], "", c, rest, bottom')
+        (Just (top', midB), Just (midA, bottom')) -> case T.uncons midA of
+          Nothing -> (top', midB, ' ', "", bottom')
+          Just (c, rest) -> (top', midB, c, rest, bottom')
+      (midBeforeTop, midBefore') = fromMaybe ([], "") $ initLast $ wrap [midBefore]
+      (midAfter', midAfterBottom) =
+        let offset = if T.length midBefore' == maxWidth then 1 else T.length midBefore' + 1
+        in  case wrapWithOffset offset midAfter of
+              [] -> ("", [])
+              x:xs -> (x, xs)
+      cursor = V.char cursorAttrs cursorChar
+  in  V.vertCat $ mconcat
+        [ vstring <$> wrap top
+        , vstring <$> midBeforeTop
+        , if T.length midBefore' == maxWidth
+            then
+              [ vstring midBefore'
+              , V.horizCat
+                [ cursor
+                , vstring midAfter'
+                ]
+              ]
+            else
+              [ V.horizCat
+                [ vstring midBefore'
+                , cursor
+                , vstring midAfter'
+                ]
+              ]
+        , vstring <$> midAfterBottom
+        , vstring <$> bottom
+        ]
+  where
+    before' = T.split (=='\n') before
+    after' = T.split (=='\n') after
+    vstring = V.string attrs . T.unpack
+    wrapWithOffset :: Int -> Text -> [Text]
+    wrapWithOffset n xs =
+      let (firstLine, rest) = T.splitAt (maxWidth - n) xs
+      in firstLine : (fmap (T.take maxWidth) . takeWhile (not . T.null) . iterate (T.drop maxWidth) $ rest)
+    wrap :: [Text] -> [Text]
+    wrap = concatMap (wrapWithOffset 0)
+    headTail :: [a] -> Maybe (a, [a])
+    headTail = \case
+      [] -> Nothing
+      x:xs -> Just (x, xs)
+    initLast :: [a] -> Maybe ([a], a)
+    initLast = \case
+      [] -> Nothing
+      (x:xs) -> case initLast xs of
+        Nothing -> Just ([], x)
+        Just (ys, y) -> Just (x:ys, y)
+
+data InputState = InputState
+  { _inputState_beforeCursor :: Text
+  , _inputState_afterCursor :: Text
+  }
+
+inputValue :: InputState -> Text
+inputValue (InputState a b) = a <> b
+
+updateInputState :: V.Event -> InputState -> InputState
+updateInputState k i@(InputState before after) = case k of
+  -- Regular characters
+  V.EvKey (V.KChar k) [] -> InputState (T.snoc before k) after
+  -- Deletion buttons
+  V.EvKey V.KBS [] -> InputState (if T.null before then T.empty else T.init before) after
+  V.EvKey V.KDel [] -> case T.uncons after of
+    Nothing -> i
+    Just (_, a) -> InputState before a
+  -- Key combinations
+  V.EvKey (V.KChar 'u') [V.MCtrl] -> InputState mempty mempty
+  V.EvKey (V.KChar 'w') [V.MCtrl] -> InputState (T.dropWhileEnd (not . isSpace) $ T.dropWhileEnd isSpace $ before) after
+  -- Navigation
+  V.EvKey V.KRight [] -> case T.uncons after of
+    Nothing -> i
+    Just (a, as) -> InputState (T.snoc before a) as
+  V.EvKey V.KLeft [] -> case T.unsnoc before of
+    Nothing -> i
+    Just (bs, b) -> InputState bs (T.cons b after)
+  _ -> i
+
+data TextInputConfig t = TextInputConfig
+  { _textInputConfig_modifyInputState :: Event t (InputState -> InputState)
+  }
+
+instance Reflex t => Default (TextInputConfig t) where
+  def = TextInputConfig never
+
+textInput :: (Reflex t, MonadHold t m, MonadFix m) => TextInputConfig t -> VtyWidget t m (Dynamic t Text)
+textInput cfg = do
+  i <- input
+  v <- foldDyn ($) (InputState mempty mempty) $ mergeWith (.)
+    [ updateInputState <$> i
+    , _textInputConfig_modifyInputState cfg
+    ]
+  dw <- displayWidth
+  let img = (\w s -> [wrapInputState w V.defAttr (V.withStyle V.defAttr V.reverseVideo) s]) -- TODO cursor ought to blink
+        <$> current dw
+        <*> current v
+  tellImages img
+  return $ inputValue <$> v
+
+multilineTextInput :: (Reflex t, MonadHold t m, MonadFix m) => TextInputConfig t -> VtyWidget t m (Dynamic t Text)
+multilineTextInput cfg = do
+  i <- input
+  textInput $ TextInputConfig $ mergeWith (.)
+    [ fforMaybe i $ \case
+        V.EvKey V.KEnter [] -> Just $ \(InputState before after) -> InputState (T.snoc before '\n') after
+        _ -> Nothing
+    , _textInputConfig_modifyInputState cfg
+    ]
