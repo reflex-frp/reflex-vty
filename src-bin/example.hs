@@ -6,16 +6,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -threaded #-}
 
-import Control.Monad
 import Control.Monad.Fix
-import Control.Monad.IO.Class
-import Control.Monad.Trans.Reader
 import qualified Data.Text as T
-import Data.Time
 import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Vty
-import Reflex.Vty.Widget
 
 main :: IO ()
 main =
@@ -35,7 +30,7 @@ testBoxes = do
   let region1 = fmap (\(w,h) -> Region (w `div` 6) (h `div` 6) (w `div` 2) (h `div` 2)) size
       region2 = fmap (\(w,h) -> Region (w `div` 4) (h `div` 4) (2 * (w `div` 3)) (2*(h `div` 3))) size
   pane region1 (constDyn False) . box singleBoxStyle $ debugInput
-  pane region2 (constDyn True) . box singleBoxStyle $
+  _ <- pane region2 (constDyn True) . box singleBoxStyle $
     splitVDrag (hRule doubleBoxStyle) (box roundedBoxStyle $ multilineTextInput def) (box roundedBoxStyle dragTest)
   return ()
 
