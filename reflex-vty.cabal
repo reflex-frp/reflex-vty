@@ -14,7 +14,9 @@ library
   exposed-modules: Reflex.Vty
                  , Reflex.Vty.Host
                  , Reflex.Vty.Widget
-                 , Reflex.Vty.Widget.Text
+                 , Reflex.Vty.Widget.Input
+                 , Reflex.Vty.Widget.Input.Text
+                 , Data.Text.Zipper
   other-modules: Reflex.Spider.Orphans
   build-depends:
     base,

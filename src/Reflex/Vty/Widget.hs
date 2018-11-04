@@ -44,10 +44,6 @@ module Reflex.Vty.Widget
   , doubleBoxStyle
   , fill
   , hRule
-  , TextInputConfig(..)
-  , textInput
-  , multilineTextInput
-  , def
   ) where
 
 import Control.Applicative (liftA2)
@@ -58,13 +54,12 @@ import Control.Monad.Trans.Writer (WriterT, runWriterT, censor, tell)
 import Data.Default
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Zipper as TZ
 import Graphics.Vty (Image, Attr)
 import qualified Graphics.Vty as V
 import Reflex
 
 import Reflex.Vty.Host
-import Reflex.Vty.Widget.Text (TextZipper(..), DisplayLines(..))
-import qualified Reflex.Vty.Widget.Text as TZ
 
 -- | The context within which a 'VtyWidget' runs
 data VtyWidgetCtx t = VtyWidgetCtx
@@ -439,58 +434,5 @@ withinImage (Region left top width height)
 
 wrapText :: Int -> Attr -> Text -> Image
 wrapText maxWidth attrs = V.vertCat
-  . concatMap (fmap (V.string attrs . T.unpack) . wrapWithOffset maxWidth 0)
+  . concatMap (fmap (V.string attrs . T.unpack) . TZ.wrapWithOffset maxWidth 0)
   . T.split (=='\n')
-
-wrapWithOffset :: Int -> Int -> Text -> [Text]
-wrapWithOffset maxWidth _ _ | maxWidth <= 0 = []
-wrapWithOffset maxWidth n xs =
-  let (firstLine, rest) = T.splitAt (maxWidth - n) xs
-  in firstLine : (fmap (T.take maxWidth) . takeWhile (not . T.null) . iterate (T.drop maxWidth) $ rest)
-
-data TextInputConfig t = TextInputConfig
-  { _textInputConfig_initialValue :: TextZipper
-  , _textInputConfig_modify :: Event t (TextZipper -> TextZipper)
-  }
-
-instance Reflex t => Default (TextInputConfig t) where
-  def = TextInputConfig TZ.empty never
-
-textInput
-  :: (Reflex t, MonadHold t m, MonadFix m)
-  => TextInputConfig t
-  -> VtyWidget t m (Dynamic t Text)
-textInput cfg = do
-  i <- input
-  v <- foldDyn ($) (_textInputConfig_initialValue cfg) $ mergeWith (.)
-    [ TZ.updateTextZipper <$> i
-    , _textInputConfig_modify cfg
-    ]
-  dw <- displayWidth
-  dh <- displayHeight
-  let rows = (\w s -> TZ.displayLines w s) <$> dw <*> v
-      img = TZ.images . _displayLines_spans <$> rows
-  y <- holdUniqDyn $ _displayLines_cursorY <$> rows
-  let newScrollTop st (h, cursorY)
-        | cursorY < st = cursorY
-        | cursorY >= st + h = cursorY - h + 1
-        | otherwise = st
-  rec let hy = attachWith newScrollTop (current scrollTop) $ updated $ zipDyn dh y
-      scrollTop <- holdDyn 0 hy
-  tellImages $ (\imgs st -> (:[]) . V.vertCat $ drop st imgs) <$> current img <*> current scrollTop
-  return $ TZ.value <$> v
-
-multilineTextInput
-  :: (Reflex t, MonadHold t m, MonadFix m)
-  => TextInputConfig t
-  -> VtyWidget t m (Dynamic t Text)
-multilineTextInput cfg = do
-  i <- input
-  textInput $ cfg
-    { _textInputConfig_modify = mergeWith (.)
-      [ fforMaybe i $ \case
-          V.EvKey V.KEnter [] -> Just $ TZ.insert "\n"
-          _ -> Nothing
-      , _textInputConfig_modify cfg
-      ]
-    }

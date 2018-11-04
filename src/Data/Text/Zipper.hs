@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Reflex.Vty.Widget.Text where
+module Data.Text.Zipper where
 
 import Data.Char
 import Data.Map (Map)
@@ -11,10 +11,13 @@ import Control.Monad.State
 
 import Data.Text (Text)
 import qualified Data.Text as T
-import qualified Graphics.Vty as V
 
--- | A zipper of the logical text input contents. The lines before the line containing the cursor
--- are stored in reverse order. The cursor is logically _between_ the "before" and "after" text.
+-- | A zipper of the logical text input contents (the "document"). The lines
+-- before the line containing the cursor are stored in reverse order.
+-- The cursor is logically between the "before" and "after" text.
+-- A "logical" line of input is a line of input up until a user-entered newline
+-- character (as compared to a "display" line, which is wrapped to fit within
+-- a given viewport width).
 data TextZipper = TextZipper
   { _textZipper_linesBefore :: [Text] -- reversed
   , _textZipper_before :: Text
@@ -23,6 +26,7 @@ data TextZipper = TextZipper
   }
   deriving (Show)
 
+-- | Move the cursor left one character, if possible
 left :: TextZipper -> TextZipper
 left z@(TextZipper lb b a la) = case T.unsnoc b of
   Nothing -> case lb of
@@ -30,6 +34,7 @@ left z@(TextZipper lb b a la) = case T.unsnoc b of
     (l:ls) -> TextZipper ls l "" (a : la)
   Just (b', c) -> TextZipper lb b' (T.cons c a) la
 
+-- | Move the cursor right one character, if possible
 right :: TextZipper -> TextZipper
 right z@(TextZipper lb b a la) = case T.uncons a of
   Nothing -> case la of
@@ -37,6 +42,7 @@ right z@(TextZipper lb b a la) = case T.uncons a of
     (l:ls) -> TextZipper (b : lb) "" l ls
   Just (c, a') -> TextZipper lb (T.snoc b c) a' la
 
+-- | Move the cursor up one logical line, if possible
 up :: TextZipper -> TextZipper
 up z@(TextZipper lb b a la) = case lb of
   [] -> z
@@ -44,6 +50,7 @@ up z@(TextZipper lb b a la) = case lb of
     let (b', a') = T.splitAt (T.length b) l
     in TextZipper ls b' a' ((b <> a) : la)
 
+-- | Move the cursor down one logical line, if possible
 down :: TextZipper -> TextZipper
 down z@(TextZipper lb b a la) = case la of
   [] -> z
@@ -51,17 +58,25 @@ down z@(TextZipper lb b a la) = case la of
     let (b', a') = T.splitAt (T.length b) l
     in TextZipper ((b <> a) : lb) b' a' ls
 
+-- | Move the cursor to the beginning of the current logical line
 home :: TextZipper -> TextZipper
 home (TextZipper lb b a la) = TextZipper lb "" (b <> a) la
 
+-- | Move the cursor to the end of the current logical line
 end :: TextZipper -> TextZipper
 end (TextZipper lb b a la) = TextZipper lb (b <> a) "" la
 
+-- | Move the cursor to the top of the document
 top :: TextZipper -> TextZipper
 top (TextZipper lb b a la) = case reverse lb of
   [] -> TextZipper [] "" (b <> a) la
   (start:rest) -> TextZipper [] "" start (rest <> la)
 
+-- | Insert a character at the current cursor position
+insertChar :: Char -> TextZipper -> TextZipper
+insertChar i = insert (T.singleton i)
+
+-- | Insert text at the current cursor position
 insert :: Text -> TextZipper -> TextZipper
 insert i z@(TextZipper lb b a la) = case T.split (=='\n') i of
   [] -> z
@@ -69,6 +84,7 @@ insert i z@(TextZipper lb b a la) = case T.split (=='\n') i of
     [] -> TextZipper lb (b <> start) a la
     (l:ls) -> TextZipper (ls <> [b <> start] <> lb) l a la
 
+-- | Delete the character to the left of the cursor
 deleteLeft :: TextZipper-> TextZipper
 deleteLeft z@(TextZipper lb b a la) = case T.unsnoc b of
   Nothing -> case lb of
@@ -76,6 +92,7 @@ deleteLeft z@(TextZipper lb b a la) = case T.unsnoc b of
     (l:ls) -> TextZipper ls l a la
   Just (b', _) -> TextZipper lb b' a la
 
+-- | Delete the character under/to the right of the cursor
 deleteRight :: TextZipper -> TextZipper
 deleteRight z@(TextZipper lb b a la) = case T.uncons a of
   Nothing -> case la of
@@ -83,6 +100,9 @@ deleteRight z@(TextZipper lb b a la) = case T.uncons a of
     (l:ls) -> TextZipper lb b l ls
   Just (_, a') -> TextZipper lb b a' la
 
+-- | Delete a word to the left of the cursor. Deletes all whitespace until it
+-- finds a non-whitespace character, and then deletes contiguous non-whitespace
+-- characters.
 deleteLeftWord :: TextZipper -> TextZipper
 deleteLeftWord (TextZipper lb b a la) =
   let b' = T.dropWhileEnd isSpace b
@@ -92,29 +112,30 @@ deleteLeftWord (TextZipper lb b a la) =
           (l:ls) -> deleteLeftWord $ TextZipper ls l a la
         else TextZipper lb (T.dropWhileEnd (not . isSpace) b') a la
 
+-- | The plain text contents of the zipper
 value :: TextZipper -> Text
 value (TextZipper lb b a la) = T.intercalate "\n" $ mconcat [ reverse lb
   , [b <> a]
   , la
   ]
 
+-- | The empty zipper
 empty :: TextZipper
 empty = TextZipper [] "" "" []
 
+-- | Constructs a zipper with the given contents. The cursor is placed after
+-- the contents.
 fromText :: Text -> TextZipper
 fromText = flip insert empty
 
--- | A span of text that makes up part of a display line
-data Span = Span V.Attr Text
+-- | A span of text tagged with some metadata that makes up part of a display
+-- line.
+data Span tag = Span tag Text
   deriving (Show)
 
--- | Default attributes for the text cursor
-cursorAttributes :: V.Attr
-cursorAttributes = V.withStyle V.defAttr V.reverseVideo
-
 -- | Information about the documents as it is displayed (i.e., post-wrapping)
-data DisplayLines = DisplayLines
-  { _displayLines_spans :: [[Span]]
+data DisplayLines tag = DisplayLines
+  { _displayLines_spans :: [[Span tag]]
   , _displayLines_offsetMap :: Map Int Int
   , _displayLines_cursorY :: Int
   }
@@ -127,9 +148,11 @@ data DisplayLines = DisplayLines
 -- offset
 displayLines
   :: Int -- ^ Width, used for wrapping
+  -> tag -- ^ Metadata for normal characters
+  -> tag -- ^ Metadata for the cursor
   -> TextZipper -- ^ The text input contents and cursor state
-  -> DisplayLines
-displayLines width (TextZipper lb b a la) =
+  -> DisplayLines tag
+displayLines width tag cursorTag (TextZipper lb b a la) =
   let linesBefore :: [[Text]]
       linesBefore = map (wrapWithOffset width 0) $ reverse lb
       linesAfter :: [[Text]]
@@ -139,25 +162,19 @@ displayLines width (TextZipper lb b a la) =
         , [wrapWithOffset width 0 $ b <> a]
         , linesAfter
         ]
-      spansBefore = map ((:[]) . Span V.defAttr) $ concat linesBefore
-      spansAfter = map ((:[]) . Span V.defAttr) $ concat linesAfter
+      spansBefore = map ((:[]) . Span tag) $ concat linesBefore
+      spansAfter = map ((:[]) . Span tag) $ concat linesAfter
       (spansCurrentBefore, spansCurLineBefore) = fromMaybe ([], []) $
-        initLast $ map ((:[]) . Span V.defAttr) (wrapWithOffset width 0 b)
+        initLast $ map ((:[]) . Span tag) (wrapWithOffset width 0 b)
       curLineOffset = spansLength spansCurLineBefore
       cursorAfterEOL = curLineOffset == width
-      -- (cursor, spansCurLineAfter, spansCurrentAfter) = case T.uncons a of
-      --   Nothing -> (Span cursorAttributes " ", [], [])
-      --   Just (c, rest) ->
-      --     ( Span cursorAttributes (T.singleton c)
-      --     ,
-
       (spansCurLineAfter, spansCurrentAfter) = fromMaybe ([], []) $
         headTail $ case T.uncons a of
-          Nothing -> [[Span cursorAttributes " "]]
+          Nothing -> [[Span cursorTag " "]]
           Just (c, rest) ->
             let o = if cursorAfterEOL then 1 else curLineOffset + 1
-                cursor = Span cursorAttributes (T.singleton c)
-            in  case map ((:[]) . Span V.defAttr) (wrapWithOffset width o rest) of
+                cursor = Span cursorTag (T.singleton c)
+            in  case map ((:[]) . Span tag) (wrapWithOffset width o rest) of
                   [] -> [[cursor]]
                   (l:ls) -> (cursor : l) : ls
   in  DisplayLines
@@ -178,7 +195,7 @@ displayLines width (TextZipper lb b a la) =
           ]
         }
   where
-    spansLength :: [Span] -> Int
+    spansLength :: [Span tag] -> Int
     spansLength = sum . map (\(Span _ t) -> T.length t)
     initLast :: [a] -> Maybe ([a], a)
     initLast = \case
@@ -191,6 +208,9 @@ displayLines width (TextZipper lb b a la) =
       [] -> Nothing
       x:xs -> Just (x, xs)
 
+-- | Wraps a logical line of text to fit within the given width. The first
+-- wrapped line is offset by the number of columns provided. Subsequent wrapped
+-- lines are not.
 wrapWithOffset :: Int -> Int -> Text -> [Text]
 wrapWithOffset maxWidth _ _ | maxWidth <= 0 = []
 wrapWithOffset maxWidth n xs =
@@ -232,34 +252,3 @@ offsetMap ts = evalState (offsetMap' ts) (0, 0)
       (dl, o) <- get
       put (dl, o + 1)
       return $ Map.insert dl (o + 1) $ Map.unions maps
-
--- click :: (Int, Int) -> Int -> DisplayLines -> TextZipper
--- click (x, y) scrollTop dlines = undefined
-
-images :: [[Span]] -> [V.Image]
-images = map (V.horizCat . map spanToImage)
-
-image :: [[Span]] -> V.Image
-image = V.vertCat . images
-
-spanToImage :: Span -> V.Image
-spanToImage (Span attrs t) = V.text' attrs t
-
-updateTextZipper :: V.Event -> TextZipper -> TextZipper
-updateTextZipper ev = case ev of
-  -- Regular characters
-  V.EvKey (V.KChar k) [] -> insert $ T.singleton k
-  -- Deletion buttons
-  V.EvKey V.KBS [] -> deleteLeft
-  V.EvKey V.KDel [] -> deleteRight
-  -- Key combinations
-  V.EvKey (V.KChar 'u') [V.MCtrl] -> const empty
-  V.EvKey (V.KChar 'w') [V.MCtrl] -> deleteLeftWord
-  -- Arrow keys
-  V.EvKey V.KLeft [] -> left
-  V.EvKey V.KRight [] -> right
-  V.EvKey V.KUp [] -> up
-  V.EvKey V.KDown [] -> down
-  V.EvKey V.KHome [] -> home
-  V.EvKey V.KEnd [] -> end
-  _ -> id
