@@ -162,10 +162,11 @@ displayLines
   -> TextZipper -- ^ The text input contents and cursor state
   -> DisplayLines tag
 displayLines width tag cursorTag (TextZipper lb b a la) =
-  let linesBefore :: [[Text]]
+  let linesBefore :: [[Text]] -- The wrapped lines before the cursor line
       linesBefore = map (wrapWithOffset width 0) $ reverse lb
-      linesAfter :: [[Text]]
+      linesAfter :: [[Text]] -- The wrapped lines after the cursor line
       linesAfter = map (wrapWithOffset width 0) la
+      offsets :: Map Int Int
       offsets = offsetMap $ mconcat
         [ linesBefore
         , [wrapWithOffset width 0 $ b <> a]
@@ -173,10 +174,19 @@ displayLines width tag cursorTag (TextZipper lb b a la) =
         ]
       spansBefore = map ((:[]) . Span tag) $ concat linesBefore
       spansAfter = map ((:[]) . Span tag) $ concat linesAfter
+      -- Separate the spans before the cursor into
+      -- * spans that are on earlier display lines (though on the same logical line), and
+      -- * spans that are on the same display line
       (spansCurrentBefore, spansCurLineBefore) = fromMaybe ([], []) $
         initLast $ map ((:[]) . Span tag) (wrapWithOffset width 0 b)
+      -- Calculate the number of columns on the cursor's display line before the cursor
       curLineOffset = spansLength spansCurLineBefore
+      -- Check whether the spans on the current display line are long enough that
+      -- the cursor has to go to the next line
       cursorAfterEOL = curLineOffset == width
+      -- Separate the span after the cursor into
+      -- * spans that are on the same display line, and
+      -- * spans that are on later display lines (though on the same logical line)
       (spansCurLineAfter, spansCurrentAfter) = fromMaybe ([], []) $
         headTail $ case T.uncons a of
           Nothing -> [[Span cursorTag " "]]
