@@ -37,19 +37,33 @@ data TextZipper = TextZipper
 
 -- | Move the cursor left one character, if possible
 left :: TextZipper -> TextZipper
-left z@(TextZipper lb b a la) = case T.unsnoc b of
-  Nothing -> case lb of
-    [] -> z
-    (l:ls) -> TextZipper ls l "" (a : la)
-  Just (b', c) -> TextZipper lb b' (T.cons c a) la
+left = leftN 1
+
+-- | Move the cursor left by the given number of characters, or, if the document
+-- isn't long enough, to the beginning of the document
+leftN :: Int -> TextZipper -> TextZipper
+leftN n z@(TextZipper lb b a la) =
+  if T.length b >= n
+    then
+      let n' = T.length b - n
+      in  TextZipper lb (T.take n' b) (T.drop n' b <> a) la
+    else case lb of
+           [] -> home z
+           (l:ls) -> leftN (n - T.length b - 1) $ TextZipper ls l "" ((b <> a) : la)
 
 -- | Move the cursor right one character, if possible
 right :: TextZipper -> TextZipper
-right z@(TextZipper lb b a la) = case T.uncons a of
-  Nothing -> case la of
-    [] -> z
-    (l:ls) -> TextZipper (b : lb) "" l ls
-  Just (c, a') -> TextZipper lb (T.snoc b c) a' la
+right = rightN 1
+
+-- | Move the character right by the given number of characters, or, if the document
+-- isn't long enough, to the end of the document
+rightN :: Int -> TextZipper -> TextZipper
+rightN n z@(TextZipper lb b a la) =
+  if T.length a >= n
+    then TextZipper lb (b <> T.take n a) (T.drop n a) la
+    else case la of
+           [] -> end z
+           (l:ls) -> rightN (n - T.length a - 1) $ TextZipper ((b <> a) : lb) "" l ls
 
 -- | Move the cursor up one logical line, if possible
 up :: TextZipper -> TextZipper

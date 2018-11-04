@@ -27,7 +27,7 @@ module Reflex.Vty.Widget
   , Region(..)
   , regionSize
   , regionBlankImage
-  , Drag (..)
+  , Drag(..)
   , drag
   , mouseDown
   , pane
@@ -278,7 +278,11 @@ drag
 drag btn = do
   inp <- input
   let f :: Maybe Drag -> V.Event -> Maybe Drag
-      f Nothing = const Nothing
+      f Nothing = \case
+        V.EvMouseDown x y btn' mods
+          | btn == btn' -> Just $ Drag (x,y) (x,y) btn' mods False
+          | otherwise -> Nothing
+        _ -> Nothing
       f (Just (Drag from _ _ mods end)) = \case
         V.EvMouseDown x y btn' mods'
           | end         -> Just $ Drag (x,y) (x,y) btn' mods' False
@@ -301,12 +305,29 @@ drag btn = do
 mouseDown
   :: (Reflex t, Monad m)
   => V.Button
-  -> VtyWidget t m (Event t VtyEvent)
+  -> VtyWidget t m (Event t MouseDown)
 mouseDown btn = do
   i <- input
-  return $ fforMaybe i $ \x -> case x of
-    V.EvMouseDown _ _ btn' _ -> if btn == btn' then Just x else Nothing
+  return $ fforMaybe i $ \case
+    V.EvMouseDown x y btn' mods -> if btn == btn'
+      then Just $ MouseDown btn' (x, y) mods
+      else Nothing
     _ -> Nothing
+
+-- | Information about a mouse down event
+data MouseDown = MouseDown
+  { _mouseDown_button :: V.Button
+  , _mouseDown_coordinates :: (Int, Int)
+  , _mouseDown_modifiers :: [V.Modifier]
+  }
+  deriving (Eq, Ord, Show)
+
+-- | Information about a mouse up event
+data MouseUp = MouseUp
+  { _mouseUp_button :: Maybe V.Button
+  , _mouseUp_coordinates :: (Int, Int)
+  }
+  deriving (Eq, Ord, Show)
 
 -- | A plain split of the available space into vertically stacked panes.
 -- No visual separator is built in here.
