@@ -37,22 +37,27 @@ textInput
   -> VtyWidget t m (Dynamic t Text)
 textInput cfg = do
   i <- input
-  v <- foldDyn ($) (_textInputConfig_initialValue cfg) $ mergeWith (.)
-    [ updateTextZipper <$> i
-    , _textInputConfig_modify cfg
-    ]
-  dw <- displayWidth
-  dh <- displayHeight
-  let rows = (\w s -> displayLines w V.defAttr cursorAttributes s) <$> dw <*> v
-      img = images . _displayLines_spans <$> rows
-  y <- holdUniqDyn $ _displayLines_cursorY <$> rows
-  let newScrollTop st (h, cursorY)
-        | cursorY < st = cursorY
-        | cursorY >= st + h = cursorY - h + 1
-        | otherwise = st
-  rec let hy = attachWith newScrollTop (current scrollTop) $ updated $ zipDyn dh y
-      scrollTop <- holdDyn 0 hy
-  tellImages $ (\imgs st -> (:[]) . V.vertCat $ drop st imgs) <$> current img <*> current scrollTop
+  rec v <- foldDyn ($) (_textInputConfig_initialValue cfg) $ mergeWith (.)
+        [ updateTextZipper <$> i
+        , _textInputConfig_modify cfg
+        , let displayInfo = (,) <$> rows <*> scrollTop
+          in ffor (attach (current displayInfo) click) $ \((dl, st), MouseDown _ (mx, my) _) ->
+            goToDisplayLinePosition mx (st + my) dl
+        ]
+      dw <- displayWidth
+      dh <- displayHeight
+      click <- mouseDown V.BLeft
+      let rows = (\w s -> displayLines w V.defAttr cursorAttributes s) <$> dw <*> v
+          img = images . _displayLines_spans <$> rows
+      y <- holdUniqDyn $ _displayLines_cursorY <$> rows
+      let newScrollTop :: Int -> (Int, Int) -> Int
+          newScrollTop st (h, cursorY)
+            | cursorY < st = cursorY
+            | cursorY >= st + h = cursorY - h + 1
+            | otherwise = st
+      rec let hy = attachWith newScrollTop (current scrollTop) $ updated $ zipDyn dh y
+          scrollTop <- holdDyn 0 hy
+      tellImages $ (\imgs st -> (:[]) . V.vertCat $ drop st imgs) <$> current img <*> current scrollTop
   return $ value <$> v
 
 -- | A widget that allows multiline text input

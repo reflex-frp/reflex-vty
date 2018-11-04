@@ -228,8 +228,6 @@ displayLines width tag cursorTag (TextZipper lb b a la) =
           ]
         }
   where
-    spansLength :: [Span tag] -> Int
-    spansLength = sum . map (\(Span _ t) -> T.length t)
     initLast :: [a] -> Maybe ([a], a)
     initLast = \case
       [] -> Nothing
@@ -281,3 +279,20 @@ offsetMap ts = evalState (offsetMap' ts) (0, 0)
       (dl, o) <- get
       put (dl, o + 1)
       return $ Map.insert dl (o + 1) $ Map.unions maps
+
+-- | Move the cursor of the given 'TextZipper' to the logical position indicated by
+-- the given display line coordinates, using the provided 'DisplayLines' information.
+goToDisplayLinePosition :: Int -> Int -> DisplayLines tag -> TextZipper -> TextZipper
+goToDisplayLinePosition x y dl tz =
+  let offset = Map.lookup y $ _displayLines_offsetMap dl
+  in  case offset of
+        Nothing -> tz
+        Just o ->
+          let displayLineLength = case drop y $ _displayLines_spans dl of
+                [] -> x
+                (s:_) -> spansLength s
+          in  rightN (o + (min displayLineLength x)) $ top tz
+
+-- | Get the length of the text in a set of 'Span's
+spansLength :: [Span tag] -> Int
+spansLength = sum . map (\(Span _ t) -> T.length t)
