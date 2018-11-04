@@ -1,3 +1,7 @@
+{-|
+Module: Reflex.Vty.Widget.Input.Text
+Description: Widgets for accepting text input from users and manipulating text within those inputs
+-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}

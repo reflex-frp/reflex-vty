@@ -1,3 +1,16 @@
+{-|
+Module: Reflex.Vty
+Description: A library for building vty apps with reflex
+Copyright   : (c) Obsidian Systems LLC
+License     : GPL-3
+Maintainer  : maintainer@obsidian.systems
+Stability   : experimental
+Portability : POSIX
+-}
+
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fno-warn-unused-top-binds #-}
 module Reflex.Vty
   ( module Reflex
   , module Reflex.Vty.Host

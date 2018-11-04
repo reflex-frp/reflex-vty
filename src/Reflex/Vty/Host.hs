@@ -1,3 +1,7 @@
+{-|
+Module: Reflex.Vty.Host
+Description: Scaffolding for running a reflex-vty application
+-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
@@ -40,6 +44,8 @@ import Reflex.Spider.Orphans ()
 import qualified Graphics.Vty as V
 import Graphics.Vty (DisplayRegion)
 
+-- | A synonym for the underlying vty event type from 'Graphics.Vty'. This should
+-- probably ultimately be replaced by something defined in this library.
 type VtyEvent = V.Event
 
 -- | The output of a 'VtyApp'.
@@ -51,6 +57,8 @@ data VtyResult t = VtyResult
   -- ^ An event that requests application termination.
   }
 
+-- | The constraints necessary to run a 'VtyApp'. See 'runVtyAppWithHandle' for more
+-- on why each of these are necessary and how they can be fulfilled.
 type MonadVtyApp t m =
   ( Reflex t
   , MonadHold t m
@@ -225,6 +233,7 @@ runVtyApp app = do
   vty <- getDefaultVty
   runVtyAppWithHandle vty app
 
+-- | Returns the standard vty configuration with mouse mode enabled.
 getDefaultVty :: IO V.Vty
 getDefaultVty = do
   cfg <- V.standardIOConfig

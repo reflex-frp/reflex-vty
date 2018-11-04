@@ -30,7 +30,6 @@ module Reflex.Vty.Widget
   , modifyImages
   , tellImages
   , tellShutdown
-  , wrapText
   , splitV
   , splitVDrag
   , fractionSz
@@ -92,7 +91,9 @@ instance (Reflex t) => Monoid (VtyWidgetOut t) where
   mempty = VtyWidgetOut mempty mempty
   mappend wo wo' = wo <> wo'
 
-newtype VtyWidget t m a = VtyWidget { unVtyWidget :: WriterT (VtyWidgetOut t) (ReaderT (VtyWidgetCtx t) m) a }
+newtype VtyWidget t m a = VtyWidget
+  { unVtyWidget :: WriterT (VtyWidgetOut t) (ReaderT (VtyWidgetCtx t) m) a
+  }
   deriving (Functor, Applicative, Monad, MonadSample t, MonadHold t, MonadFix)
 
 -- | Runs a 'VtyWidget' with a given context
@@ -104,7 +105,10 @@ runVtyWidget
 runVtyWidget ctx w = runReaderT (runWriterT (unVtyWidget w)) ctx
 
 -- | Sets up the top-level context for a 'VtyWidget' and runs it with that context
-mainWidgetWithHandle :: V.Vty -> (forall t m. MonadVtyApp t m => VtyWidget t m ()) -> IO ()
+mainWidgetWithHandle
+  :: V.Vty
+  -> (forall t m. MonadVtyApp t m => VtyWidget t m ())
+  -> IO ()
 mainWidgetWithHandle vty child =
   runVtyAppWithHandle vty $ \dr0 inp -> do
     size <- holdDyn dr0 $ fforMaybe inp $ \case
@@ -125,7 +129,9 @@ mainWidgetWithHandle vty child =
       }
 
 -- | Like 'mainWidgetWithHandle', but uses a default vty configuration
-mainWidget :: (forall t m. MonadVtyApp t m => VtyWidget t m ()) -> IO ()
+mainWidget
+  :: (forall t m. MonadVtyApp t m => VtyWidget t m ())
+  -> IO ()
 mainWidget child = do
   vty <- getDefaultVty
   mainWidgetWithHandle vty child
@@ -414,25 +420,33 @@ box style child = do
             ]
       in sides ++ if width > 1 && height > 1 then corners else []
 
-text :: (Reflex t, Monad m) => Behavior t Text -> VtyWidget t m ()
+text
+  :: (Reflex t, Monad m)
+  => Behavior t Text
+  -> VtyWidget t m ()
 text msg = do
   dw <- displayWidth
   let img = (\w s -> [wrapText w V.defAttr s]) <$> current dw <*> msg
   tellImages img
+  where
+    wrapText maxWidth attrs = V.vertCat
+      . concatMap (fmap (V.string attrs . T.unpack) . TZ.wrapWithOffset maxWidth 0)
+      . T.split (=='\n')
 
-display :: (Reflex t, Monad m, Show a) => Behavior t a -> VtyWidget t m ()
+display
+  :: (Reflex t, Monad m, Show a)
+  => Behavior t a
+  -> VtyWidget t m ()
 display a = text $ T.pack . show <$> a
 
 regionBlankImage :: Region -> Image
 regionBlankImage r@(Region _ _ width height) =
   withinImage r $ V.charFill V.defAttr ' ' width height
 
-withinImage :: Region -> Image -> Image
+withinImage
+  :: Region
+  -> Image
+  -> Image
 withinImage (Region left top width height)
   | width < 0 || height < 0 = withinImage (Region left top 0 0)
   | otherwise = V.translate left top . V.crop width height
-
-wrapText :: Int -> Attr -> Text -> Image
-wrapText maxWidth attrs = V.vertCat
-  . concatMap (fmap (V.string attrs . T.unpack) . TZ.wrapWithOffset maxWidth 0)
-  . T.split (=='\n')
