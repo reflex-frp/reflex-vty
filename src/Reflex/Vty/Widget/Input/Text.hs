@@ -11,12 +11,13 @@ module Reflex.Vty.Widget.Input.Text
   , def
   ) where
 
-import Control.Monad.Fix
-import Data.Default
+import Control.Monad.Fix (MonadFix)
+import Data.Default (Default(..))
 import Data.Text (Text)
 import Data.Text.Zipper
 import qualified Graphics.Vty as V
 import Reflex
+
 import Reflex.Vty.Widget
 
 -- | Configuration options for a 'textInput'. For more information on

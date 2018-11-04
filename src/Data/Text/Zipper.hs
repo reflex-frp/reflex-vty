@@ -12,11 +12,11 @@ Description: A zipper for text documents that allows convenient editing and navi
 {-# LANGUAGE OverloadedStrings #-}
 module Data.Text.Zipper where
 
-import Data.Char
+import Data.Char (isSpace)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
-import Control.Monad.State
+import Control.Monad.State (evalState, forM, get, put)
 
 import Data.Text (Text)
 import qualified Data.Text as T

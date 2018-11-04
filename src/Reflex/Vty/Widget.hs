@@ -53,7 +53,7 @@ import Control.Monad.Fix (MonadFix)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, asks, ask)
 import Control.Monad.Trans.Writer (WriterT, runWriterT, censor, tell)
-import Data.Default
+import Data.Default (Default(..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Zipper as TZ
