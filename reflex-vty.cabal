@@ -18,6 +18,7 @@ library
   other-modules: Reflex.Spider.Orphans
   build-depends:
     base,
+    containers,
     data-default,
     dependent-sum,
     mtl,

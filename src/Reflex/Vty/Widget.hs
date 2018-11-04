@@ -55,9 +55,7 @@ import Control.Monad.Fix (MonadFix)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, asks, ask)
 import Control.Monad.Trans.Writer (WriterT, runWriterT, censor, tell)
-import Data.Char
 import Data.Default
-import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Graphics.Vty (Image, Attr)
@@ -65,6 +63,8 @@ import qualified Graphics.Vty as V
 import Reflex
 
 import Reflex.Vty.Host
+import Reflex.Vty.Widget.Text (TextZipper(..), DisplayLines(..))
+import qualified Reflex.Vty.Widget.Text as TZ
 
 -- | The context within which a 'VtyWidget' runs
 data VtyWidgetCtx t = VtyWidgetCtx
@@ -448,166 +448,49 @@ wrapWithOffset maxWidth n xs =
   let (firstLine, rest) = T.splitAt (maxWidth - n) xs
   in firstLine : (fmap (T.take maxWidth) . takeWhile (not . T.null) . iterate (T.drop maxWidth) $ rest)
 
-wrapInputState
-  :: Int -- ^ Maximum line length
-  -> Attr -- ^ Normal string attributes
-  -> Attr -- ^ Cursor character attributes
-  -> InputState -- ^ The input to render
-  -> ([Image], Int)
-wrapInputState maxWidth attrs cursorAttrs (InputState before after) =
-  let -- Break up the InputState into:
-      -- * A top section of lines before the line containing the cursor
-      -- * A part of the line containing the cursor that comes immediately before the cursor
-      -- * The cursor character (i.e., the character the cursor is on top of)
-      -- * The remainder of the line containing the cursor
-      -- * The bottom section of lines after the line containing the cursor
-      (top, midBefore, cursorChar, midAfter, bottom) = case (initLast before', headTail after') of
-        (Nothing, Nothing) -> ([], "", ' ', "", [])
-        (Just (top', mid), Nothing) -> (top', mid, ' ', "", [])
-        (Nothing, Just (mid, bottom')) -> case T.uncons mid of
-          Nothing -> ([], "", ' ', "", bottom')
-          Just (c, rest) -> ([], "", c, rest, bottom')
-        (Just (top', midB), Just (midA, bottom')) -> case T.uncons midA of
-          Nothing -> (top', midB, ' ', "", bottom')
-          Just (c, rest) -> (top', midB, c, rest, bottom')
-      wrappedTop = wrap top
-      wrappedBottom = wrap bottom
-      (midBeforeTop, midBefore') = fromMaybe ([], "") $ initLast $ wrap [midBefore]
-      cursorAfterEOL = T.length midBefore' == maxWidth
-      (midAfter', midAfterBottom) =
-        let offset = if cursorAfterEOL then 1 else T.length midBefore' + 1
-        in  case wrapWithOffset maxWidth offset midAfter of
-              [] -> ("", [])
-              x:xs -> (x, xs)
-      cursor = V.char cursorAttrs cursorChar
-      images = mconcat
-        [ vstring <$> wrappedTop
-        , vstring <$> midBeforeTop
-        , if cursorAfterEOL
-            then
-              [ vstring midBefore'
-              , V.horizCat
-                [ cursor
-                , vstring midAfter'
-                ]
-              ]
-            else
-              [ V.horizCat
-                [ vstring midBefore'
-                , cursor
-                , vstring midAfter'
-                ]
-              ]
-        , vstring <$> midAfterBottom
-        , vstring <$> wrappedBottom
-        ]
-      cursorY = length wrappedTop + length midBeforeTop + if cursorAfterEOL then 1 else 0
-  in (images, cursorY)
-  where
-    before' = T.split (=='\n') before
-    after' = T.split (=='\n') after
-    vstring = V.string attrs . T.unpack
-    wrap :: [Text] -> [Text]
-    wrap = concatMap (wrapWithOffset maxWidth 0)
-    headTail :: [a] -> Maybe (a, [a])
-    headTail = \case
-      [] -> Nothing
-      x:xs -> Just (x, xs)
-    initLast :: [a] -> Maybe ([a], a)
-    initLast = \case
-      [] -> Nothing
-      (x:xs) -> case initLast xs of
-        Nothing -> Just ([], x)
-        Just (ys, y) -> Just (x:ys, y)
-
-data InputState = InputState
-  { _inputState_beforeCursor :: Text
-  , _inputState_afterCursor :: Text
-  }
-
-inputValue :: InputState -> Text
-inputValue (InputState a b) = a <> b
-
-updateInputState :: V.Event -> InputState -> InputState
-updateInputState ev i@(InputState before after) = case ev of
-  -- Regular characters
-  V.EvKey (V.KChar k) [] -> InputState (T.snoc before k) after
-  -- Deletion buttons
-  V.EvKey V.KBS [] -> InputState (if T.null before then T.empty else T.init before) after
-  V.EvKey V.KDel [] -> case T.uncons after of
-    Nothing -> i
-    Just (_, a) -> InputState before a
-  -- Key combinations
-  V.EvKey (V.KChar 'u') [V.MCtrl] -> InputState mempty mempty
-  V.EvKey (V.KChar 'w') [V.MCtrl] -> InputState (T.dropWhileEnd (not . isSpace) $ T.dropWhileEnd isSpace $ before) after
-  -- Arrow keys
-  V.EvKey V.KRight [] -> case T.uncons after of
-    Nothing -> i
-    Just (a, as) -> InputState (T.snoc before a) as
-  V.EvKey V.KLeft [] -> case T.unsnoc before of
-    Nothing -> i
-    Just (bs, b) -> InputState bs (T.cons b after)
-  V.EvKey V.KUp [] ->
-    let (pre, post) = T.breakOnEnd "\n" before
-        (top, previousLine) =  T.breakOnEnd "\n" (T.dropEnd 1 pre)
-        (previousLineBefore, previousLineAfter) = T.splitAt (T.length post) previousLine
-    in if T.null pre
-         then i
-         else InputState (top <> previousLineBefore) (previousLineAfter <> "\n" <> post <> after)
-  V.EvKey V.KDown [] ->
-    let offset = T.length $ T.takeWhileEnd (/='\n') before
-        (pre, post) = T.breakOn "\n" after
-        (nextLine, rest) = T.breakOn "\n" (T.drop 1 post)
-        (nextLineBefore, nextLineAfter) = T.splitAt offset nextLine
-    in if T.null post
-         then i
-         else InputState (before <> pre <> "\n" <> nextLineBefore) (nextLineAfter <> rest)
-  V.EvKey V.KHome [] ->
-    let (pre, post) = T.breakOnEnd "\n" before
-    in InputState pre (post <> after)
-  V.EvKey V.KEnd [] ->
-    let (pre, post) = T.breakOn "\n" after
-    in InputState (before <> pre) post
-  _ -> i
-
 data TextInputConfig t = TextInputConfig
-  { _textInputConfig_initialValue :: Text
-  , _textInputConfig_modifyInputState :: Event t (InputState -> InputState)
+  { _textInputConfig_initialValue :: TextZipper
+  , _textInputConfig_modify :: Event t (TextZipper -> TextZipper)
   }
 
 instance Reflex t => Default (TextInputConfig t) where
-  def = TextInputConfig "" never
+  def = TextInputConfig TZ.empty never
 
-textInput :: (Reflex t, MonadHold t m, MonadFix m) => TextInputConfig t -> VtyWidget t m (Dynamic t Text)
+textInput
+  :: (Reflex t, MonadHold t m, MonadFix m)
+  => TextInputConfig t
+  -> VtyWidget t m (Dynamic t Text)
 textInput cfg = do
   i <- input
-  v <- foldDyn ($) (InputState (_textInputConfig_initialValue cfg) mempty) $ mergeWith (.)
-    [ updateInputState <$> i
-    , _textInputConfig_modifyInputState cfg
+  v <- foldDyn ($) (_textInputConfig_initialValue cfg) $ mergeWith (.)
+    [ TZ.updateTextZipper <$> i
+    , _textInputConfig_modify cfg
     ]
   dw <- displayWidth
   dh <- displayHeight
-  let img = (\w s -> wrapInputState w V.defAttr (V.withStyle V.defAttr V.reverseVideo) s) -- TODO cursor ought to blink
-        <$> dw
-        <*> v
-  y <- holdUniqDyn $ snd <$> img
+  let rows = (\w s -> TZ.displayLines w s) <$> dw <*> v
+      img = TZ.images . _displayLines_spans <$> rows
+  y <- holdUniqDyn $ _displayLines_cursorY <$> rows
   let newScrollTop st (h, cursorY)
         | cursorY < st = cursorY
         | cursorY >= st + h = cursorY - h + 1
         | otherwise = st
   rec let hy = attachWith newScrollTop (current scrollTop) $ updated $ zipDyn dh y
       scrollTop <- holdDyn 0 hy
-  tellImages $ (\(imgs, _) st -> (:[]) . V.vertCat $ drop st imgs) <$> current img <*> current scrollTop
-  return $ inputValue <$> v
+  tellImages $ (\imgs st -> (:[]) . V.vertCat $ drop st imgs) <$> current img <*> current scrollTop
+  return $ TZ.value <$> v
 
-multilineTextInput :: (Reflex t, MonadHold t m, MonadFix m) => TextInputConfig t -> VtyWidget t m (Dynamic t Text)
+multilineTextInput
+  :: (Reflex t, MonadHold t m, MonadFix m)
+  => TextInputConfig t
+  -> VtyWidget t m (Dynamic t Text)
 multilineTextInput cfg = do
   i <- input
   textInput $ cfg
-    { _textInputConfig_modifyInputState = mergeWith (.)
+    { _textInputConfig_modify = mergeWith (.)
       [ fforMaybe i $ \case
-          V.EvKey V.KEnter [] -> Just $ \(InputState before after) -> InputState (T.snoc before '\n') after
+          V.EvKey V.KEnter [] -> Just $ TZ.insert "\n"
           _ -> Nothing
-      , _textInputConfig_modifyInputState cfg
+      , _textInputConfig_modify cfg
       ]
     }
