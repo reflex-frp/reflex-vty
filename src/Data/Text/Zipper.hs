@@ -280,8 +280,10 @@ offsetMap ts = evalState (offsetMap' ts) (0, 0)
       put (dl, o + 1)
       return $ Map.insert dl (o + 1) $ Map.unions maps
 
--- | Move the cursor of the given 'TextZipper' to the logical position indicated by
--- the given display line coordinates, using the provided 'DisplayLines' information.
+-- | Move the cursor of the given 'TextZipper' to the logical position indicated
+-- by the given display line coordinates, using the provided 'DisplayLines'
+-- information.  If the x coordinate is beyond the end of a line, the cursor is
+-- moved to the end of the line.
 goToDisplayLinePosition :: Int -> Int -> DisplayLines tag -> TextZipper -> TextZipper
 goToDisplayLinePosition x y dl tz =
   let offset = Map.lookup y $ _displayLines_offsetMap dl
