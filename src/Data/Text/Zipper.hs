@@ -142,7 +142,7 @@ fromText = flip insert empty
 data Span tag = Span tag Text
   deriving (Show)
 
--- | Information about the documents as it is displayed (i.e., post-wrapping)
+-- | Information about the document as it is displayed (i.e., post-wrapping)
 data DisplayLines tag = DisplayLines
   { _displayLines_spans :: [[Span tag]]
   , _displayLines_offsetMap :: Map Int Int
