@@ -1,3 +1,7 @@
+{-|
+Module: Reflex.Vty.Widget
+Description: Basic set of widgets and building blocks for reflex-vty applications
+-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -167,6 +171,7 @@ instance (Reflex t, Monad m) => HasFocus t (VtyWidget t m) where
 
 -- | A class for widgets that can produce images to draw to the display
 class (Reflex t, Monad m) => ImageWriter t m | m -> t where
+  -- | Send images upstream for rendering
   tellImages :: Behavior t [Image] -> m ()
 
 instance (Reflex t, Monad m) => ImageWriter t (VtyWidget t m) where
@@ -174,6 +179,7 @@ instance (Reflex t, Monad m) => ImageWriter t (VtyWidget t m) where
 
 -- | A class for things that can shut down the vty application
 class (Reflex t, Monad m) => Shutdown t m where
+  -- | Signals that the vty application should shut down
   tellShutdown :: Event t () -> m ()
 
 instance (Reflex t, Monad m) => Shutdown t (VtyWidget t m) where
@@ -191,6 +197,22 @@ data Region = Region
 -- | The width and height of a 'Region'
 regionSize :: Region -> (Int, Int)
 regionSize (Region _ _ w h) = (w, h)
+
+
+-- | Produces an 'Image' that fills a region with space characters
+regionBlankImage :: Region -> Image
+regionBlankImage r@(Region _ _ width height) =
+  withinImage r $ V.charFill V.defAttr ' ' width height
+
+-- | Translates and crops an 'Image' so that it is contained by
+-- the given 'Region'.
+withinImage
+  :: Region
+  -> Image
+  -> Image
+withinImage (Region left top width height)
+  | width < 0 || height < 0 = withinImage (Region left top 0 0)
+  | otherwise = V.translate left top . V.crop width height
 
 -- | Low-level widget combinator that runs a child 'VtyWidget' within
 -- a given region and context. This widget filters and modifies the input
@@ -455,20 +477,12 @@ text msg = do
       . concatMap (fmap (V.string attrs . T.unpack) . TZ.wrapWithOffset maxWidth 0)
       . T.split (=='\n')
 
+-- | Renders any behavior whose value can be converted to
+-- 'String' as text
 display
   :: (Reflex t, Monad m, Show a)
   => Behavior t a
   -> VtyWidget t m ()
 display a = text $ T.pack . show <$> a
 
-regionBlankImage :: Region -> Image
-regionBlankImage r@(Region _ _ width height) =
-  withinImage r $ V.charFill V.defAttr ' ' width height
 
-withinImage
-  :: Region
-  -> Image
-  -> Image
-withinImage (Region left top width height)
-  | width < 0 || height < 0 = withinImage (Region left top 0 0)
-  | otherwise = V.translate left top . V.crop width height
