@@ -471,6 +471,7 @@ wrapInputState maxWidth attrs cursorAttrs (InputState before after) =
           Nothing -> (top', midB, ' ', "", bottom')
           Just (c, rest) -> (top', midB, c, rest, bottom')
       wrappedTop = wrap top
+      wrappedBottom = wrap bottom
       (midBeforeTop, midBefore') = fromMaybe ([], "") $ initLast $ wrap [midBefore]
       cursorAfterEOL = T.length midBefore' == maxWidth
       (midAfter', midAfterBottom) =
@@ -498,7 +499,7 @@ wrapInputState maxWidth attrs cursorAttrs (InputState before after) =
                 ]
               ]
         , vstring <$> midAfterBottom
-        , vstring <$> bottom
+        , vstring <$> wrappedBottom
         ]
       cursorY = length wrappedTop + length midBeforeTop + if cursorAfterEOL then 1 else 0
   in (images, cursorY)
