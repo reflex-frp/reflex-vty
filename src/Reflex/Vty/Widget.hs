@@ -32,7 +32,6 @@ module Reflex.Vty.Widget
   , tellShutdown
   , splitV
   , splitVDrag
-  , fractionSz
   , box
   , text
   , display
@@ -91,6 +90,7 @@ instance (Reflex t) => Monoid (VtyWidgetOut t) where
   mempty = VtyWidgetOut mempty mempty
   mappend wo wo' = wo <> wo'
 
+-- | A widget that can read its context and produce image output
 newtype VtyWidget t m a = VtyWidget
   { unVtyWidget :: WriterT (VtyWidgetOut t) (ReaderT (VtyWidgetCtx t) m) a
   }
@@ -136,42 +136,50 @@ mainWidget child = do
   vty <- getDefaultVty
   mainWidgetWithHandle vty child
 
+-- | A class for things that know their own display size dimensions
 class (Reflex t, Monad m) => HasDisplaySize t m | m -> t where
   displaySize :: m (Dynamic t (Int, Int))
 
 instance (Reflex t, Monad m) => HasDisplaySize t (VtyWidget t m) where
   displaySize = VtyWidget . lift $ asks _vtyWidgetCtx_size
 
+-- | Retrieve the display width (columns)
 displayWidth :: HasDisplaySize t m => m (Dynamic t Int)
 displayWidth = fmap fst <$> displaySize
 
+-- | Retrieve the display height (rows)
 displayHeight :: HasDisplaySize t m => m (Dynamic t Int)
 displayHeight = fmap snd <$> displaySize
 
+-- | A class for things that can receive vty events as input
 class HasVtyInput t m | m -> t where
   input :: m (Event t VtyEvent)
 
 instance (Reflex t, Monad m) => HasVtyInput t (VtyWidget t m) where
   input = VtyWidget . lift $ asks _vtyWidgetCtx_input
 
+-- | A class for things that can dynamically gain and lose focus
 class HasFocus t m | m -> t where
   focus :: m (Dynamic t Bool)
 
 instance (Reflex t, Monad m) => HasFocus t (VtyWidget t m) where
   focus = VtyWidget . lift $ asks _vtyWidgetCtx_focus
 
+-- | A class for widgets that can produce images to draw to the display
 class (Reflex t, Monad m) => ImageWriter t m | m -> t where
   tellImages :: Behavior t [Image] -> m ()
 
 instance (Reflex t, Monad m) => ImageWriter t (VtyWidget t m) where
   tellImages imgs = VtyWidget $ tell (mempty { _vtyWidgetOut_images = imgs })
 
+-- | A class for things that can shut down the vty application
 class (Reflex t, Monad m) => Shutdown t m where
   tellShutdown :: Event t () -> m ()
 
 instance (Reflex t, Monad m) => Shutdown t (VtyWidget t m) where
   tellShutdown sd = VtyWidget $ tell (mempty { _vtyWidgetOut_shutdown = sd })
 
+-- | A chunk of the display area
 data Region = Region
   { _region_left :: Int
   , _region_top :: Int
@@ -180,9 +188,17 @@ data Region = Region
   }
   deriving (Show, Read, Eq, Ord)
 
+-- | The width and height of a 'Region'
 regionSize :: Region -> (Int, Int)
 regionSize (Region _ _ w h) = (w, h)
 
+-- | Low-level widget combinator that runs a child 'VtyWidget' within
+-- a given region and context. This widget filters and modifies the input
+-- that the child widget receives such that:
+-- * unfocused widgets receive no key events
+-- * mouse inputs outside the region are ignored
+-- * mouse inputs inside the region have their coordinates translated such
+--   that (0,0) is the top-left corner of the region
 pane
   :: (Reflex t, Monad m)
   => Dynamic t Region -- ^ Region into which we should draw the widget (in coordinates relative to our own)
@@ -207,11 +223,6 @@ pane reg foc child = VtyWidget $ do
   tell wo'
   return result
   where
-    -- Filters input such that:
-    -- * unfocused widgets receive no key events
-    -- * mouse inputs outside the region are ignored
-    -- * mouse inputs inside the region have their coordinates translated
-    -- such that (0,0) is the top-left corner of the region
     filterInput :: Region -> Bool -> VtyEvent -> Maybe VtyEvent
     filterInput (Region l t w h) focused e = case e of
       V.EvKey _ _ | not focused -> Nothing
@@ -227,6 +238,7 @@ pane reg foc child = VtyWidget $ do
           | otherwise =
             Just (con (x - l) (y - t))
 
+-- | Information about a drag operation
 data Drag = Drag
   { _drag_from :: (Int, Int) -- ^ Where the drag began
   , _drag_to :: (Int, Int) -- ^ Where the mouse currently is
@@ -236,14 +248,16 @@ data Drag = Drag
   }
   deriving (Eq, Ord, Show)
 
+-- | Converts raw vty mouse drag events into an event stream of 'Drag's
 drag
   :: (Reflex t, MonadFix m, MonadHold t m)
   => V.Button
   -> VtyWidget t m (Event t Drag)
 drag btn = do
   inp <- input
-  let f :: Drag -> V.Event -> Maybe Drag
-      f (Drag from _ _ mods end) = \case
+  let f :: Maybe Drag -> V.Event -> Maybe Drag
+      f Nothing = const Nothing
+      f (Just (Drag from _ _ mods end)) = \case
         V.EvMouseDown x y btn' mods'
           | end         -> Just $ Drag (x,y) (x,y) btn' mods' False
           | btn == btn' -> Just $ Drag from (x,y) btn mods' False
@@ -258,10 +272,10 @@ drag btn = do
           | otherwise -> Just $ Drag from (x,y) btn mods True
         _ -> Nothing
   rec let newDrag = attachWithMaybe f (current dragD) inp
-      dragD <- holdDyn (Drag (0,0) (0,0) btn [] True) -- gross, but ok because it'll never be produced.
-                       newDrag
-  return (updated dragD)
+      dragD <- holdDyn Nothing $ Just <$> newDrag
+  return (fmapMaybe id $ updated dragD)
 
+-- | Mouse down events for a particular mouse button
 mouseDown
   :: (Reflex t, Monad m)
   => V.Button
@@ -342,9 +356,7 @@ fill c = do
 hRule :: (Reflex t, Monad m) => BoxStyle -> VtyWidget t m ()
 hRule boxStyle = fill (_boxStyle_s boxStyle)
 
-fractionSz :: Double -> Int -> Int
-fractionSz x h = round (fromIntegral h * x)
-
+-- | Transform the images produces by a widget
 modifyImages
   :: (Reflex t, MonadHold t m, MonadFix m)
   => Behavior t ([Image] -> [Image])
@@ -353,6 +365,8 @@ modifyImages
 modifyImages f (VtyWidget w) = VtyWidget $ flip censor w $ \wo ->
   wo { _vtyWidgetOut_images = f <*> (_vtyWidgetOut_images wo) }
 
+-- | Defines a set of symbols to use to draw the outlines of boxes
+-- C.f. https://en.wikipedia.org/wiki/Box-drawing_character
 data BoxStyle = BoxStyle
   { _boxStyle_nw :: Char
   , _boxStyle_n :: Char
@@ -367,21 +381,28 @@ data BoxStyle = BoxStyle
 instance Default BoxStyle where
   def = singleBoxStyle
 
+-- | A box style that uses hyphens and pipe characters. Doesn't handle
+-- corners very well.
 hyphenBoxStyle :: BoxStyle
 hyphenBoxStyle = BoxStyle '-' '-' '-' '|' '-' '-' '-' '|'
 
+-- | A single line box style
 singleBoxStyle :: BoxStyle
 singleBoxStyle = BoxStyle '┌' '─' '┐' '│' '┘' '─' '└' '│'
 
+-- | A thick single line box style
 thickBoxStyle :: BoxStyle
 thickBoxStyle = BoxStyle '┏' '━' '┓' '┃' '┛' '━' '┗' '┃'
 
+-- | A double line box style
 doubleBoxStyle :: BoxStyle
 doubleBoxStyle = BoxStyle '╔' '═' '╗' '║' '╝' '═' '╚' '║'
 
+-- | A single line box style with rounded corners
 roundedBoxStyle :: BoxStyle
 roundedBoxStyle = BoxStyle '╭' '─' '╮' '│' '╯' '─' '╰' '│'
 
+-- | Draws a box in the provided style and a child widget inside of that box
 box :: (Monad m, Reflex t)
     => BoxStyle
     -> VtyWidget t m a
@@ -420,6 +441,7 @@ box style child = do
             ]
       in sides ++ if width > 1 && height > 1 then corners else []
 
+-- | Renders text, wrapped to the container width
 text
   :: (Reflex t, Monad m)
   => Behavior t Text
