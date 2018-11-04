@@ -230,19 +230,15 @@ wrapWithOffset maxWidth n xs =
 -- from display line index to text offset in the original text.
 -- This is used to help determine how interactions with the displayed
 -- text map back to the original text.
--- For example, given the document @"AA\nBBB\nCCCCCCCC\n"@ wrapped to 5 columns,
+-- For example, given the document @\"AA\\nBBB\\nCCCCCCCC\\n\"@ wrapped to 5 columns,
 -- this function will compute the offset in the original document of each character
 -- in column 1:
--- @
 --
---     AA...      (0, 0)
---     BBB..      (1, 3)
---     CCCCC      (2, 7)  -- (this line wraps to the next row)
---     CCC..      (3, 12)
---     .....      (4, 16)
---
---
--- @
+-- >   AA...      (0, 0)
+-- >   BBB..      (1, 3)
+-- >   CCCCC      (2, 7)  -- (this line wraps to the next row)
+-- >   CCC..      (3, 12)
+-- >   .....      (4, 16)
 offsetMap
   :: [[Text]] -- ^ The outer list represents logical lines, and the
               -- inner list represents the display lines into which
