@@ -54,7 +54,7 @@ import Data.Default
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Zipper as TZ
-import Graphics.Vty (Image, Attr)
+import Graphics.Vty (Image)
 import qualified Graphics.Vty as V
 import Reflex
 
