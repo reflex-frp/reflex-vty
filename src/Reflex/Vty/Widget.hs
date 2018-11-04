@@ -29,6 +29,8 @@ module Reflex.Vty.Widget
   , regionBlankImage
   , Drag(..)
   , drag
+  , MouseDown(..)
+  , MouseUp(..)
   , mouseDown
   , pane
   , modifyImages

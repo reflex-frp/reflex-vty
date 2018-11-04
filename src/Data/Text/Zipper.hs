@@ -93,7 +93,7 @@ end (TextZipper lb b a la) = TextZipper lb (b <> a) "" la
 top :: TextZipper -> TextZipper
 top (TextZipper lb b a la) = case reverse lb of
   [] -> TextZipper [] "" (b <> a) la
-  (start:rest) -> TextZipper [] "" start (rest <> la)
+  (start:rest) -> TextZipper [] "" start (rest <> [b <> a] <> la)
 
 -- | Insert a character at the current cursor position
 insertChar :: Char -> TextZipper -> TextZipper
