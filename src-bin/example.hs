@@ -36,7 +36,7 @@ main = mainWidget $ do
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
   let buttons = do
-        text $ pure "Select an example. Ctrl+c to quit."
+        text $ pure "Select an example. Esc will bring you back here. Ctrl+c to quit."
         let region1 = ffor size $ \(w,h) ->
               Region (w `div` 6) (h `div` 6) (w `div` 6) (h `div` 6)
             region2 = ffor size $ \(w,h) ->
@@ -44,12 +44,19 @@ main = mainWidget $ do
         todo' <- pane region1 (pure True) $ button "Todo List"
         editor <- pane region2 (pure True) $ button "Text Editor"
         return $ leftmost
-          [ Example_TextEditor <$ editor
-          , Example_Todo <$ todo'
+          [ Left Example_TextEditor <$ editor
+          , Left Example_Todo <$ todo'
           ]
-  rec out <- networkHold buttons $ ffor (switch $ current out) $ \case
-        Example_TextEditor -> testBoxes >> return never
-        Example_Todo -> taskList >> return never
+      escapable w = do
+        w
+        i <- input
+        return $ fforMaybe i $ \case
+          V.EvKey V.KEsc [] -> Just $ Right ()
+          _ -> Nothing
+  rec out <- networkHold buttons $ ffor (switch (current out)) $ \case
+        Left Example_TextEditor -> escapable testBoxes
+        Left Example_Todo -> escapable taskList
+        Right () -> buttons
   return ()
 
 taskList
