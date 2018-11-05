@@ -65,7 +65,7 @@ taskList
 taskList = do
   let btn = textButtonStatic def "Add another task"
   inp <- input
-  rec let todos' = todos [Todo "First" True, Todo "Second" False, Todo "Third" False] $ leftmost
+  rec let todos' = todos [Todo "Find reflex-vty" True, Todo "Become functional reactive" False, Todo "Make vty apps" False] $ leftmost
             [ () <$ e
             , fforMaybe inp $ \case
                 V.EvKey V.KEnter [] -> Just ()

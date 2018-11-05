@@ -6,6 +6,9 @@ License     : GPL-3
 Maintainer  : maintainer@obsidian.systems
 Stability   : experimental
 Portability : POSIX
+
+<<./doc/welcome.gif>>
+
 -}
 module Reflex.Vty
   ( module Reflex

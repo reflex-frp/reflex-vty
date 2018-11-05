@@ -1,7 +1,10 @@
 name: reflex-vty
 version: 0.1.0.0
 synopsis: Reflex FRP host and widgets for vty applications
-description: Host and widget library for Reflex-based FRP applications
+description:
+  Host and widget library for Reflex-based FRP applications
+  .
+  <<./doc/welcome.gif>>
 license: BSD3
 license-file: LICENSE
 author: Obsidian Systems LLC
@@ -9,6 +12,7 @@ maintainer: maintainer@obsidian.systems
 category: FRP
 build-type: Simple
 cabal-version: >=1.10
+extra-doc-files: doc/welcome.gif
 
 library
   exposed-modules: Reflex.Vty
