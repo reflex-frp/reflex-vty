@@ -75,6 +75,7 @@ type MonadVtyApp t m =
   , PerformEvent t m
   , MonadIO m
   , MonadIO (Performable m)
+  , Adjustable t m
   )
 
 -- | A functional reactive vty application.

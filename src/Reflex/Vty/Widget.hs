@@ -11,7 +11,10 @@ Description: Basic set of widgets and building blocks for reflex-vty application
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Reflex.Vty.Widget
   ( VtyWidgetCtx(..)
   , VtyWidget(..)
@@ -32,6 +35,7 @@ module Reflex.Vty.Widget
   , MouseDown(..)
   , MouseUp(..)
   , mouseDown
+  , mouseUp
   , pane
   , modifyImages
   , tellImages
@@ -55,6 +59,7 @@ import Control.Monad.Fix (MonadFix)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, asks, ask)
 import Control.Monad.Trans.Writer (WriterT, runWriterT, censor, tell)
+import Control.Monad.Writer.Adjustable ()
 import Data.Default (Default(..))
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -62,6 +67,9 @@ import qualified Data.Text.Zipper as TZ
 import Graphics.Vty (Image)
 import qualified Graphics.Vty as V
 import Reflex
+import Reflex.Class.Switchable
+import Reflex.NotReady.Class
+import Reflex.NotReady.Class.Orphans ()
 
 import Reflex.Vty.Host
 
@@ -96,11 +104,32 @@ instance (Reflex t) => Monoid (VtyWidgetOut t) where
   mempty = VtyWidgetOut mempty mempty
   mappend wo wo' = wo <> wo'
 
+instance Reflex t => Switchable t (VtyWidgetOut t) where
+  switching e0 e = do
+    shutdown <- switching (_vtyWidgetOut_shutdown e0) $ fmap _vtyWidgetOut_shutdown e
+    images <- switching (_vtyWidgetOut_images e0) $ fmap _vtyWidgetOut_images e
+    return $ VtyWidgetOut
+      { _vtyWidgetOut_images = images
+      , _vtyWidgetOut_shutdown = shutdown
+      }
+
 -- | A widget that can read its context and produce image output
 newtype VtyWidget t m a = VtyWidget
   { unVtyWidget :: WriterT (VtyWidgetOut t) (ReaderT (VtyWidgetCtx t) m) a
   }
-  deriving (Functor, Applicative, Monad, MonadSample t, MonadHold t, MonadFix)
+  deriving (Functor, Applicative, Monad, MonadSample t, MonadHold t, MonadFix, NotReady t)
+
+instance (PostBuild t m, Reflex t) => PostBuild t (VtyWidget t m) where
+  getPostBuild = VtyWidget $ lift getPostBuild
+
+instance (Adjustable t m, MonadHold t m, Reflex t) => Adjustable t (VtyWidget t m) where
+  runWithReplace a0 a' = VtyWidget $ runWithReplace (unVtyWidget a0) $ fmap unVtyWidget a'
+  traverseIntMapWithKeyWithAdjust f dm0 dm' = VtyWidget $
+    traverseIntMapWithKeyWithAdjust (\k v -> unVtyWidget (f k v)) dm0 dm'
+  traverseDMapWithKeyWithAdjust f dm0 dm' = VtyWidget $ do
+    traverseDMapWithKeyWithAdjust (\k v -> unVtyWidget (f k v)) dm0 dm'
+  traverseDMapWithKeyWithAdjustWithMove f dm0 dm' = VtyWidget $ do
+    traverseDMapWithKeyWithAdjustWithMove (\k v -> unVtyWidget (f k v)) dm0 dm'
 
 -- | Runs a 'VtyWidget' with a given context
 runVtyWidget
@@ -128,7 +157,9 @@ mainWidgetWithHandle vty child =
           , _vtyWidgetCtx_input = inp'
           , _vtyWidgetCtx_focus = constDyn True
           }
-    ((), wo) <- runVtyWidget ctx child
+    ((), wo) <- runVtyWidget ctx $ do
+      tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
+      child
     return $ VtyResult
       { _vtyResult_picture = fmap (V.picForLayers . reverse) (_vtyWidgetOut_images wo)
       , _vtyResult_shutdown = _vtyWidgetOut_shutdown wo
@@ -314,6 +345,16 @@ mouseDown btn = do
     V.EvMouseDown x y btn' mods -> if btn == btn'
       then Just $ MouseDown btn' (x, y) mods
       else Nothing
+    _ -> Nothing
+
+-- | Mouse up events for a particular mouse button
+mouseUp
+  :: (Reflex t, Monad m)
+  => VtyWidget t m (Event t MouseUp)
+mouseUp = do
+  i <- input
+  return $ fforMaybe i $ \case
+    V.EvMouseUp x y btn' -> Just $ MouseUp btn' (x, y)
     _ -> Nothing
 
 -- | Information about a mouse down event

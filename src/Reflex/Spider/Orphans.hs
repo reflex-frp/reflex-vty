@@ -1,3 +1,7 @@
+{-|
+Module: Reflex.Spider.Orphans
+Description: Orphan instances for SpiderTimeline and SpiderHost
+-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}

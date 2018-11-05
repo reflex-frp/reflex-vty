@@ -7,10 +7,6 @@ Maintainer  : maintainer@obsidian.systems
 Stability   : experimental
 Portability : POSIX
 -}
-
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -fno-warn-unused-top-binds #-}
 module Reflex.Vty
   ( module Reflex
   , module Reflex.Vty.Host

@@ -17,11 +17,15 @@ library
                  , Reflex.Vty.Widget.Input
                  , Reflex.Vty.Widget.Input.Text
                  , Data.Text.Zipper
-  other-modules: Reflex.Spider.Orphans
+                 , Control.Monad.Writer.Adjustable
+                 , Reflex.Class.Switchable
+                 , Reflex.NotReady.Class.Orphans
+                 , Reflex.Spider.Orphans
   build-depends:
     base,
     containers,
     data-default,
+    dependent-map,
     dependent-sum,
     mtl,
     primitive,
@@ -41,6 +45,7 @@ executable example
   ghc-options: -threaded
   build-depends:
     base,
+    containers,
     reflex,
     reflex-vty,
     text,

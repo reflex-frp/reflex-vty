@@ -3,26 +3,34 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -threaded #-}
 
 import Control.Monad.Fix
+import Data.Foldable
+import Data.Sequence (Seq)
+import qualified Data.Sequence as Seq
+import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Zipper as TZ
 import qualified Graphics.Vty as V
 import Reflex
+import Reflex.Network
+import Reflex.NotReady.Class
 import Reflex.Vty
 
 main :: IO ()
-main =
-  mainWidget $ do
-    inp <- input
-    tellShutdown . fforMaybe inp $ \case
-      V.EvKey V.KEsc _ -> Just ()
-      _ -> Nothing
-
-    debugInput
-    testBoxes
-    return ()
+main = mainWidget $ do
+  inp <- input
+  tellShutdown . fforMaybe inp $ \case
+    V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
+    _ -> Nothing
+  rec let todos' = todos [] $ () <$ e
+          btn = button $ pure "Add another task"
+      (_, e) <- splitV (pure (subtract 3)) (pure (True, True)) todos' btn
+  return ()
 
 testBoxes :: (Reflex t, MonadHold t m, MonadFix m) => VtyWidget t m ()
 testBoxes = do 
@@ -52,3 +60,68 @@ dragTest = do
 testStringBox :: (Reflex t, Monad m) => VtyWidget t m ()
 testStringBox = box singleBoxStyle .
   text . pure . T.pack . take 500 $ cycle ('\n' : ['a'..'z'])
+
+
+data Todo = Todo
+  { _todo_label :: Text
+  , _todo_done :: Bool
+  }
+  deriving (Show, Read, Eq, Ord)
+
+checkbox
+  :: (MonadHold t m, MonadFix m, Reflex t)
+  => Bool
+  -> VtyWidget t m (Dynamic t Bool)
+checkbox v0 = do
+  i <- input
+  v <- toggle v0 $ fforMaybe i $ \case
+    V.EvMouseUp _ _ _ -> Just ()
+    _ -> Nothing
+  text $ current $ ffor v $ \v' -> if v' then "[x]" else "[ ]"
+  return v
+
+button :: (Reflex t, Monad m) => Behavior t Text -> VtyWidget t m (Event t ())
+button t = do
+  box roundedBoxStyle $ text t
+  fmap (() <$) mouseUp
+
+todo
+  :: (MonadHold t m, MonadFix m, Reflex t)
+  => Todo
+  -> VtyWidget t m (Dynamic t Todo)
+todo t0 = do
+  w <- displayWidth
+  let checkboxWidth = 3
+      checkboxRegion = pure $ Region 0 0 checkboxWidth 1
+      labelRegion = ffor w $ \w' -> Region (checkboxWidth + 1) 0 (w' - 1 - checkboxWidth) 1
+  value <- pane checkboxRegion (pure True) $ checkbox $ _todo_done t0
+  label <- pane labelRegion (pure True) $
+    textInput $ def { _textInputConfig_initialValue = TZ.fromText $ _todo_label t0 }
+  return $ Todo <$> label <*> value
+
+todos
+  :: (MonadHold t m, MonadFix m, Reflex t, Adjustable t m, NotReady t m, PostBuild t m)
+  => [Todo]
+  -> Event t ()
+  -> VtyWidget t m (Dynamic t (Seq Todo))
+todos todos0 newTodo = do
+  rec todos <- foldDyn ($) (Seq.fromList todos0) $ leftmost
+        [ (\ts -> ts Seq.|> Todo "" False) <$ newTodo
+        , (\(ix, t) -> Seq.update ix t) <$> updates
+        ]
+      w <- displayWidth
+      listOut <- networkView $ ffor todos $ \ts' ->
+        flip Seq.traverseWithIndex ts' $ \row t -> do
+          let reg = fmap (\w' -> Region 0 row w' 1) w
+          pane reg (fmap (==row) selected) $ do
+            e <- mouseUp
+            r <- todo t
+            return (row <$ e, (row,) <$> updated r)
+      selectionClick <- switchHold never $
+        fmap (leftmost . toList . fmap fst) listOut
+      selected <- holdDyn 0 $ leftmost
+        [ selectionClick
+        , Seq.length <$> tag (current todos) newTodo
+        ]
+      updates <- switchHold never $ fmap (leftmost . toList . fmap snd) listOut
+  return todos
