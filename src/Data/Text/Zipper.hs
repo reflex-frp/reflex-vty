@@ -135,6 +135,11 @@ deleteLeftWord (TextZipper lb b a la) =
           (l:ls) -> deleteLeftWord $ TextZipper ls l a la
         else TextZipper lb (T.dropWhileEnd (not . isSpace) b') a la
 
+-- | Insert up to n spaces to get to the next logical column that is a multiple of n
+tab :: Int -> TextZipper -> TextZipper
+tab n z@(TextZipper _ b _ _) =
+  insert (T.replicate (fromEnum $ n - (T.length b `mod` n)) " ") z
+
 -- | The plain text contents of the zipper
 value :: TextZipper -> Text
 value (TextZipper lb b a la) = T.intercalate "\n" $ mconcat [ reverse lb

@@ -98,6 +98,7 @@ spanToImage (Span attrs t) = V.text' attrs t
 updateTextZipper :: V.Event -> TextZipper -> TextZipper
 updateTextZipper ev = case ev of
   -- Regular characters
+  V.EvKey (V.KChar '\t') [] -> tab 4
   V.EvKey (V.KChar k) [] -> insertChar k
   -- Deletion buttons
   V.EvKey V.KBS [] -> deleteLeft
