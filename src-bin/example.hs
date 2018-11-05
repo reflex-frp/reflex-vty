@@ -19,17 +19,45 @@ import qualified Data.Text as T
 import qualified Data.Text.Zipper as TZ
 import qualified Graphics.Vty as V
 import Reflex
+import Reflex.Network
 import Reflex.Class.Switchable
 import Reflex.NotReady.Class
 import Reflex.Vty
 
+data Example = Example_TextEditor
+             | Example_Todo
+  deriving (Show, Read, Eq, Ord, Enum, Bounded)
+
 main :: IO ()
 main = mainWidget $ do
   inp <- input
+  size <- displaySize
   tellShutdown . fforMaybe inp $ \case
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
+  let buttons = do
+        text $ pure "Select an example. Ctrl+c to quit."
+        let region1 = ffor size $ \(w,h) ->
+              Region (w `div` 6) (h `div` 6) (w `div` 6) (h `div` 6)
+            region2 = ffor size $ \(w,h) ->
+              Region (2 * w `div` 6) (h `div` 6) (w `div` 6) (h `div` 6)
+        todo' <- pane region1 (pure True) $ button "Todo List"
+        editor <- pane region2 (pure True) $ button "Text Editor"
+        return $ leftmost
+          [ Example_TextEditor <$ editor
+          , Example_Todo <$ todo'
+          ]
+  rec out <- networkHold buttons $ ffor (switch $ current out) $ \case
+        Example_TextEditor -> testBoxes >> return never
+        Example_Todo -> taskList >> return never
+  return ()
+
+taskList
+  :: (Reflex t, MonadHold t m, MonadFix m, Adjustable t m, NotReady t m, PostBuild t m)
+  => VtyWidget t m ()
+taskList = do
   let btn = button $ pure "Add another task"
+  inp <- input
   rec let todos' = todos [Todo "First" True, Todo "Second" False, Todo "Third" False] $ leftmost
             [ () <$ e
             , fforMaybe inp $ \case
@@ -41,7 +69,7 @@ main = mainWidget $ do
   return ()
 
 testBoxes :: (Reflex t, MonadHold t m, MonadFix m) => VtyWidget t m ()
-testBoxes = do 
+testBoxes = do
   size <- displaySize
   let region1 = fmap (\(w,h) -> Region (w `div` 6) (h `div` 6) (w `div` 2) (h `div` 2)) size
       region2 = fmap (\(w,h) -> Region (w `div` 4) (h `div` 4) (2 * (w `div` 3)) (2*(h `div` 3))) size
