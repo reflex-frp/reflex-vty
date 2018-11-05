@@ -7,7 +7,7 @@ Maintainer  : maintainer@obsidian.systems
 Stability   : experimental
 Portability : POSIX
 
-<<./doc/welcome.gif>>
+<<./doc/tasks.png>>
 
 -}
 module Reflex.Vty
