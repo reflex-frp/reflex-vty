@@ -1,6 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
@@ -8,18 +10,16 @@
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -threaded #-}
 
+import Control.Applicative
 import Control.Monad.Fix
-import Data.Foldable
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Sequence (Seq)
-import qualified Data.Sequence as Seq
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Zipper as TZ
 import qualified Graphics.Vty as V
 import Reflex
-import Reflex.Network
+import Reflex.Class.Switchable
 import Reflex.NotReady.Class
 import Reflex.Vty
 
@@ -30,8 +30,13 @@ main = mainWidget $ do
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
   let btn = button $ pure "Add another task"
-  rec let todos'' = todos' [Todo "First" True, Todo "Second" False, Todo "Third" False] $ () <$ e
-      (m, (e, _)) <- splitV (pure (subtract 6)) (pure (True, True)) todos'' $ do
+  rec let todos' = todos [Todo "First" True, Todo "Second" False, Todo "Third" False] $ leftmost
+            [ () <$ e
+            , fforMaybe inp $ \case
+                V.EvKey V.KEnter [] -> Just ()
+                _ -> Nothing
+            ]
+      (m, (e, _)) <- splitV (pure (subtract 6)) (pure (True, True)) todos' $ do
         splitV (pure (subtract 3)) (pure (True, True)) btn (display $ current m)
   return ()
 
@@ -64,7 +69,6 @@ testStringBox :: (Reflex t, Monad m) => VtyWidget t m ()
 testStringBox = box singleBoxStyle .
   text . pure . T.pack . take 500 $ cycle ('\n' : ['a'..'z'])
 
-
 data Todo = Todo
   { _todo_label :: Text
   , _todo_done :: Bool
@@ -88,57 +92,52 @@ button t = do
   box roundedBoxStyle $ text t
   fmap (() <$) mouseUp
 
+data TodoOutput t = TodoOutput
+  { _todoOutput_todo :: Dynamic t Todo
+  , _todoOutput_delete :: Event t ()
+  }
+
+instance Reflex t => Switchable t (TodoOutput t) where
+  switching t0 e = TodoOutput
+    <$> switching (_todoOutput_todo t0) (_todoOutput_todo <$> e)
+    <*> switching (_todoOutput_delete t0) (_todoOutput_delete <$> e)
+
 todo
   :: (MonadHold t m, MonadFix m, Reflex t)
   => Todo
-  -> VtyWidget t m (Dynamic t Todo)
+  -> VtyWidget t m (TodoOutput t)
 todo t0 = do
   w <- displayWidth
   let checkboxWidth = 3
       checkboxRegion = pure $ Region 0 0 checkboxWidth 1
       labelRegion = ffor w $ \w' -> Region (checkboxWidth + 1) 0 (w' - 1 - checkboxWidth) 1
   value <- pane checkboxRegion (pure True) $ checkbox $ _todo_done t0
-  label <- pane labelRegion (pure True) $
-    textInput $ def { _textInputConfig_initialValue = TZ.fromText $ _todo_label t0 }
-  return $ Todo <$> label <*> value
+  (label, d) <- pane labelRegion (pure True) $ do
+    i <- input
+    v <- textInput $ def { _textInputConfig_initialValue = TZ.fromText $ _todo_label t0 }
+    let deleteSelf = attachWithMaybe backspaceOnEmpty (current v) i
+    return (v, deleteSelf)
+  return $ TodoOutput
+    { _todoOutput_todo = Todo <$> label <*> value
+    , _todoOutput_delete = d
+    }
+  where
+    backspaceOnEmpty v = \case
+      V.EvKey V.KBS _ | T.null v -> Just ()
+      _ -> Nothing
 
 todos
-  :: (MonadHold t m, MonadFix m, Reflex t, Adjustable t m, NotReady t m, PostBuild t m)
-  => [Todo]
-  -> Event t ()
-  -> VtyWidget t m (Dynamic t (Seq Todo))
-todos todos0 newTodo = do
-  rec todos <- foldDyn ($) (Seq.fromList todos0) $ leftmost
-        [ (\ts -> ts Seq.|> Todo "" False) <$ newTodo
-        , (\(ix, t) -> Seq.update ix t) <$> updates
-        ]
-      w <- displayWidth
-      listOut <- networkView $ ffor todos $ \ts' ->
-        flip Seq.traverseWithIndex ts' $ \row t -> do
-          let reg = fmap (\w' -> Region 0 row w' 1) w
-          pane reg (fmap (==row) selected) $ do
-            e <- mouseUp
-            r <- todo t
-            return (row <$ e, (row,) <$> updated r)
-      selectionClick <- switchHold never $
-        fmap (leftmost . toList . fmap fst) listOut
-      selected <- holdDyn 0 $ leftmost
-        [ selectionClick
-        , Seq.length <$> tag (current todos) newTodo
-        ]
-      updates <- switchHold never $ fmap (leftmost . toList . fmap snd) listOut
-  return todos
-
-todos'
-  :: (MonadHold t m, MonadFix m, Reflex t, Adjustable t m, NotReady t m, PostBuild t m)
+  :: forall t m. (MonadHold t m, MonadFix m, Reflex t, Adjustable t m, NotReady t m, PostBuild t m)
   => [Todo]
   -> Event t ()
   -> VtyWidget t m (Dynamic t (Map Int Todo))
-todos' todos0 newTodo = do
+todos todos0 newTodo = do
   let todosMap0 = Map.fromList $ zip [0..] todos0
   w <- displayWidth
-  rec listOut <- listHoldWithKey todosMap0 insert $ \row t -> do
-        let reg = fmap (\w' -> Region 0 row w' 1) w
+  rec listOut <- listHoldWithKey todosMap0 updates $ \row t -> do
+        let reg = zipDynWith (\w' ts ->
+              let l = Map.size $ Map.takeWhileAntitone (<row) ts
+              in Region 0 l w' 1) w todosMap
         pane reg (fmap (==row) selected) $ do
           e <- mouseUp
           r <- todo t
@@ -146,10 +145,21 @@ todos' todos0 newTodo = do
       let selectionClick = switch . current $ fmap (leftmost . Map.elems . fmap fst) listOut
       selected <- holdDyn 0 $ leftmost
         [ selectionClick
-        , Map.size <$> tag (current todosMap) newTodo
+        , fmapMaybe (fmap fst . Map.lookupMax) insert
+        , selectOnDelete
         ]
-      let todosMap = joinDynThroughMap $ fmap (fmap snd) listOut
-      let insert = ffor (tagPromptlyDyn todosMap newTodo) $ \m -> case Map.lookupMax m of
+      let todosMap = joinDynThroughMap $ fmap (fmap (_todoOutput_todo . snd)) listOut
+          todoDelete = switch . current $
+            leftmost .  Map.elems . Map.mapWithKey (\k -> (k <$) . _todoOutput_delete . snd) <$> listOut
+          selectOnDelete = attachWithMaybe
+            (\m k -> let (before, after) = Map.split k m
+                      in  fmap fst $ Map.lookupMax before <|> Map.lookupMin after)
+            (current todosMap)
+            todoDelete
+          insert = ffor (tag (current todosMap) newTodo) $ \m -> case Map.lookupMax m of
             Nothing -> Map.singleton 0 $ Just $ Todo "" False
-            Just (k, _) -> {- Map.union (Just <$> m) $ -} Map.singleton (k+1) $ Just $ Todo "" False
+            Just (k, _) -> Map.union (Just <$> m) $ Map.singleton (k+1) $ Just $ Todo "" False
+          delete = ffor (attach (current todosMap) todoDelete) $ \(m, k) ->
+            Map.union (Map.singleton k Nothing) $ Just <$> m
+          updates = leftmost [insert, delete]
   return todosMap
