@@ -21,6 +21,7 @@ From within the nix-shell you can:
 * Load the library in the repl: `cabal repl reflex-vty`
 * Build the example executable: `cabal build example`
 * Build the docs: `cabal haddock`
+* Run ghcid for immediate compiler feedback when you save a .hs file: `ghcid -c "cabal repl reflex-vty --ghc-options=-Wall"`
 * etc.
 
 ### Contributing
