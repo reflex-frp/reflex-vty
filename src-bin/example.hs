@@ -110,18 +110,6 @@ data Todo = Todo
   }
   deriving (Show, Read, Eq, Ord)
 
-checkbox
-  :: (MonadHold t m, MonadFix m, Reflex t)
-  => Bool
-  -> VtyWidget t m (Dynamic t Bool)
-checkbox v0 = do
-  i <- input
-  v <- toggle v0 $ fforMaybe i $ \case
-    V.EvMouseUp _ _ _ -> Just ()
-    _ -> Nothing
-  text $ current $ ffor v $ \v' -> if v' then "[x]" else "[ ]"
-  return v
-
 data TodoOutput t = TodoOutput
   { _todoOutput_todo :: Dynamic t Todo
   , _todoOutput_delete :: Event t ()
@@ -141,7 +129,7 @@ todo t0 = do
   let checkboxWidth = 3
       checkboxRegion = pure $ Region 0 0 checkboxWidth 1
       labelRegion = ffor w $ \w' -> Region (checkboxWidth + 1) 0 (w' - 1 - checkboxWidth) 1
-  value <- pane checkboxRegion (pure True) $ checkbox $ _todo_done t0
+  value <- pane checkboxRegion (pure True) $ checkbox def $ _todo_done t0
   (label, d) <- pane labelRegion (pure True) $ do
     i <- input
     v <- textInput $ def { _textInputConfig_initialValue = TZ.fromText $ _todo_label t0 }

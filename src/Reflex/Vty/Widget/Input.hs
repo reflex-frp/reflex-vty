@@ -2,6 +2,8 @@
 Module: Reflex.Vty.Widget.Input
 Description: User input widgets for reflex-vty
 -}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Reflex.Vty.Widget.Input
   ( module Export
   , module Reflex.Vty.Widget.Input
@@ -10,8 +12,11 @@ module Reflex.Vty.Widget.Input
 
 import Reflex.Vty.Widget.Input.Text as Export
 
-import Data.Default
+import Control.Monad (join)
+import Control.Monad.Fix (MonadFix)
+import Data.Default (Default(..))
 import Data.Text (Text)
+import Data.Text.Zipper (Span)
 import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Vty.Widget
@@ -68,3 +73,59 @@ linkStatic
   => Text
   -> VtyWidget t m (Event t MouseUp)
 linkStatic = link . pure
+
+-- | Characters used to render checked and unchecked textboxes
+data CheckboxStyle = CheckboxStyle
+  { _checkboxStyle_unchecked :: Text
+  , _checkboxStyle_checked :: Text
+  }
+
+instance Default CheckboxStyle where
+  def = checkboxStyleTick
+
+-- | This checkbox style uses an "x" to indicate the checked state
+checkboxStyleX :: CheckboxStyle
+checkboxStyleX = CheckboxStyle
+  { _checkboxStyle_unchecked = "[ ]"
+  , _checkboxStyle_checked = "[x]"
+  }
+
+-- | This checkbox style uses a unicode tick mark to indicate the checked state
+checkboxStyleTick :: CheckboxStyle
+checkboxStyleTick = CheckboxStyle
+  { _checkboxStyle_unchecked = "[ ]"
+  , _checkboxStyle_checked = "[✓]"
+  }
+
+-- | Configuration options for a checkbox
+data CheckboxConfig t = CheckboxConfig
+  { _checkboxConfig_checkboxStyle :: Behavior t CheckboxStyle
+  , _checkboxConfig_attributes :: Behavior t V.Attr
+  }
+
+instance (Reflex t) => Default (CheckboxConfig t) where
+  def = CheckboxConfig
+    { _checkboxConfig_checkboxStyle = pure def
+    , _checkboxConfig_attributes = pure V.defAttr
+    }
+
+-- | A checkbox widget
+checkbox
+  :: (MonadHold t m, MonadFix m, Reflex t)
+  => CheckboxConfig t
+  -> Bool
+  -> VtyWidget t m (Dynamic t Bool)
+checkbox cfg v0 = do
+  md <- mouseDown V.BLeft
+  mu <- mouseUp
+  v <- toggle v0 $ () <$ mu
+  depressed <- hold mempty $ leftmost
+    [ V.withStyle mempty V.bold <$ md
+    , mempty <$ mu
+    ]
+  let attrs = (<>) <$> (_checkboxConfig_attributes cfg) <*> depressed
+  richText (RichTextConfig attrs) $ join . current $ ffor v $ \checked ->
+    if checked
+      then fmap _checkboxStyle_checked $ _checkboxConfig_checkboxStyle cfg
+      else fmap _checkboxStyle_unchecked $ _checkboxConfig_checkboxStyle cfg
+  return v
