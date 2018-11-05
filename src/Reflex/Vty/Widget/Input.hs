@@ -61,3 +61,10 @@ link t = do
         }
   richText cfg t
   mouseUp
+
+-- | A clickable link widget with a static label
+linkStatic
+  :: (Reflex t, Monad m)
+  => Text
+  -> VtyWidget t m (Event t MouseUp)
+linkStatic = link . pure
