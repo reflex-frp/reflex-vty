@@ -10,6 +10,8 @@
 
 import Control.Monad.Fix
 import Data.Foldable
+import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 import Data.Text (Text)
@@ -27,9 +29,10 @@ main = mainWidget $ do
   tellShutdown . fforMaybe inp $ \case
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
-  rec let todos' = todos [] $ () <$ e
-          btn = button $ pure "Add another task"
-      (_, e) <- splitV (pure (subtract 3)) (pure (True, True)) todos' btn
+  let btn = button $ pure "Add another task"
+  rec let todos'' = todos' [Todo "First" True, Todo "Second" False, Todo "Third" False] $ () <$ e
+      (m, (e, _)) <- splitV (pure (subtract 6)) (pure (True, True)) todos'' $ do
+        splitV (pure (subtract 3)) (pure (True, True)) btn (display $ current m)
   return ()
 
 testBoxes :: (Reflex t, MonadHold t m, MonadFix m) => VtyWidget t m ()
@@ -125,3 +128,28 @@ todos todos0 newTodo = do
         ]
       updates <- switchHold never $ fmap (leftmost . toList . fmap snd) listOut
   return todos
+
+todos'
+  :: (MonadHold t m, MonadFix m, Reflex t, Adjustable t m, NotReady t m, PostBuild t m)
+  => [Todo]
+  -> Event t ()
+  -> VtyWidget t m (Dynamic t (Map Int Todo))
+todos' todos0 newTodo = do
+  let todosMap0 = Map.fromList $ zip [0..] todos0
+  w <- displayWidth
+  rec listOut <- listHoldWithKey todosMap0 insert $ \row t -> do
+        let reg = fmap (\w' -> Region 0 row w' 1) w
+        pane reg (fmap (==row) selected) $ do
+          e <- mouseUp
+          r <- todo t
+          return (row <$ e, r)
+      let selectionClick = switch . current $ fmap (leftmost . Map.elems . fmap fst) listOut
+      selected <- holdDyn 0 $ leftmost
+        [ selectionClick
+        , Map.size <$> tag (current todosMap) newTodo
+        ]
+      let todosMap = joinDynThroughMap $ fmap (fmap snd) listOut
+      let insert = ffor (tagPromptlyDyn todosMap newTodo) $ \m -> case Map.lookupMax m of
+            Nothing -> Map.singleton 0 $ Just $ Todo "" False
+            Just (k, _) -> {- Map.union (Just <$> m) $ -} Map.singleton (k+1) $ Just $ Todo "" False
+  return todosMap

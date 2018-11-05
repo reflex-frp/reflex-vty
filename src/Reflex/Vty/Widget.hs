@@ -231,7 +231,6 @@ data Region = Region
 regionSize :: Region -> (Int, Int)
 regionSize (Region _ _ w h) = (w, h)
 
-
 -- | Produces an 'Image' that fills a region with space characters
 regionBlankImage :: Region -> Image
 regionBlankImage r@(Region _ _ width height) =
