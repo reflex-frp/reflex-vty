@@ -39,15 +39,15 @@ textInput
 textInput cfg = do
   i <- input
   f <- focus
+  dh <- displayHeight
+  dw <- displayWidth
   rec v <- foldDyn ($) (_textInputConfig_initialValue cfg) $ mergeWith (.)
-        [ updateTextZipper (_textInputConfig_tabWidth cfg) <$> i
+        [ uncurry (updateTextZipper (_textInputConfig_tabWidth cfg)) <$> attach (current dh) i
         , _textInputConfig_modify cfg
         , let displayInfo = (,) <$> rows <*> scrollTop
           in ffor (attach (current displayInfo) click) $ \((dl, st), MouseDown _ (mx, my) _) ->
             goToDisplayLinePosition mx (st + my) dl
         ]
-      dw <- displayWidth
-      dh <- displayHeight
       click <- mouseDown V.BLeft
       let cursorAttrs = ffor f $ \x -> if x then cursorAttributes else V.defAttr
       let rows = (\w s c -> displayLines w V.defAttr c s) <$> dw <*> v <*> cursorAttrs
@@ -96,10 +96,16 @@ spanToImage :: Span V.Attr -> V.Image
 spanToImage (Span attrs t) = V.text' attrs t
 
 -- | Default vty event handler for text inputs
-updateTextZipper :: Int -> V.Event -> TextZipper -> TextZipper
-updateTextZipper tabWidth ev = case ev of
-  -- Regular characters
+updateTextZipper
+  :: Int -- ^ Tab width
+  -> Int -- ^ Page size
+  -> V.Event -- ^ The vty event to handle
+  -> TextZipper -- ^ The zipper to modify
+  -> TextZipper
+updateTextZipper tabWidth pageSize ev = case ev of
+  -- Special characters
   V.EvKey (V.KChar '\t') [] -> tab tabWidth
+  -- Regular characters
   V.EvKey (V.KChar k) [] -> insertChar k
   -- Deletion buttons
   V.EvKey V.KBS [] -> deleteLeft
@@ -114,4 +120,6 @@ updateTextZipper tabWidth ev = case ev of
   V.EvKey V.KDown [] -> down
   V.EvKey V.KHome [] -> home
   V.EvKey V.KEnd [] -> end
+  V.EvKey V.KPageUp [] -> pageUp pageSize
+  V.EvKey V.KPageDown [] -> pageDown pageSize
   _ -> id

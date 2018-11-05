@@ -81,6 +81,18 @@ down z@(TextZipper lb b a la) = case la of
     let (b', a') = T.splitAt (T.length b) l
     in TextZipper ((b <> a) : lb) b' a' ls
 
+-- | Move the cursor up by the given number of lines
+pageUp :: Int -> TextZipper -> TextZipper
+pageUp pageSize z = if pageSize <= 0
+  then z
+  else pageUp (pageSize - 1) $ up z
+
+-- | Move the cursor down by the given number of lines
+pageDown :: Int -> TextZipper -> TextZipper
+pageDown pageSize z = if pageSize <= 0
+  then z
+  else pageDown (pageSize - 1) $ down z
+
 -- | Move the cursor to the beginning of the current logical line
 home :: TextZipper -> TextZipper
 home (TextZipper lb b a la) = TextZipper lb "" (b <> a) la
