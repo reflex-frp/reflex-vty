@@ -23,6 +23,8 @@ library
                  , Reflex.Vty.Widget.Input.Text
                  , Data.Text.Zipper
                  , Control.Monad.Writer.Adjustable
+                 , Reflex.BehaviorWriter.Base
+                 , Reflex.BehaviorWriter.Class
                  , Reflex.Class.Switchable
                  , Reflex.NotReady.Class.Orphans
                  , Reflex.Spider.Orphans
@@ -32,6 +34,7 @@ library
     data-default,
     dependent-map,
     dependent-sum,
+    exception-transformers,
     mtl,
     primitive,
     ref-tf,

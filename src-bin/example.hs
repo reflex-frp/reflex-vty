@@ -33,9 +33,6 @@ main :: IO ()
 main = mainWidget $ do
   inp <- input
   size <- displaySize
-  tellShutdown . fforMaybe inp $ \case
-    V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
-    _ -> Nothing
   let buttons = do
         text $ pure "Select an example. Esc will bring you back here. Ctrl+c to quit."
         let region1 = ffor size $ \(w,h) ->
@@ -58,7 +55,9 @@ main = mainWidget $ do
         Left Example_TextEditor -> escapable testBoxes
         Left Example_Todo -> escapable taskList
         Right () -> buttons
-  return ()
+  return $ fforMaybe inp $ \case
+    V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
+    _ -> Nothing
 
 taskList
   :: (Reflex t, MonadHold t m, MonadFix m, Adjustable t m, NotReady t m, PostBuild t m)
@@ -177,8 +176,7 @@ todos todos0 newTodo = do
             todoDelete
           insert = ffor (tag (current todosMap) newTodo) $ \m -> case Map.lookupMax m of
             Nothing -> Map.singleton 0 $ Just $ Todo "" False
-            Just (k, _) -> Map.union (Just <$> m) $ Map.singleton (k+1) $ Just $ Todo "" False
-          delete = ffor (attach (current todosMap) todoDelete) $ \(m, k) ->
-            Map.union (Map.singleton k Nothing) $ Just <$> m
+            Just (k, _) -> Map.singleton (k+1) $ Just $ Todo "" False
+          delete = ffor todoDelete $ \k -> Map.singleton k Nothing
           updates = leftmost [insert, delete]
   return todosMap

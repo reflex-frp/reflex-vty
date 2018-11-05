@@ -37,9 +37,7 @@ module Reflex.Vty.Widget
   , mouseDown
   , mouseUp
   , pane
-  , modifyImages
   , tellImages
-  , tellShutdown
   , splitV
   , splitVDrag
   , box
@@ -62,8 +60,6 @@ import Control.Applicative (liftA2)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, asks, ask)
-import Control.Monad.Trans.Writer (WriterT, runWriterT, censor, tell)
-import Control.Monad.Writer.Adjustable ()
 import Data.Default (Default(..))
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -71,9 +67,10 @@ import qualified Data.Text.Zipper as TZ
 import Graphics.Vty (Image)
 import qualified Graphics.Vty as V
 import Reflex
-import Reflex.Class.Switchable
 import Reflex.NotReady.Class
 import Reflex.NotReady.Class.Orphans ()
+import Reflex.BehaviorWriter.Class (tellBehavior)
+import Reflex.BehaviorWriter.Base (BehaviorWriterT, runBehaviorWriterT)
 
 import Reflex.Vty.Host
 
@@ -93,38 +90,8 @@ data VtyWidgetCtx t = VtyWidgetCtx
 
 -- | The output of a 'VtyWidget'
 data VtyWidgetOut t = VtyWidgetOut
-  { _vtyWidgetOut_images :: Behavior t [Image]
-    -- ^ The visual output of the 'VtyWidget'
-  , _vtyWidgetOut_shutdown :: Event t ()
+  { _vtyWidgetOut_shutdown :: Event t ()
   }
-
-instance Reflex t => Semigroup (VtyWidgetOut t) where
-  wo <> wo' = VtyWidgetOut
-    { _vtyWidgetOut_images = _vtyWidgetOut_images wo <> _vtyWidgetOut_images wo'
-    , _vtyWidgetOut_shutdown = _vtyWidgetOut_shutdown wo <> _vtyWidgetOut_shutdown wo'
-    }
-
-instance (Reflex t) => Monoid (VtyWidgetOut t) where
-  mempty = VtyWidgetOut mempty mempty
-  mappend wo wo' = wo <> wo'
-
-instance Reflex t => Switchable t (VtyWidgetOut t) where
-  switching e0 e = do
-    shutdown <- switching (_vtyWidgetOut_shutdown e0) $ fmap _vtyWidgetOut_shutdown e
-    images <- switching (_vtyWidgetOut_images e0) $ fmap _vtyWidgetOut_images e
-    return $ VtyWidgetOut
-      { _vtyWidgetOut_images = images
-      , _vtyWidgetOut_shutdown = shutdown
-      }
-
--- | A widget that can read its context and produce image output
-newtype VtyWidget t m a = VtyWidget
-  { unVtyWidget :: WriterT (VtyWidgetOut t) (ReaderT (VtyWidgetCtx t) m) a
-  }
-  deriving (Functor, Applicative, Monad, MonadSample t, MonadHold t, MonadFix, NotReady t)
-
-instance (PostBuild t m, Reflex t) => PostBuild t (VtyWidget t m) where
-  getPostBuild = VtyWidget $ lift getPostBuild
 
 instance (Adjustable t m, MonadHold t m, Reflex t) => Adjustable t (VtyWidget t m) where
   runWithReplace a0 a' = VtyWidget $ runWithReplace (unVtyWidget a0) $ fmap unVtyWidget a'
@@ -135,18 +102,24 @@ instance (Adjustable t m, MonadHold t m, Reflex t) => Adjustable t (VtyWidget t 
   traverseDMapWithKeyWithAdjustWithMove f dm0 dm' = VtyWidget $ do
     traverseDMapWithKeyWithAdjustWithMove (\k v -> unVtyWidget (f k v)) dm0 dm'
 
+-- | A widget that can read its context and produce image output
+newtype VtyWidget t m a = VtyWidget
+  { unVtyWidget :: BehaviorWriterT t [Image] (ReaderT (VtyWidgetCtx t) m) a
+  }
+  deriving (Functor, Applicative, Monad, MonadSample t, MonadHold t, MonadFix, NotReady t, ImageWriter t)
+
 -- | Runs a 'VtyWidget' with a given context
 runVtyWidget
-  :: Reflex t
+  :: (Reflex t, Monad m)
   => VtyWidgetCtx t
   -> VtyWidget t m a
-  -> m (a, VtyWidgetOut t)
-runVtyWidget ctx w = runReaderT (runWriterT (unVtyWidget w)) ctx
+  -> m (a, Behavior t [Image])
+runVtyWidget ctx w = runReaderT (runBehaviorWriterT (unVtyWidget w)) ctx
 
 -- | Sets up the top-level context for a 'VtyWidget' and runs it with that context
 mainWidgetWithHandle
   :: V.Vty
-  -> (forall t m. MonadVtyApp t m => VtyWidget t m ())
+  -> (forall t m. MonadVtyApp t m => VtyWidget t m (Event t ()))
   -> IO ()
 mainWidgetWithHandle vty child =
   runVtyAppWithHandle vty $ \dr0 inp -> do
@@ -161,17 +134,17 @@ mainWidgetWithHandle vty child =
           , _vtyWidgetCtx_input = inp'
           , _vtyWidgetCtx_focus = constDyn True
           }
-    ((), wo) <- runVtyWidget ctx $ do
+    (shutdown, images) <- runVtyWidget ctx $ do
       tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
       child
     return $ VtyResult
-      { _vtyResult_picture = fmap (V.picForLayers . reverse) (_vtyWidgetOut_images wo)
-      , _vtyResult_shutdown = _vtyWidgetOut_shutdown wo
+      { _vtyResult_picture = fmap (V.picForLayers . reverse) images
+      , _vtyResult_shutdown = shutdown
       }
 
 -- | Like 'mainWidgetWithHandle', but uses a default vty configuration
 mainWidget
-  :: (forall t m. MonadVtyApp t m => VtyWidget t m ())
+  :: (forall t m. MonadVtyApp t m => VtyWidget t m (Event t ()))
   -> IO ()
 mainWidget child = do
   vty <- getDefaultVty
@@ -211,16 +184,8 @@ class (Reflex t, Monad m) => ImageWriter t m | m -> t where
   -- | Send images upstream for rendering
   tellImages :: Behavior t [Image] -> m ()
 
-instance (Reflex t, Monad m) => ImageWriter t (VtyWidget t m) where
-  tellImages imgs = VtyWidget $ tell (mempty { _vtyWidgetOut_images = imgs })
-
--- | A class for things that can shut down the vty application
-class (Reflex t, Monad m) => Shutdown t m where
-  -- | Signals that the vty application should shut down
-  tellShutdown :: Event t () -> m ()
-
-instance (Reflex t, Monad m) => Shutdown t (VtyWidget t m) where
-  tellShutdown sd = VtyWidget $ tell (mempty { _vtyWidgetOut_shutdown = sd })
+instance (Monad m, Reflex t) => ImageWriter t (BehaviorWriterT t [Image] m) where
+  tellImages = tellBehavior
 
 -- | A chunk of the display area
 data Region = Region
@@ -274,11 +239,9 @@ pane reg foc child = VtyWidget $ do
             ]
         , _vtyWidgetCtx_focus = liftA2 (&&) (_vtyWidgetCtx_focus ctx) foc
         , _vtyWidgetCtx_size = fmap regionSize reg }
-  (result, wo) <- lift . lift $ runVtyWidget ctx' child
-  let images = _vtyWidgetOut_images wo
-      images' = liftA2 (\r is -> map (withinImage r) is) (current reg) images
-      wo' = wo { _vtyWidgetOut_images = images' }
-  tell wo'
+  (result, images) <- lift . lift $ runVtyWidget ctx' child
+  let images' = liftA2 (\r is -> map (withinImage r) is) (current reg) images
+  tellImages images'
   return result
   where
     filterInput :: Region -> Bool -> VtyEvent -> Maybe VtyEvent
@@ -444,15 +407,6 @@ fill c = do
 -- | Fill the background with the bottom
 hRule :: (Reflex t, Monad m) => BoxStyle -> VtyWidget t m ()
 hRule boxStyle = fill (_boxStyle_s boxStyle)
-
--- | Transform the images produces by a widget
-modifyImages
-  :: (Reflex t, MonadHold t m, MonadFix m)
-  => Behavior t ([Image] -> [Image])
-  -> VtyWidget t m a
-  -> VtyWidget t m a
-modifyImages f (VtyWidget w) = VtyWidget $ flip censor w $ \wo ->
-  wo { _vtyWidgetOut_images = f <*> (_vtyWidgetOut_images wo) }
 
 -- | Defines a set of symbols to use to draw the outlines of boxes
 -- C.f. https://en.wikipedia.org/wiki/Box-drawing_character

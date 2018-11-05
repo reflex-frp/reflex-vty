@@ -20,16 +20,16 @@ import Reflex.Class.Switchable
 
 instance (Adjustable t m, MonadHold t m, Switchable t w, Monoid w) => Adjustable t (WriterT w m) where
   runWithReplace a0 a' = do
-    (w, r) <- lift $ runWithReplace (runWriterT a0) $ fmap (runWriterT) a'
-    tell =<< switching (snd w) (snd <$> r)
-    return $ (fst w, fst <$> r)
+    (result0, result) <- lift $ runWithReplace (runWriterT a0) $ fmap (runWriterT) a'
+    tell =<< switching (snd result0) (snd <$> result)
+    return $ (fst result0, fst <$> result)
   traverseIntMapWithKeyWithAdjust f dm0 dm' = do
-    (w, r) <- lift $ traverseIntMapWithKeyWithAdjust (\k v -> runWriterT (f k v)) dm0 dm'
-    tell =<< switching (fold $ fmap snd w) (fmap (mconcat . patchIntMapNewElements . fmap snd) r)
-    return (fmap fst w, fmap (fmap fst) r)
+    (result0, result) <- lift $ traverseIntMapWithKeyWithAdjust (\k v -> runWriterT (f k v)) dm0 dm'
+    tell =<< switching (fold $ fmap snd result0) (fmap (mconcat . patchIntMapNewElements . fmap snd) result)
+    return (fmap fst result0, fmap (fmap fst) result)
   traverseDMapWithKeyWithAdjustWithMove f dm0 dm' = do
-    (w, r) <- lift $ traverseDMapWithKeyWithAdjustWithMove (\k v -> fmap (\(x, w') -> Compose (w', x)) $ runWriterT (f k v)) dm0 dm'
-    let w' = runWriter $ DMap.traverseWithKey (\_ (Compose (w'', x)) -> tell w'' >> return x) w
-        r' = fmap (runWriter . traversePatchDMapWithMove (\(Compose (w'', x)) -> tell w'' >> return x)) r
-    tell =<< switching (snd w') (fmap snd r')
-    return (fst w', fmap fst r')
+    (result0, result) <- lift $ traverseDMapWithKeyWithAdjustWithMove (\k v -> fmap (\(r, r0) -> Compose (r0, r)) $ runWriterT (f k v)) dm0 dm'
+    let result0' = runWriter $ DMap.traverseWithKey (\_ (Compose (w'', x)) -> tell w'' >> return x) result0
+        result' = fmap (runWriter . traversePatchDMapWithMove (\(Compose (w'', x)) -> tell w'' >> return x)) result
+    tell =<< switching (snd result0') (fmap snd result')
+    return (fst result0', fmap fst result')
