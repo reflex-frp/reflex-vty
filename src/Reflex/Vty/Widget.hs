@@ -43,6 +43,7 @@ module Reflex.Vty.Widget
   , splitV
   , splitVDrag
   , box
+  , boxStatic
   , text
   , display
   , hyphenBoxStyle
@@ -489,19 +490,19 @@ roundedBoxStyle = BoxStyle '╭' '─' '╮' '│' '╯' '─' '╰' '│'
 
 -- | Draws a box in the provided style and a child widget inside of that box
 box :: (Monad m, Reflex t)
-    => BoxStyle
+    => Behavior t BoxStyle
     -> VtyWidget t m a
     -> VtyWidget t m a
-box style child = do
+box boxStyle child = do
   sz <- displaySize
   let boxReg = ffor (current sz) $ \(w,h) -> Region 0 0 w h
       innerReg = ffor sz $ \(w,h) -> Region 1 1 (w - 2) (h - 2)
-  tellImages (fmap boxImages boxReg)
+  tellImages (boxImages <$> boxStyle <*> boxReg)
   tellImages (fmap (\r -> [regionBlankImage r]) (current innerReg))
   pane innerReg (pure True) child
   where
-    boxImages :: Region -> [Image]
-    boxImages (Region left top width height) =
+    boxImages :: BoxStyle -> Region -> [Image]
+    boxImages style (Region left top width height) =
       let right = left + width - 1
           bottom = top + height - 1
           sides =
@@ -525,6 +526,14 @@ box style child = do
                 V.char V.defAttr (_boxStyle_sw style)
             ]
       in sides ++ if width > 1 && height > 1 then corners else []
+
+-- | A box whose style is static
+boxStatic
+  :: (Reflex t, Monad m)
+  => BoxStyle
+  -> VtyWidget t m a
+  -> VtyWidget t m a
+boxStatic = box . pure
 
 -- | Renders text, wrapped to the container width
 text

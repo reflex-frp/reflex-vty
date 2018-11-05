@@ -80,9 +80,9 @@ testBoxes = do
   size <- displaySize
   let region1 = fmap (\(w,h) -> Region (w `div` 6) (h `div` 6) (w `div` 2) (h `div` 2)) size
       region2 = fmap (\(w,h) -> Region (w `div` 4) (h `div` 4) (2 * (w `div` 3)) (2*(h `div` 3))) size
-  pane region1 (constDyn False) . box singleBoxStyle $ debugInput
-  _ <- pane region2 (constDyn True) . box singleBoxStyle $
-    splitVDrag (hRule doubleBoxStyle) (box roundedBoxStyle $ multilineTextInput def) (box roundedBoxStyle dragTest)
+  pane region1 (constDyn False) . boxStatic singleBoxStyle $ debugInput
+  _ <- pane region2 (constDyn True) . boxStatic singleBoxStyle $
+    splitVDrag (hRule doubleBoxStyle) (boxStatic roundedBoxStyle $ multilineTextInput def) (boxStatic roundedBoxStyle dragTest)
   return ()
 
 debugFocus :: (Reflex t, Monad m) => VtyWidget t m ()
@@ -101,7 +101,7 @@ dragTest = do
   text $ T.pack <$> lastEvent
 
 testStringBox :: (Reflex t, Monad m) => VtyWidget t m ()
-testStringBox = box singleBoxStyle .
+testStringBox = boxStatic singleBoxStyle .
   text . pure . T.pack . take 500 $ cycle ('\n' : ['a'..'z'])
 
 data Todo = Todo
@@ -124,7 +124,7 @@ checkbox v0 = do
 
 button :: (Reflex t, Monad m) => Behavior t Text -> VtyWidget t m (Event t ())
 button t = do
-  box roundedBoxStyle $ text t
+  boxStatic roundedBoxStyle $ text t
   fmap (() <$) mouseUp
 
 data TodoOutput t = TodoOutput
