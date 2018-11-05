@@ -44,8 +44,11 @@ module Reflex.Vty.Widget
   , splitVDrag
   , box
   , boxStatic
+  , RichTextConfig(..)
+  , richText
   , text
   , display
+  , BoxStyle(..)
   , hyphenBoxStyle
   , singleBoxStyle
   , roundedBoxStyle
@@ -535,19 +538,38 @@ boxStatic
   -> VtyWidget t m a
 boxStatic = box . pure
 
--- | Renders text, wrapped to the container width
-text
+-- | Configuration options for displaying "rich" text
+data RichTextConfig t = RichTextConfig
+  { _richTextConfig_attributes :: Behavior t V.Attr
+  }
+
+instance Reflex t => Default (RichTextConfig t) where
+  def = RichTextConfig $ pure V.defAttr
+
+-- | A widget that displays text with custom time-varying attributes
+richText
   :: (Reflex t, Monad m)
-  => Behavior t Text
+  => RichTextConfig t
+  -> Behavior t Text
   -> VtyWidget t m ()
-text msg = do
+richText cfg t = do
   dw <- displayWidth
-  let img = (\w s -> [wrapText w V.defAttr s]) <$> current dw <*> msg
+  let img = (\w a s -> [wrapText w a s])
+        <$> current dw
+        <*> _richTextConfig_attributes cfg
+        <*> t
   tellImages img
   where
     wrapText maxWidth attrs = V.vertCat
       . concatMap (fmap (V.string attrs . T.unpack) . TZ.wrapWithOffset maxWidth 0)
       . T.split (=='\n')
+
+-- | Renders text, wrapped to the container width
+text
+  :: (Reflex t, Monad m)
+  => Behavior t Text
+  -> VtyWidget t m ()
+text = richText def
 
 -- | Renders any behavior whose value can be converted to
 -- 'String' as text
@@ -556,5 +578,3 @@ display
   => Behavior t a
   -> VtyWidget t m ()
 display a = text $ T.pack . show <$> a
-
-

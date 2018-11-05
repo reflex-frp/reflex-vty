@@ -41,8 +41,8 @@ main = mainWidget $ do
               Region (w `div` 6) (h `div` 6) (w `div` 6) (h `div` 6)
             region2 = ffor size $ \(w,h) ->
               Region (2 * w `div` 6) (h `div` 6) (w `div` 6) (h `div` 6)
-        todo' <- pane region1 (pure True) $ button "Todo List"
-        editor <- pane region2 (pure True) $ button "Text Editor"
+        todo' <- pane region1 (pure True) $ textButtonStatic def "Todo List"
+        editor <- pane region2 (pure True) $ textButtonStatic def "Text Editor"
         return $ leftmost
           [ Left Example_TextEditor <$ editor
           , Left Example_Todo <$ todo'
@@ -63,7 +63,7 @@ taskList
   :: (Reflex t, MonadHold t m, MonadFix m, Adjustable t m, NotReady t m, PostBuild t m)
   => VtyWidget t m ()
 taskList = do
-  let btn = button $ pure "Add another task"
+  let btn = textButtonStatic def "Add another task"
   inp <- input
   rec let todos' = todos [Todo "First" True, Todo "Second" False, Todo "Third" False] $ leftmost
             [ () <$ e
@@ -121,11 +121,6 @@ checkbox v0 = do
     _ -> Nothing
   text $ current $ ffor v $ \v' -> if v' then "[x]" else "[ ]"
   return v
-
-button :: (Reflex t, Monad m) => Behavior t Text -> VtyWidget t m (Event t ())
-button t = do
-  boxStatic roundedBoxStyle $ text t
-  fmap (() <$) mouseUp
 
 data TodoOutput t = TodoOutput
   { _todoOutput_todo :: Dynamic t Todo
