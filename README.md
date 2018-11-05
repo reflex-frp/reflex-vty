@@ -1,5 +1,7 @@
 # reflex-vty
 
+![reflex-vty example animation](doc/welcome.gif)
+
 ## A library for building functional reactive terminal applications
 
 ### How to Build
