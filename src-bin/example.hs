@@ -11,6 +11,7 @@
 {-# OPTIONS_GHC -threaded #-}
 
 import Control.Applicative
+import Control.Monad (void)
 import Control.Monad.Fix
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -48,7 +49,7 @@ main = mainWidget $ do
           , Left Example_Todo <$ todo'
           ]
       escapable w = do
-        w
+        void w
         i <- input
         return $ fforMaybe i $ \case
           V.EvKey V.KEsc [] -> Just $ Right ()

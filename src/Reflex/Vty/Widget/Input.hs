@@ -16,7 +16,6 @@ import Control.Monad (join)
 import Control.Monad.Fix (MonadFix)
 import Data.Default (Default(..))
 import Data.Text (Text)
-import Data.Text.Zipper (Span)
 import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Vty.Widget
