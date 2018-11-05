@@ -37,6 +37,7 @@ textInput
   -> VtyWidget t m (Dynamic t Text)
 textInput cfg = do
   i <- input
+  f <- focus
   rec v <- foldDyn ($) (_textInputConfig_initialValue cfg) $ mergeWith (.)
         [ updateTextZipper <$> i
         , _textInputConfig_modify cfg
@@ -47,7 +48,8 @@ textInput cfg = do
       dw <- displayWidth
       dh <- displayHeight
       click <- mouseDown V.BLeft
-      let rows = (\w s -> displayLines w V.defAttr cursorAttributes s) <$> dw <*> v
+      let cursorAttrs = ffor f $ \x -> if x then cursorAttributes else V.defAttr
+      let rows = (\w s c -> displayLines w V.defAttr c s) <$> dw <*> v <*> cursorAttrs
           img = images . _displayLines_spans <$> rows
       y <- holdUniqDyn $ _displayLines_cursorY <$> rows
       let newScrollTop :: Int -> (Int, Int) -> Int
