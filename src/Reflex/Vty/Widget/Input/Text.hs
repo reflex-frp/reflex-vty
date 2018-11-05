@@ -25,10 +25,11 @@ import Reflex.Vty.Widget
 data TextInputConfig t = TextInputConfig
   { _textInputConfig_initialValue :: TextZipper
   , _textInputConfig_modify :: Event t (TextZipper -> TextZipper)
+  , _textInputConfig_tabWidth :: Int
   }
 
 instance Reflex t => Default (TextInputConfig t) where
-  def = TextInputConfig empty never
+  def = TextInputConfig empty never 4
 
 -- | A widget that allows text input
 textInput
@@ -39,7 +40,7 @@ textInput cfg = do
   i <- input
   f <- focus
   rec v <- foldDyn ($) (_textInputConfig_initialValue cfg) $ mergeWith (.)
-        [ updateTextZipper <$> i
+        [ updateTextZipper (_textInputConfig_tabWidth cfg) <$> i
         , _textInputConfig_modify cfg
         , let displayInfo = (,) <$> rows <*> scrollTop
           in ffor (attach (current displayInfo) click) $ \((dl, st), MouseDown _ (mx, my) _) ->
@@ -95,10 +96,10 @@ spanToImage :: Span V.Attr -> V.Image
 spanToImage (Span attrs t) = V.text' attrs t
 
 -- | Default vty event handler for text inputs
-updateTextZipper :: V.Event -> TextZipper -> TextZipper
-updateTextZipper ev = case ev of
+updateTextZipper :: Int -> V.Event -> TextZipper -> TextZipper
+updateTextZipper tabWidth ev = case ev of
   -- Regular characters
-  V.EvKey (V.KChar '\t') [] -> tab 4
+  V.EvKey (V.KChar '\t') [] -> tab tabWidth
   V.EvKey (V.KChar k) [] -> insertChar k
   -- Deletion buttons
   V.EvKey V.KBS [] -> deleteLeft
