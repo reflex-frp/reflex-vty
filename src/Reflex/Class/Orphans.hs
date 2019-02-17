@@ -1,4 +1,4 @@
-{-
+{-|
 Module: Reflex.Class.Orphans
 Description: Orphan instances for Dynamic. These should be upstreamed.
 -}
