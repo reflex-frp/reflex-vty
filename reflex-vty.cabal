@@ -23,6 +23,7 @@ library
                  , Reflex.Vty.Widget.Input.Text
                  , Data.Text.Zipper
                  , Control.Monad.Writer.Adjustable
+                 , Reflex.Class.Orphans
                  , Reflex.Class.Switchable
                  , Reflex.NotReady.Class.Orphans
                  , Reflex.Spider.Orphans

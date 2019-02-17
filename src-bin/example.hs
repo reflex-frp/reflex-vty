@@ -21,27 +21,39 @@ import qualified Data.Text as T
 import qualified Data.Text.Zipper as TZ
 import qualified Graphics.Vty as V
 import Reflex
+import Reflex.Class.Orphans
 import Reflex.Network
 import Reflex.Class.Switchable
 import Reflex.NotReady.Class
 import Reflex.Vty
 
+import Data.Tree
+
+-- Unlimited Stack
+  -- Parent provides orientation and maximum cross-dimension size
+  -- Each child takes as much main-dimension space as it wants and reports what it took
+  -- Parent offsets each child so that it does not overlap with other children
+  -- If parent runs of out space, parent provides a scroll bar
+
 data Example = Example_TextEditor
              | Example_Todo
   deriving (Show, Read, Eq, Ord, Enum, Bounded)
 
+div' :: (Integral a, Applicative f) => f a ->f a -> f a
+div' = liftA2 div
+
 main :: IO ()
 main = mainWidget $ do
   inp <- input
-  taskList
 
-{-
+  w <- displayWidth
+  h <- displayHeight
   let buttons = do
         text $ pure "Select an example. Esc will bring you back here. Ctrl+c to quit."
-        let region1 = ffor size $ \(w,h) ->
-              Region (w `div` 6) (h `div` 6) (w `div` 6) (h `div` 6)
-            region2 = ffor size $ \(w,h) ->
-              Region (2 * w `div` 6) (h `div` 6) (w `div` 6) (h `div` 6)
+        let w' = fmap (`div`6) w
+            h' = fmap (`div`6) h
+            region1 = DynRegion w' h' w' h'
+            region2 = DynRegion (2 * w') h' w' h'
         todo' <- pane region1 (pure True) $ textButtonStatic def "Todo List"
         editor <- pane region2 (pure True) $ textButtonStatic def "Text Editor"
         return $ leftmost
@@ -59,7 +71,6 @@ main = mainWidget $ do
         Left Example_Todo -> escapable taskList
         Right () -> buttons
 
--}
   return $ fforMaybe inp $ \case
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
@@ -80,18 +91,16 @@ taskList = do
         splitV (pure (subtract 3)) (pure (True, True)) btn (display $ current m)
   return ()
 
-{-
 testBoxes :: (Reflex t, MonadHold t m, MonadFix m) => VtyWidget t m ()
 testBoxes = do
   dw <- displayWidth
   dh <- displayHeight
-  let region1 = liftA2 (\w h -> Region (w `div` 6) (h `div` 6) (w `div` 2) (h `div` 2)) dw dh
-      region2 = liftA2 (\w h -> Region (w `div` 4) (h `div` 4) (2 * (w `div` 3)) (2*(h `div` 3))) dw dh
+  let region1 = DynRegion (div' dw 6) (div' dh 6) (div' dw 2) (div' dh 2)
+      region2 = DynRegion (div' dw 4) (div' dh 4) (2 * div' dw 3) (2 * div' dh 3)
   pane region1 (constDyn False) . boxStatic singleBoxStyle $ debugInput
   _ <- pane region2 (constDyn True) . boxStatic singleBoxStyle $
     splitVDrag (hRule doubleBoxStyle) (boxStatic roundedBoxStyle $ multilineTextInput def) (boxStatic roundedBoxStyle dragTest)
   return ()
--}
 
 debugFocus :: (Reflex t, Monad m) => VtyWidget t m ()
 debugFocus = do
@@ -137,14 +146,14 @@ todo
 todo t0 = do
   w <- displayWidth
   rec let checkboxWidth = 3
-          checkboxRegion = pure $ Region 0 0 checkboxWidth 1
+          checkboxRegion = DynRegion 0 0 checkboxWidth 1
           labelHeight = _textInput_lines ti
-          labelWidth = ffor w $ \w' -> w' - 1 - checkboxWidth
-          labelLeft = constDyn $ checkboxWidth + 1 
+          labelWidth = w - 1 - checkboxWidth
+          labelLeft = checkboxWidth + 1 
           labelTop = constDyn 0
-          -- labelRegion = liftA2 (\w' h -> Region (checkboxWidth + 1) 0 (w' - 1 - checkboxWidth) h) w (_textInput_lines ti)
+          labelRegion = DynRegion labelLeft labelTop labelWidth labelHeight
       value <- pane checkboxRegion (pure True) $ checkbox def $ _todo_done t0
-      (ti, d) <- pane' labelLeft labelTop labelWidth labelHeight (pure True) $ do
+      (ti, d) <- pane labelRegion (pure True) $ do
         i <- input
         v <- textInput $ def { _textInputConfig_initialValue = TZ.fromText $ _todo_label t0 }
         let deleteSelf = attachWithMaybe backspaceOnEmpty (current $ _textInput_value v) i
@@ -171,11 +180,7 @@ todos todos0 newTodo = do
         let reg = zipDynWith (\w' ts ->
               let l = Map.size $ Map.takeWhileAntitone (<row) ts
               in Region 0 l w' 1) w todosMap
-        pane'
-          (pure 0)
-          (fromMaybe 0 . Map.lookup row <$> offsets)
-          w
-          (fromMaybe 1 . Map.lookup row <$> heights)
+        pane (DynRegion 0 (fromMaybe 0 . Map.lookup row <$> offsets) w (fromMaybe 1 . Map.lookup row <$> heights))
           (fmap (==row) selected) $ do
             e <- mouseUp
             r <- todo t

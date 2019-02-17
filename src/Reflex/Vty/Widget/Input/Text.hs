@@ -32,6 +32,9 @@ data TextInputConfig t = TextInputConfig
 instance Reflex t => Default (TextInputConfig t) where
   def = TextInputConfig empty never 4
 
+-- | The output produced by text input widgets, including the text
+-- value and the number of display lines (post-wrapping). Note that some
+-- display lines may not be visible due to scrolling.
 data TextInput t = TextInput
   { _textInput_value :: Dynamic t Text
   , _textInput_lines :: Dynamic t Int

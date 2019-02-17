@@ -25,6 +25,8 @@ module Reflex.Vty.Widget
   , HasDisplaySize(..)
   , HasFocus(..)
   , HasVtyInput(..)
+  , DynRegion(..)
+  , currentRegion
   , Region(..)
   , regionSize
   , regionBlankImage
@@ -35,10 +37,9 @@ module Reflex.Vty.Widget
   , mouseDown
   , mouseUp
   , pane
-  , pane'
   , tellImages
   , splitV
-  -- , splitVDrag TODO
+  , splitVDrag
   , box
   , boxStatic
   , RichTextConfig(..)
@@ -66,10 +67,9 @@ import qualified Data.Text.Zipper as TZ
 import Graphics.Vty (Image)
 import qualified Graphics.Vty as V
 import Reflex
+import Reflex.Class.Orphans
 import Reflex.NotReady.Class
 import Reflex.NotReady.Class.Orphans ()
-import Reflex.BehaviorWriter.Class (tellBehavior)
-import Reflex.BehaviorWriter.Base (BehaviorWriterT, runBehaviorWriterT)
 
 import Reflex.Vty.Host
 
@@ -194,6 +194,14 @@ data Region = Region
   }
   deriving (Show, Read, Eq, Ord)
 
+-- | A dynamic chunk of the display area
+data DynRegion t = DynRegion
+  { _dynRegion_left :: Dynamic t Int
+  , _dynRegion_top :: Dynamic t Int
+  , _dynRegion_width :: Dynamic t Int
+  , _dynRegion_height :: Dynamic t Int
+  }
+
 -- | The width and height of a 'Region'
 regionSize :: Region -> (Int, Int)
 regionSize (Region _ _ w h) = (w, h)
@@ -202,6 +210,10 @@ regionSize (Region _ _ w h) = (w, h)
 regionBlankImage :: Region -> Image
 regionBlankImage r@(Region _ _ width height) =
   withinImage r $ V.charFill V.defAttr ' ' width height
+
+-- | A behavior of the current display area represented by a 'DynRegion'
+currentRegion :: Reflex t => DynRegion t -> Behavior t Region
+currentRegion (DynRegion l t w h) = Region <$> current l <*> current t <*> current w <*> current h
 
 -- | Translates and crops an 'Image' so that it is contained by
 -- the given 'Region'.
@@ -222,53 +234,11 @@ withinImage (Region left top width height)
 --   that (0,0) is the top-left corner of the region
 pane
   :: (Reflex t, Monad m)
-  => Dynamic t Region -- ^ Region into which we should draw the widget (in coordinates relative to our own)
+  => DynRegion t
   -> Dynamic t Bool -- ^ Whether the widget should be focused when the parent is.
   -> VtyWidget t m a
   -> VtyWidget t m a
-pane reg foc child = VtyWidget $ do
-  ctx <- lift ask
-  let ctx' = VtyWidgetCtx
-        { _vtyWidgetCtx_input = leftmost -- TODO: think about this leftmost more.
-            [ fmapMaybe id $
-                attachWith (\(r,f) e -> filterInput r f e)
-                  (liftA2 (,) (current reg) (current foc))
-                  (_vtyWidgetCtx_input ctx)
-            ]
-        , _vtyWidgetCtx_focus = liftA2 (&&) (_vtyWidgetCtx_focus ctx) foc
-        , _vtyWidgetCtx_width = fmap (fst . regionSize) reg
-        , _vtyWidgetCtx_height = fmap (snd . regionSize) reg
-        }
-  (result, images) <- lift . lift $ runVtyWidget ctx' child
-  let images' = liftA2 (\r is -> map (withinImage r) is) (current reg) images
-  tellImages images'
-  return result
-  where
-    filterInput :: Region -> Bool -> VtyEvent -> Maybe VtyEvent
-    filterInput (Region l t w h) focused e = case e of
-      V.EvKey _ _ | not focused -> Nothing
-      V.EvMouseDown x y btn m -> mouse (\u v -> V.EvMouseDown u v btn m) x y
-      V.EvMouseUp x y btn -> mouse (\u v -> V.EvMouseUp u v btn) x y
-      _ -> Just e
-      where
-        mouse con x y
-          | or [ x < l
-               , y < t
-               , x >= l + w
-               , y >= t + h ] = Nothing
-          | otherwise =
-            Just (con (x - l) (y - t))
-
-pane'
-  :: (Reflex t, Monad m)
-  => Dynamic t Int
-  -> Dynamic t Int
-  -> Dynamic t Int
-  -> Dynamic t Int
-  -> Dynamic t Bool -- ^ Whether the widget should be focused when the parent is.
-  -> VtyWidget t m a
-  -> VtyWidget t m a
-pane' l t w h foc child = VtyWidget $ do
+pane (DynRegion l t w h) foc child = VtyWidget $ do
   ctx <- lift ask
   let reg = Region <$> l <*> t <*> w <*> h
   let ctx' = VtyWidgetCtx
@@ -398,13 +368,22 @@ splitV :: (Reflex t, Monad m)
 splitV sizeFunD focD wA wB = do
   dw <- displayWidth
   dh <- displayHeight
-  let regA = (\f w h -> Region 0 0 w (f h)) <$> sizeFunD <*> dw <*> dh
-      regB = (\w h (Region _ _ _ hA) -> Region 0 hA w (h - hA)) <$> dw <*> dh <*> regA
+  let regA = DynRegion
+        { _dynRegion_left = pure 0
+        , _dynRegion_top = pure 0
+        , _dynRegion_width = dw
+        , _dynRegion_height = sizeFunD <*> dh
+        }
+      regB = DynRegion
+        { _dynRegion_left = pure 0
+        , _dynRegion_top = _dynRegion_height regA
+        , _dynRegion_width = dw
+        , _dynRegion_height = liftA2 (-) dh (_dynRegion_height regA)
+        }
   ra <- pane regA (fst <$> focD) wA
   rb <- pane regB (snd <$> focD) wB
   return (ra,rb)
 
-{-
 -- | A split of the available space into two parts with a draggable separator.
 -- Starts with half the space allocated to each, and the first pane has focus.
 -- Clicking in a pane switches focus.
@@ -414,22 +393,23 @@ splitVDrag :: (Reflex t, MonadFix m, MonadHold t m)
   -> VtyWidget t m b
   -> VtyWidget t m (a,b)
 splitVDrag wS wA wB = do
-  sz <- displaySize
-  (_, h0) <- sample $ current sz
+  dh <- displayHeight
+  dw <- displayWidth
+  h0 <- sample $ current dh -- TODO
   dragE <- drag V.BLeft
   let splitter0 = h0 `div` 2
   rec splitterCheckpoint <- holdDyn splitter0 $ leftmost [fst <$> ffilter snd dragSplitter, resizeSplitter]
       splitterPos <- holdDyn splitter0 $ leftmost [fst <$> dragSplitter, resizeSplitter]
-      splitterFrac <- holdDyn ((1::Double) / 2) $ ffor (attach (current sz) (fst <$> dragSplitter)) $ \((_,h),x) ->
+      splitterFrac <- holdDyn ((1::Double) / 2) $ ffor (attach (current dh) (fst <$> dragSplitter)) $ \(h, x) ->
         fromIntegral x / fromIntegral h
       let dragSplitter = fforMaybe (attach (current splitterCheckpoint) dragE) $
             \(splitterY, Drag (_, fromY) (_, toY) _ _ end) ->
               if splitterY == fromY then Just (toY, end) else Nothing
-          regA = (\(w,_) sp -> Region 0 0 w sp) <$> sz <*> splitterPos
-          regS = (\(w,_) sp -> Region 0 sp w 1) <$> sz <*> splitterPos
-          regB = (\(w,h) sp -> Region 0 (sp + 1) w (h - sp - 1)) <$> sz <*> splitterPos
-          resizeSplitter = ffor (attach (current splitterFrac) (updated sz)) $
-            \(frac, (_,h)) -> round (frac * fromIntegral h)
+          regA = DynRegion 0 0 dw splitterPos
+          regS = DynRegion 0 splitterPos dw 1
+          regB = DynRegion 0 (splitterPos + 1) dw (dh - splitterPos - 1)
+          resizeSplitter = ffor (attach (current splitterFrac) (updated dh)) $
+            \(frac, h) -> round (frac * fromIntegral h)
       focA <- holdDyn True $ leftmost
         [ True <$ mA
         , False <$ mB
@@ -443,7 +423,7 @@ splitVDrag wS wA wB = do
       m <- mouseDown V.BLeft
       x' <- x
       return (m, x')
--}
+
 -- | Fill the background with a particular character.
 fill :: (Reflex t, Monad m) => Char -> VtyWidget t m ()
 fill c = do
@@ -501,10 +481,10 @@ box :: (Monad m, Reflex t)
 box boxStyle child = do
   dh <- displayHeight
   dw <- displayWidth
-  let boxReg = liftA2 (\w h -> Region 0 0 w h) dw dh
-      innerReg = liftA2 (\w h -> Region 1 1 (w - 2) (h - 2)) dw dh
-  tellImages (boxImages <$> boxStyle <*> current boxReg)
-  tellImages (fmap (\r -> [regionBlankImage r]) (current innerReg))
+  let boxReg = DynRegion (pure 0) (pure 0) dw dh
+      innerReg = DynRegion (pure 1) (pure 1) (subtract 2 <$> dw) (subtract 2 <$> dh)
+  tellImages (boxImages <$> boxStyle <*> currentRegion boxReg)
+  tellImages (fmap (\r -> [regionBlankImage r]) (currentRegion innerReg))
   pane innerReg (pure True) child
   where
     boxImages :: BoxStyle -> Region -> [Image]
