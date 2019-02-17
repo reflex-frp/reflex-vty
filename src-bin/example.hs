@@ -11,9 +11,10 @@
 {-# OPTIONS_GHC -threaded #-}
 
 import Control.Applicative
-import Control.Monad (void)
+import Control.Monad
 import Control.Monad.Fix
 import Data.Map (Map)
+import Data.Maybe
 import qualified Data.Map as Map
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -32,7 +33,9 @@ data Example = Example_TextEditor
 main :: IO ()
 main = mainWidget $ do
   inp <- input
-  size <- displaySize
+  taskList
+
+{-
   let buttons = do
         text $ pure "Select an example. Esc will bring you back here. Ctrl+c to quit."
         let region1 = ffor size $ \(w,h) ->
@@ -55,6 +58,8 @@ main = mainWidget $ do
         Left Example_TextEditor -> escapable testBoxes
         Left Example_Todo -> escapable taskList
         Right () -> buttons
+
+-}
   return $ fforMaybe inp $ \case
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
@@ -75,15 +80,18 @@ taskList = do
         splitV (pure (subtract 3)) (pure (True, True)) btn (display $ current m)
   return ()
 
+{-
 testBoxes :: (Reflex t, MonadHold t m, MonadFix m) => VtyWidget t m ()
 testBoxes = do
-  size <- displaySize
-  let region1 = fmap (\(w,h) -> Region (w `div` 6) (h `div` 6) (w `div` 2) (h `div` 2)) size
-      region2 = fmap (\(w,h) -> Region (w `div` 4) (h `div` 4) (2 * (w `div` 3)) (2*(h `div` 3))) size
+  dw <- displayWidth
+  dh <- displayHeight
+  let region1 = liftA2 (\w h -> Region (w `div` 6) (h `div` 6) (w `div` 2) (h `div` 2)) dw dh
+      region2 = liftA2 (\w h -> Region (w `div` 4) (h `div` 4) (2 * (w `div` 3)) (2*(h `div` 3))) dw dh
   pane region1 (constDyn False) . boxStatic singleBoxStyle $ debugInput
   _ <- pane region2 (constDyn True) . boxStatic singleBoxStyle $
     splitVDrag (hRule doubleBoxStyle) (boxStatic roundedBoxStyle $ multilineTextInput def) (boxStatic roundedBoxStyle dragTest)
   return ()
+-}
 
 debugFocus :: (Reflex t, Monad m) => VtyWidget t m ()
 debugFocus = do
@@ -113,12 +121,14 @@ data Todo = Todo
 data TodoOutput t = TodoOutput
   { _todoOutput_todo :: Dynamic t Todo
   , _todoOutput_delete :: Event t ()
+  , _todoOutput_height :: Dynamic t Int
   }
 
 instance Reflex t => Switchable t (TodoOutput t) where
   switching t0 e = TodoOutput
     <$> switching (_todoOutput_todo t0) (_todoOutput_todo <$> e)
     <*> switching (_todoOutput_delete t0) (_todoOutput_delete <$> e)
+    <*> switching (_todoOutput_height t0) (_todoOutput_height <$> e)
 
 todo
   :: (MonadHold t m, MonadFix m, Reflex t)
@@ -126,18 +136,23 @@ todo
   -> VtyWidget t m (TodoOutput t)
 todo t0 = do
   w <- displayWidth
-  let checkboxWidth = 3
-      checkboxRegion = pure $ Region 0 0 checkboxWidth 1
-      labelRegion = ffor w $ \w' -> Region (checkboxWidth + 1) 0 (w' - 1 - checkboxWidth) 1
-  value <- pane checkboxRegion (pure True) $ checkbox def $ _todo_done t0
-  (label, d) <- pane labelRegion (pure True) $ do
-    i <- input
-    v <- textInput $ def { _textInputConfig_initialValue = TZ.fromText $ _todo_label t0 }
-    let deleteSelf = attachWithMaybe backspaceOnEmpty (current v) i
-    return (v, deleteSelf)
+  rec let checkboxWidth = 3
+          checkboxRegion = pure $ Region 0 0 checkboxWidth 1
+          labelHeight = _textInput_lines ti
+          labelWidth = ffor w $ \w' -> w' - 1 - checkboxWidth
+          labelLeft = constDyn $ checkboxWidth + 1 
+          labelTop = constDyn 0
+          -- labelRegion = liftA2 (\w' h -> Region (checkboxWidth + 1) 0 (w' - 1 - checkboxWidth) h) w (_textInput_lines ti)
+      value <- pane checkboxRegion (pure True) $ checkbox def $ _todo_done t0
+      (ti, d) <- pane' labelLeft labelTop labelWidth labelHeight (pure True) $ do
+        i <- input
+        v <- textInput $ def { _textInputConfig_initialValue = TZ.fromText $ _todo_label t0 }
+        let deleteSelf = attachWithMaybe backspaceOnEmpty (current $ _textInput_value v) i
+        return (v, deleteSelf)
   return $ TodoOutput
-    { _todoOutput_todo = Todo <$> label <*> value
+    { _todoOutput_todo = Todo <$> (_textInput_value ti) <*> value
     , _todoOutput_delete = d
+    , _todoOutput_height = _textInput_lines ti
     }
   where
     backspaceOnEmpty v = \case
@@ -156,10 +171,20 @@ todos todos0 newTodo = do
         let reg = zipDynWith (\w' ts ->
               let l = Map.size $ Map.takeWhileAntitone (<row) ts
               in Region 0 l w' 1) w todosMap
-        pane reg (fmap (==row) selected) $ do
-          e <- mouseUp
-          r <- todo t
-          return (row <$ e, r)
+        pane'
+          (pure 0)
+          (fromMaybe 0 . Map.lookup row <$> offsets)
+          w
+          (fromMaybe 1 . Map.lookup row <$> heights)
+          (fmap (==row) selected) $ do
+            e <- mouseUp
+            r <- todo t
+            return (row <$ e, r)
+      let heights :: Dynamic t (Map Int Int) = joinDynThroughMap $ fmap (fmap (_todoOutput_height . snd)) listOut
+          offsets :: Dynamic t (Map Int Int) = ffor heights $ \m ->
+            let l = Map.toList m
+                o = scanl (+) 0 $ map snd l
+            in Map.fromList $ zipWith (\(k, _) o' -> (k, o')) l o
       let selectionClick = switch . current $ fmap (leftmost . Map.elems . fmap fst) listOut
       selected <- holdDyn 0 $ leftmost
         [ selectionClick

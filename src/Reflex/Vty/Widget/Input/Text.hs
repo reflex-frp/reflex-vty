@@ -6,6 +6,7 @@ Description: Widgets for accepting text input from users and manipulating text w
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Reflex.Vty.Widget.Input.Text
   ( module Reflex.Vty.Widget.Input.Text
   , def
@@ -31,11 +32,16 @@ data TextInputConfig t = TextInputConfig
 instance Reflex t => Default (TextInputConfig t) where
   def = TextInputConfig empty never 4
 
+data TextInput t = TextInput
+  { _textInput_value :: Dynamic t Text
+  , _textInput_lines :: Dynamic t Int
+  }
+
 -- | A widget that allows text input
 textInput
   :: (Reflex t, MonadHold t m, MonadFix m)
   => TextInputConfig t
-  -> VtyWidget t m (Dynamic t Text)
+  -> VtyWidget t m (TextInput t)
 textInput cfg = do
   i <- input
   f <- focus
@@ -44,8 +50,8 @@ textInput cfg = do
   rec v <- foldDyn ($) (_textInputConfig_initialValue cfg) $ mergeWith (.)
         [ uncurry (updateTextZipper (_textInputConfig_tabWidth cfg)) <$> attach (current dh) i
         , _textInputConfig_modify cfg
-        , let displayInfo = (,) <$> rows <*> scrollTop
-          in ffor (attach (current displayInfo) click) $ \((dl, st), MouseDown _ (mx, my) _) ->
+        , let displayInfo = (,) <$> current rows <*> scrollTop
+          in ffor (attach displayInfo click) $ \((dl, st), MouseDown _ (mx, my) _) ->
             goToDisplayLinePosition mx (st + my) dl
         ]
       click <- mouseDown V.BLeft
@@ -58,16 +64,19 @@ textInput cfg = do
             | cursorY < st = cursorY
             | cursorY >= st + h = cursorY - h + 1
             | otherwise = st
-      rec let hy = attachWith newScrollTop (current scrollTop) $ updated $ zipDyn dh y
-          scrollTop <- holdDyn 0 hy
-      tellImages $ (\imgs st -> (:[]) . V.vertCat $ drop st imgs) <$> current img <*> current scrollTop
-  return $ value <$> v
+      let hy = attachWith newScrollTop scrollTop $ updated $ zipDyn dh y
+      scrollTop <- hold 0 hy
+      tellImages $ (\imgs st -> (:[]) . V.vertCat $ drop st imgs) <$> current img <*> scrollTop
+  return $ TextInput
+    { _textInput_value = value <$> v
+    , _textInput_lines = length . _displayLines_spans <$> rows
+    }
 
 -- | A widget that allows multiline text input
 multilineTextInput
   :: (Reflex t, MonadHold t m, MonadFix m)
   => TextInputConfig t
-  -> VtyWidget t m (Dynamic t Text)
+  -> VtyWidget t m (TextInput t)
 multilineTextInput cfg = do
   i <- input
   textInput $ cfg

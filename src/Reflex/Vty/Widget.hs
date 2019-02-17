@@ -23,8 +23,6 @@ module Reflex.Vty.Widget
   , mainWidget
   , mainWidgetWithHandle
   , HasDisplaySize(..)
-  , displayWidth
-  , displayHeight
   , HasFocus(..)
   , HasVtyInput(..)
   , Region(..)
@@ -37,9 +35,10 @@ module Reflex.Vty.Widget
   , mouseDown
   , mouseUp
   , pane
+  , pane'
   , tellImages
   , splitV
-  , splitVDrag
+  -- , splitVDrag TODO
   , box
   , boxStatic
   , RichTextConfig(..)
@@ -76,8 +75,10 @@ import Reflex.Vty.Host
 
 -- | The context within which a 'VtyWidget' runs
 data VtyWidgetCtx t = VtyWidgetCtx
-  { _vtyWidgetCtx_size :: Dynamic t (Int,Int)
-    -- ^ The width and height of the region allocated to the widget.
+  { _vtyWidgetCtx_width :: Dynamic t Int
+    -- ^ The width of the region allocated to the widget.
+  , _vtyWidgetCtx_height :: Dynamic t Int
+    -- ^ The height of the region allocated to the widget.
   , _vtyWidgetCtx_focus :: Dynamic t Bool
     -- ^ Whether the widget should behave as if it has focus for keyboard input.
   , _vtyWidgetCtx_input :: Event t VtyEvent
@@ -130,7 +131,8 @@ mainWidgetWithHandle vty child =
           V.EvResize {} -> Nothing
           x -> Just x
     let ctx = VtyWidgetCtx
-          { _vtyWidgetCtx_size = size
+          { _vtyWidgetCtx_width = fmap fst size
+          , _vtyWidgetCtx_height = fmap snd size
           , _vtyWidgetCtx_input = inp'
           , _vtyWidgetCtx_focus = constDyn True
           }
@@ -152,18 +154,14 @@ mainWidget child = do
 
 -- | A class for things that know their own display size dimensions
 class (Reflex t, Monad m) => HasDisplaySize t m | m -> t where
-  displaySize :: m (Dynamic t (Int, Int))
+  -- | Retrieve the display width (columns)
+  displayWidth :: m (Dynamic t Int)
+  -- | Retrieve the display height (rows)
+  displayHeight :: m (Dynamic t Int)
 
 instance (Reflex t, Monad m) => HasDisplaySize t (VtyWidget t m) where
-  displaySize = VtyWidget . lift $ asks _vtyWidgetCtx_size
-
--- | Retrieve the display width (columns)
-displayWidth :: HasDisplaySize t m => m (Dynamic t Int)
-displayWidth = fmap fst <$> displaySize
-
--- | Retrieve the display height (rows)
-displayHeight :: HasDisplaySize t m => m (Dynamic t Int)
-displayHeight = fmap snd <$> displaySize
+  displayWidth = VtyWidget . lift $ asks _vtyWidgetCtx_width
+  displayHeight = VtyWidget . lift $ asks _vtyWidgetCtx_height
 
 -- | A class for things that can receive vty events as input
 class HasVtyInput t m | m -> t where
@@ -238,7 +236,9 @@ pane reg foc child = VtyWidget $ do
                   (_vtyWidgetCtx_input ctx)
             ]
         , _vtyWidgetCtx_focus = liftA2 (&&) (_vtyWidgetCtx_focus ctx) foc
-        , _vtyWidgetCtx_size = fmap regionSize reg }
+        , _vtyWidgetCtx_width = fmap (fst . regionSize) reg
+        , _vtyWidgetCtx_height = fmap (snd . regionSize) reg
+        }
   (result, images) <- lift . lift $ runVtyWidget ctx' child
   let images' = liftA2 (\r is -> map (withinImage r) is) (current reg) images
   tellImages images'
@@ -258,6 +258,51 @@ pane reg foc child = VtyWidget $ do
                , y >= t + h ] = Nothing
           | otherwise =
             Just (con (x - l) (y - t))
+
+pane'
+  :: (Reflex t, Monad m)
+  => Dynamic t Int
+  -> Dynamic t Int
+  -> Dynamic t Int
+  -> Dynamic t Int
+  -> Dynamic t Bool -- ^ Whether the widget should be focused when the parent is.
+  -> VtyWidget t m a
+  -> VtyWidget t m a
+pane' l t w h foc child = VtyWidget $ do
+  ctx <- lift ask
+  let reg = Region <$> l <*> t <*> w <*> h
+  let ctx' = VtyWidgetCtx
+        { _vtyWidgetCtx_input = leftmost -- TODO: think about this leftmost more.
+            [ fmapMaybe id $
+                attachWith (\(r,f) e -> filterInput r f e)
+                  (liftA2 (,) (current reg) (current foc))
+                  (_vtyWidgetCtx_input ctx)
+            ]
+        , _vtyWidgetCtx_focus = liftA2 (&&) (_vtyWidgetCtx_focus ctx) foc
+        , _vtyWidgetCtx_width = w
+        , _vtyWidgetCtx_height = h
+        }
+  (result, images) <- lift . lift $ runVtyWidget ctx' child
+  let images' = liftA2 (\r is -> map (withinImage r) is) (current reg) images
+  tellImages images'
+  return result
+  where
+    filterInput :: Region -> Bool -> VtyEvent -> Maybe VtyEvent
+    filterInput (Region l t w h) focused e = case e of
+      V.EvKey _ _ | not focused -> Nothing
+      V.EvMouseDown x y btn m -> mouse (\u v -> V.EvMouseDown u v btn m) x y
+      V.EvMouseUp x y btn -> mouse (\u v -> V.EvMouseUp u v btn) x y
+      _ -> Just e
+      where
+        mouse con x y
+          | or [ x < l
+               , y < t
+               , x >= l + w
+               , y >= t + h ] = Nothing
+          | otherwise =
+            Just (con (x - l) (y - t))
+
+
 
 -- | Information about a drag operation
 data Drag = Drag
@@ -351,13 +396,15 @@ splitV :: (Reflex t, Monad m)
        -- ^ Widget for second pane
        -> VtyWidget t m (a,b)
 splitV sizeFunD focD wA wB = do
-  sz <- displaySize
-  let regA = (\f (w,h) -> Region 0 0 w (f h)) <$> sizeFunD <*> sz
-      regB = (\(w,h) (Region _ _ _ hA) -> Region 0 hA w (h - hA)) <$> sz <*> regA
+  dw <- displayWidth
+  dh <- displayHeight
+  let regA = (\f w h -> Region 0 0 w (f h)) <$> sizeFunD <*> dw <*> dh
+      regB = (\w h (Region _ _ _ hA) -> Region 0 hA w (h - hA)) <$> dw <*> dh <*> regA
   ra <- pane regA (fst <$> focD) wA
   rb <- pane regB (snd <$> focD) wB
   return (ra,rb)
 
+{-
 -- | A split of the available space into two parts with a draggable separator.
 -- Starts with half the space allocated to each, and the first pane has focus.
 -- Clicking in a pane switches focus.
@@ -396,12 +443,13 @@ splitVDrag wS wA wB = do
       m <- mouseDown V.BLeft
       x' <- x
       return (m, x')
-
+-}
 -- | Fill the background with a particular character.
 fill :: (Reflex t, Monad m) => Char -> VtyWidget t m ()
 fill c = do
-  sz <- displaySize
-  let fillImg = ffor (current sz) $ \(w,h) -> [V.charFill V.defAttr c w h]
+  dw <- displayWidth
+  dh <- displayHeight
+  let fillImg = current $ liftA2 (\w h -> [V.charFill V.defAttr c w h]) dw dh
   tellImages fillImg
 
 -- | Fill the background with the bottom
@@ -451,10 +499,11 @@ box :: (Monad m, Reflex t)
     -> VtyWidget t m a
     -> VtyWidget t m a
 box boxStyle child = do
-  sz <- displaySize
-  let boxReg = ffor (current sz) $ \(w,h) -> Region 0 0 w h
-      innerReg = ffor sz $ \(w,h) -> Region 1 1 (w - 2) (h - 2)
-  tellImages (boxImages <$> boxStyle <*> boxReg)
+  dh <- displayHeight
+  dw <- displayWidth
+  let boxReg = liftA2 (\w h -> Region 0 0 w h) dw dh
+      innerReg = liftA2 (\w h -> Region 1 1 (w - 2) (h - 2)) dw dh
+  tellImages (boxImages <$> boxStyle <*> current boxReg)
   tellImages (fmap (\r -> [regionBlankImage r]) (current innerReg))
   pane innerReg (pure True) child
   where
