@@ -2,6 +2,7 @@
 Module: Reflex.Class.Orphans
 Description: Orphan instances for Dynamic. These should be upstreamed.
 -}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Reflex.Class.Orphans where
 
 import Control.Applicative

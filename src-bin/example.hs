@@ -27,19 +27,12 @@ import Reflex.Class.Switchable
 import Reflex.NotReady.Class
 import Reflex.Vty
 
-import Data.Tree
-
--- Unlimited Stack
-  -- Parent provides orientation and maximum cross-dimension size
-  -- Each child takes as much main-dimension space as it wants and reports what it took
-  -- Parent offsets each child so that it does not overlap with other children
-  -- If parent runs of out space, parent provides a scroll bar
-
 data Example = Example_TextEditor
              | Example_Todo
+             | Example_Stack
   deriving (Show, Read, Eq, Ord, Enum, Bounded)
 
-div' :: (Integral a, Applicative f) => f a ->f a -> f a
+div' :: (Integral a, Applicative f) => f a -> f a -> f a
 div' = liftA2 div
 
 main :: IO ()
@@ -48,6 +41,20 @@ main = mainWidget $ do
 
   w <- displayWidth
   h <- displayHeight
+
+  row $ sized (div' w 2) $ col $ do
+      sized 5 $ display (current w)
+      sized 5 $ textButtonStatic def "A"
+      sized 5 $ textButtonStatic def "B"
+      -- (th, label) <- StackWidget $ \_ -> do
+      --   (TextInput value lines) <- multilineTextInput def
+      --   return (lines, (lines, value))
+      -- sized (th+4) $ textButton def ("\n" <> current label)
+      sized 5 $ textButtonStatic def "E"
+      sized 1 $ text "asdf"
+      sized 1 $ text "zxcv"
+
+  {-
   let buttons = do
         text $ pure "Select an example. Esc will bring you back here. Ctrl+c to quit."
         let w' = fmap (`div`6) w
@@ -70,7 +77,7 @@ main = mainWidget $ do
         Left Example_TextEditor -> escapable testBoxes
         Left Example_Todo -> escapable taskList
         Right () -> buttons
-
+  -}
   return $ fforMaybe inp $ \case
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing

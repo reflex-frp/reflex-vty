@@ -2,6 +2,7 @@
 Module: Reflex.Vty.Widget
 Description: Basic set of widgets and building blocks for reflex-vty applications
 -}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -13,6 +14,7 @@ Description: Basic set of widgets and building blocks for reflex-vty application
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 module Reflex.Vty.Widget
@@ -23,6 +25,14 @@ module Reflex.Vty.Widget
   , runVtyWidget
   , mainWidget
   , mainWidgetWithHandle
+
+  , StackWidget(..)
+  , stack
+  , Direction(..)
+  , col
+  , row
+  , sized
+
   , HasDisplaySize(..)
   , HasFocus(..)
   , HasVtyInput(..)
@@ -57,6 +67,7 @@ module Reflex.Vty.Widget
   ) where
 
 import Control.Applicative (liftA2)
+import Control.Monad (ap)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, asks, ask)
@@ -67,7 +78,7 @@ import qualified Data.Text.Zipper as TZ
 import Graphics.Vty (Image)
 import qualified Graphics.Vty as V
 import Reflex
-import Reflex.Class.Orphans
+import Reflex.Class.Orphans ()
 import Reflex.NotReady.Class
 import Reflex.NotReady.Class.Orphans ()
 
@@ -238,22 +249,22 @@ pane
   -> Dynamic t Bool -- ^ Whether the widget should be focused when the parent is.
   -> VtyWidget t m a
   -> VtyWidget t m a
-pane (DynRegion l t w h) foc child = VtyWidget $ do
+pane dr foc child = VtyWidget $ do
   ctx <- lift ask
-  let reg = Region <$> l <*> t <*> w <*> h
+  let reg = currentRegion dr
   let ctx' = VtyWidgetCtx
         { _vtyWidgetCtx_input = leftmost -- TODO: think about this leftmost more.
             [ fmapMaybe id $
                 attachWith (\(r,f) e -> filterInput r f e)
-                  (liftA2 (,) (current reg) (current foc))
+                  (liftA2 (,) reg (current foc))
                   (_vtyWidgetCtx_input ctx)
             ]
         , _vtyWidgetCtx_focus = liftA2 (&&) (_vtyWidgetCtx_focus ctx) foc
-        , _vtyWidgetCtx_width = w
-        , _vtyWidgetCtx_height = h
+        , _vtyWidgetCtx_width = _dynRegion_width dr
+        , _vtyWidgetCtx_height = _dynRegion_height dr
         }
   (result, images) <- lift . lift $ runVtyWidget ctx' child
-  let images' = liftA2 (\r is -> map (withinImage r) is) (current reg) images
+  let images' = liftA2 (\r is -> map (withinImage r) is) reg images
   tellImages images'
   return result
   where
@@ -561,3 +572,60 @@ display
   => Behavior t a
   -> VtyWidget t m ()
 display a = text $ T.pack . show <$> a
+
+data Direction = Direction_Column
+               | Direction_Row
+  deriving (Show, Read, Eq, Ord)
+
+newtype StackWidget t m a = StackWidget { unStackWidget :: Direction -> VtyWidget t m (Dynamic t Int, a) }
+  deriving (Functor)
+
+instance (Reflex t, MonadFix m) => Applicative (StackWidget t m) where
+  pure = return
+  (<*>) = ap
+
+instance (MonadFix m, Reflex t) => Monad (StackWidget t m) where
+  w >>= g = StackWidget $ \dir -> do
+    (sz, r) <- runStackWidget dir 0 w
+    (sz', r') <- runStackWidget dir sz (g r)
+    return (sz + sz', r')
+  return x = StackWidget $ \_ -> return (0, x)
+
+runStackWidget
+  :: (Reflex t, MonadFix m)
+  => Direction
+  -> Dynamic t Int
+  -> StackWidget t m a
+  -> VtyWidget t m (Dynamic t Int, a)
+runStackWidget dir offset x = do
+  mkRegion <- case dir of
+    Direction_Column -> (\w sz -> DynRegion 0 offset w sz) <$> displayWidth
+    Direction_Row -> (\h sz -> DynRegion offset 0 sz h) <$> displayHeight
+  rec (h, a) <- pane (mkRegion h) (pure True) $ unStackWidget x dir
+  return (h, a)
+
+stack
+  :: (Reflex t, MonadFix m)
+  => Direction
+  -> StackWidget t m a
+  -> VtyWidget t m a
+stack dir w = fmap snd $ runStackWidget dir 0 w
+
+col
+  :: (Reflex t, MonadFix m)
+  => StackWidget t m a
+  -> VtyWidget t m a
+col = stack Direction_Column
+
+row
+  :: (Reflex t, MonadFix m)
+  => StackWidget t m a
+  -> VtyWidget t m a
+row = stack Direction_Row
+
+sized
+  :: (Reflex t, MonadFix m)
+  => Dynamic t Int
+  -> VtyWidget t m a
+  -> StackWidget t m a
+sized sz w = StackWidget $ \_ -> (sz,) <$> w
