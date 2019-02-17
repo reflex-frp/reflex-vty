@@ -19,6 +19,7 @@ module Reflex.Vty.Widget
   ( VtyWidgetCtx(..)
   , VtyWidget(..)
   , VtyWidgetOut(..)
+  , ImageWriter(..)
   , runVtyWidget
   , mainWidget
   , mainWidgetWithHandle
@@ -37,7 +38,6 @@ module Reflex.Vty.Widget
   , mouseDown
   , mouseUp
   , pane
-  , tellImages
   , splitV
   , splitVDrag
   , box
