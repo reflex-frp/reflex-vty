@@ -23,27 +23,36 @@ import Reflex.Vty.Widget
 -- | Configuration options for the 'button' widget
 data ButtonConfig t = ButtonConfig
   { _buttonConfig_boxStyle :: Behavior t BoxStyle
+  , _buttonConfig_focusStyle :: Behavior t BoxStyle
   }
 
 instance Reflex t => Default (ButtonConfig t) where
-  def = ButtonConfig (pure def)
+  def = ButtonConfig (pure singleBoxStyle) (pure thickBoxStyle)
 
 -- | A button widget that contains a sub-widget
 button
   :: (Reflex t, Monad m)
   => ButtonConfig t
   -> VtyWidget t m ()
-  -> VtyWidget t m (Event t MouseUp)
+  -> VtyWidget t m (Event t ())
 button cfg child = do
-  box (_buttonConfig_boxStyle cfg) child
-  mouseUp
+  f <- focus
+  let style = do
+        isFocused <- current f
+        if isFocused
+          then _buttonConfig_focusStyle cfg
+          else _buttonConfig_boxStyle cfg
+  box style child
+  m <- mouseUp
+  k <- key V.KEnter
+  return $ leftmost [() <$ k, () <$ m]
 
 -- | A button widget that displays text that can change
 textButton
   :: (Reflex t, Monad m)
   => ButtonConfig t
   -> Behavior t Text
-  -> VtyWidget t m (Event t MouseUp)
+  -> VtyWidget t m (Event t ())
 textButton cfg = button cfg . text -- TODO Centering etc.
 
 -- | A button widget that displays a static bit of text
@@ -51,7 +60,7 @@ textButtonStatic
   :: (Reflex t, Monad m)
   => ButtonConfig t
   -> Text
-  -> VtyWidget t m (Event t MouseUp)
+  -> VtyWidget t m (Event t ())
 textButtonStatic cfg = textButton cfg . pure
 
 -- | A clickable link widget

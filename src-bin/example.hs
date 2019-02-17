@@ -42,14 +42,12 @@ main = mainWidget $ do
   w <- displayWidth
   h <- displayHeight
 
-  row $ sized (div' w 2) $ col $ do
-      sized 5 $ display (current w)
+  row $ {- sized (div' w 2) $ col $ -} do
       sized 5 $ textButtonStatic def "A"
       sized 5 $ textButtonStatic def "B"
-      -- (th, label) <- StackWidget $ \_ -> do
-      --   (TextInput value lines) <- multilineTextInput def
-      --   return (lines, (lines, value))
-      -- sized (th+4) $ textButton def ("\n" <> current label)
+      TextInput value lines <- sized 10 $ multilineTextInput def
+      TextInput value' lines' <- sized 10 $ multilineTextInput def
+      sized 10 $ textButton def ("\n" <> current value)
       sized 5 $ textButtonStatic def "E"
       sized 1 $ text "asdf"
       sized 1 $ text "zxcv"

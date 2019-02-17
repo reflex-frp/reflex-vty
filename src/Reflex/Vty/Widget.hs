@@ -64,6 +64,10 @@ module Reflex.Vty.Widget
   , doubleBoxStyle
   , fill
   , hRule
+  , KeyCombo
+  , key
+  , keys
+  , keyCombos
   ) where
 
 import Control.Applicative (liftA2)
@@ -72,6 +76,9 @@ import Control.Monad.Fix (MonadFix)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, asks, ask)
 import Data.Default (Default(..))
+import Data.Monoid (Sum(..))
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Zipper as TZ
@@ -364,6 +371,26 @@ data MouseUp = MouseUp
   }
   deriving (Eq, Ord, Show)
 
+type KeyCombo = (V.Key, [V.Modifier])
+
+key :: (Monad m, Reflex t) => V.Key -> VtyWidget t m (Event t KeyCombo)
+key = keyCombos . Set.singleton . (,[])
+
+keys :: (Monad m, Reflex t) => [V.Key] -> VtyWidget t m (Event t KeyCombo)
+keys = keyCombos . Set.fromList . fmap (,[])
+
+keyCombos
+  :: (Reflex t, Monad m)
+  => Set KeyCombo
+  -> VtyWidget t m (Event t KeyCombo)
+keyCombos ks = do
+  i <- input
+  return $ fforMaybe i $ \case
+    V.EvKey k m -> if Set.member (k, m) ks
+      then Just (k, m)
+      else Nothing
+    _ -> Nothing
+
 -- | A plain split of the available space into vertically stacked panes.
 -- No visual separator is built in here.
 splitV :: (Reflex t, Monad m)
@@ -577,32 +604,36 @@ data Direction = Direction_Column
                | Direction_Row
   deriving (Show, Read, Eq, Ord)
 
-newtype StackWidget t m a = StackWidget { unStackWidget :: Direction -> VtyWidget t m (Dynamic t Int, a) }
-  deriving (Functor)
+newtype StackWidget t m a = StackWidget { unStackWidget :: ReaderT Direction (DynamicWriterT t (Sum Int) (VtyWidget t m)) a }
+  deriving (Functor, MonadSample t, MonadHold t, MonadFix, NotReady t)
 
 instance (Reflex t, MonadFix m) => Applicative (StackWidget t m) where
   pure = return
   (<*>) = ap
-
-instance (MonadFix m, Reflex t) => Monad (StackWidget t m) where
-  w >>= g = StackWidget $ \dir -> do
-    (sz, r) <- runStackWidget dir 0 w
-    (sz', r') <- runStackWidget dir sz (g r)
-    return (sz + sz', r')
-  return x = StackWidget $ \_ -> return (0, x)
 
 runStackWidget
   :: (Reflex t, MonadFix m)
   => Direction
   -> Dynamic t Int
   -> StackWidget t m a
-  -> VtyWidget t m (Dynamic t Int, a)
+  -> VtyWidget t m (Dynamic t (Sum Int), a)
 runStackWidget dir offset x = do
   mkRegion <- case dir of
     Direction_Column -> (\w sz -> DynRegion 0 offset w sz) <$> displayWidth
     Direction_Row -> (\h sz -> DynRegion offset 0 sz h) <$> displayHeight
-  rec (h, a) <- pane (mkRegion h) (pure True) $ unStackWidget x dir
+  rec (a, h) <- pane (mkRegion h') (pure True) $ runDynamicWriterT $ runReaderT (unStackWidget x) dir
+      let h' = getSum <$> h
   return (h, a)
+
+instance (MonadFix m, Reflex t) => Monad (StackWidget t m) where
+  w >>= g = StackWidget $ do
+    dir <- ask
+    (sz, r) <- lift $ lift $ runStackWidget dir 0 w
+    tellDyn sz
+    (sz', r') <- lift $ lift $ runStackWidget dir (getSum <$> sz) (g r)
+    tellDyn sz'
+    return r'
+  return x = StackWidget $ return x
 
 stack
   :: (Reflex t, MonadFix m)
@@ -628,4 +659,6 @@ sized
   => Dynamic t Int
   -> VtyWidget t m a
   -> StackWidget t m a
-sized sz w = StackWidget $ \_ -> (sz,) <$> w
+sized sz w = StackWidget $ do
+  tellDyn $ Sum <$> sz
+  lift $ lift w
