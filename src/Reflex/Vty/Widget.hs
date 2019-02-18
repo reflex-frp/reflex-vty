@@ -2,6 +2,7 @@
 Module: Reflex.Vty.Widget
 Description: Basic set of widgets and building blocks for reflex-vty applications
 -}
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -17,6 +18,7 @@ Description: Basic set of widgets and building blocks for reflex-vty application
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+
 module Reflex.Vty.Widget
   ( VtyWidgetCtx(..)
   , VtyWidget(..)
@@ -25,14 +27,6 @@ module Reflex.Vty.Widget
   , runVtyWidget
   , mainWidget
   , mainWidgetWithHandle
-
-  , StackWidget(..)
-  , stack
-  , Direction(..)
-  , col
-  , row
-  , sized
-
   , HasDisplaySize(..)
   , HasFocus(..)
   , HasVtyInput(..)
@@ -68,15 +62,30 @@ module Reflex.Vty.Widget
   , key
   , keys
   , keyCombos
+  , SizedWidget
+  , StackT
+  , StackConfig(..)
+  , StackWidget(..)
+  , stack
+  , Direction(..)
+  , askDirection
+  , askRemainingSpace
+  , askOffset
+  , col
+  , row
+  , fixed
+  , fraction
+  , remaining
+  , tile
   ) where
 
 import Control.Applicative (liftA2)
-import Control.Monad (ap)
+import Control.Monad.TimeMachine
 import Control.Monad.Fix (MonadFix)
+import Control.Monad.Trans.Class
 import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Reader (ReaderT, runReaderT, asks, ask)
+import Control.Monad.Reader
 import Data.Default (Default(..))
-import Data.Monoid (Sum(..))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
@@ -85,6 +94,7 @@ import qualified Data.Text.Zipper as TZ
 import Graphics.Vty (Image)
 import qualified Graphics.Vty as V
 import Reflex
+import Reflex.Class ()
 import Reflex.Class.Orphans ()
 import Reflex.NotReady.Class
 import Reflex.NotReady.Class.Orphans ()
@@ -125,7 +135,7 @@ instance (Adjustable t m, MonadHold t m, Reflex t) => Adjustable t (VtyWidget t 
 newtype VtyWidget t m a = VtyWidget
   { unVtyWidget :: BehaviorWriterT t [Image] (ReaderT (VtyWidgetCtx t) m) a
   }
-  deriving (Functor, Applicative, Monad, MonadSample t, MonadHold t, MonadFix, NotReady t, ImageWriter t)
+  deriving (Functor, Applicative, Monad, MonadSample t, MonadHold t, MonadFix, NotReady t, ImageWriter t, PostBuild t)
 
 -- | Runs a 'VtyWidget' with a given context
 runVtyWidget
@@ -174,12 +184,22 @@ mainWidget child = do
 class (Reflex t, Monad m) => HasDisplaySize t m | m -> t where
   -- | Retrieve the display width (columns)
   displayWidth :: m (Dynamic t Int)
+  default displayWidth :: (f m' ~ m, MonadTrans f, HasDisplaySize t m') => m (Dynamic t Int)
+  displayWidth = lift displayWidth
   -- | Retrieve the display height (rows)
   displayHeight :: m (Dynamic t Int)
-
+  default displayHeight :: (f m' ~ m, MonadTrans f, HasDisplaySize t m') => m (Dynamic t Int)
+  displayHeight = lift displayHeight
 instance (Reflex t, Monad m) => HasDisplaySize t (VtyWidget t m) where
   displayWidth = VtyWidget . lift $ asks _vtyWidgetCtx_width
   displayHeight = VtyWidget . lift $ asks _vtyWidgetCtx_height
+
+instance HasDisplaySize t m => HasDisplaySize t (ReaderT x m)
+instance HasDisplaySize t m => HasDisplaySize t (BehaviorWriterT t x m)
+instance HasDisplaySize t m => HasDisplaySize t (DynamicWriterT t x m)
+instance HasDisplaySize t m => HasDisplaySize t (EventWriterT t x m)
+
+instance (MonadFix m, HasDisplaySize t m) => HasDisplaySize t (TimeMachineT back fwd m)
 
 -- | A class for things that can receive vty events as input
 class HasVtyInput t m | m -> t where
@@ -290,8 +310,6 @@ pane dr foc child = VtyWidget $ do
           | otherwise =
             Just (con (x - l) (y - t))
 
-
-
 -- | Information about a drag operation
 data Drag = Drag
   { _drag_from :: (Int, Int) -- ^ Where the drag began
@@ -371,14 +389,18 @@ data MouseUp = MouseUp
   }
   deriving (Eq, Ord, Show)
 
+-- | Type synonym for a key and modifier combination
 type KeyCombo = (V.Key, [V.Modifier])
 
+-- | Emits an event that fires on a particular key press (without modifiers)
 key :: (Monad m, Reflex t) => V.Key -> VtyWidget t m (Event t KeyCombo)
 key = keyCombos . Set.singleton . (,[])
 
+-- | Emits an event that fires on particular key presses (without modifiers)
 keys :: (Monad m, Reflex t) => [V.Key] -> VtyWidget t m (Event t KeyCombo)
 keys = keyCombos . Set.fromList . fmap (,[])
 
+-- | Emit an event that fires whenever any of the provided key combinations occur
 keyCombos
   :: (Reflex t, Monad m)
   => Set KeyCombo
@@ -600,65 +622,169 @@ display
   -> VtyWidget t m ()
 display a = text $ T.pack . show <$> a
 
+-- | The main-axis orientation of a 'StackWidget' widget
 data Direction = Direction_Column
                | Direction_Row
   deriving (Show, Read, Eq, Ord)
 
-newtype StackWidget t m a = StackWidget { unStackWidget :: ReaderT Direction (DynamicWriterT t (Sum Int) (VtyWidget t m)) a }
-  deriving (Functor, MonadSample t, MonadHold t, MonadFix, NotReady t)
+-- | Convenience type synonym for the 'TimeMachine' used to manage 'StackWidget'
+-- focus and offset states. The first parameter is the "focus previous" event and
+-- the second parameter is a tuple of "focus next" and the total size.
+type StackT t = TimeMachineT (Event t ()) (Event t (), Dynamic t Int)
 
-instance (Reflex t, MonadFix m) => Applicative (StackWidget t m) where
-  pure = return
-  (<*>) = ap
+-- | A 'VtyWidget' that can be stacked automatically
+newtype StackWidget t m a
+  = StackWidget
+    { unStackWidget ::
+        StackT t
+          (EventWriterT t ()
+            (ReaderT (StackConfig, Event t ())
+              (VtyWidget t m))) a
+    }
+  deriving
+    ( Functor
+    , Applicative
+    , Monad
+    , MonadSample t
+    , MonadHold t
+    , MonadFix
+    , NotReady t
+    , HasDisplaySize t
+    )
 
+-- | Retrieve the 'Direction'/orientation of the current 'StackWidget'
+askDirection :: MonadFix m => StackWidget t m Direction
+askDirection = StackWidget $ asks $ _stackConfig_direction . fst
+
+-- | Retrieve the offset reported by the previous 'tile'
+askOffset :: Monad m => StackWidget t m (Dynamic t Int)
+askOffset = StackWidget $ snd <$> recvFromPast
+
+-- | Compute the remaining main-axis space available
+askRemainingSpace :: (Reflex t, MonadFix m) => StackWidget t m (Dynamic t Int)
+askRemainingSpace = do
+  dir <- askDirection
+  offset <- askOffset
+  sz <- case dir of
+    Direction_Column -> displayHeight
+    Direction_Row -> displayWidth
+  return $ sz - offset
+
+-- | A 'VtyWidget' and its actual main-axis size
+type SizedWidget t m a = VtyWidget t m (Dynamic t Int, a)
+
+-- | Runs a 'StackWidget' with the provided configuration and initial offset
 runStackWidget
-  :: (Reflex t, MonadFix m)
-  => Direction
+  :: (MonadFix m, PostBuild t m)
+  => StackConfig
   -> Dynamic t Int
   -> StackWidget t m a
-  -> VtyWidget t m (Dynamic t (Sum Int), a)
-runStackWidget dir offset x = do
-  mkRegion <- case dir of
-    Direction_Column -> (\w sz -> DynRegion 0 offset w sz) <$> displayWidth
-    Direction_Row -> (\h sz -> DynRegion offset 0 sz h) <$> displayHeight
-  rec (a, h) <- pane (mkRegion h') (pure True) $ runDynamicWriterT $ runReaderT (unStackWidget x) dir
-      let h' = getSum <$> h
-  return (h, a)
+  -> SizedWidget t m a
+runStackWidget cfg offset x = do
+  pb <- getPostBuild
+  rec ((back, (fwd, sz), a), unfocus) <- runReaderT (runEventWriterT (runTimeMachineT (unStackWidget x) back (fwd <> pb, offset))) (cfg, unfocus)
+  return (sz, a)
 
-instance (MonadFix m, Reflex t) => Monad (StackWidget t m) where
-  w >>= g = StackWidget $ do
-    dir <- ask
-    (sz, r) <- lift $ lift $ runStackWidget dir 0 w
-    tellDyn sz
-    (sz', r') <- lift $ lift $ runStackWidget dir (getSum <$> sz) (g r)
-    tellDyn sz'
-    return r'
-  return x = StackWidget $ return x
+-- | Turns a 'SizedWidget' into a 'StackWidget'. Wires up the focus-switching
+-- and offset propagation.
+tile
+  :: (Reflex t, MonadHold t m, MonadFix m)
+  => SizedWidget t m a
+  -> StackWidget t m a
+tile s = StackWidget $ do
+  (focusTriggerP, offset) <- recvFromPast
+  rec sendToPast focusBackward
+      (cfg, unfocus) <- ask
+      let bk = Set.difference (_stackConfig_focusPrevKey cfg) fk
+          fk = _stackConfig_focusNextKey cfg
+      focused <- holdDyn False $ leftmost
+        [ True <$ (focusTriggerF <> focusTriggerP)
+        , True <$ click
+        , False <$ unfocus -- NB: unfocus must come after events that focus the current widget
+        ]
+      tellEvent $ mconcat
+        [ () <$ click
+        , () <$ keypress
+        ]
+      reg <- case _stackConfig_direction cfg of
+        Direction_Column -> do
+          w <- displayWidth
+          return $ DynRegion 0 offset w sz
+        Direction_Row -> do
+          h <- displayHeight
+          return $ DynRegion offset 0 sz h
+      (click, keypress, (sz, r)) <- lift $ lift $ lift $ pane reg focused $ do
+        e <- mouseDown V.BLeft
+        ek <- keyCombos $ Set.union bk fk
+        v <- s
+        return (e, ek, v)
+      let focusForward = () <$ ffilter (flip Set.member fk) keypress
+          focusBackward = () <$ ffilter (flip Set.member bk) keypress
+      focusTriggerF  <- recvFromFuture
+  sendToFuture (focusForward, sz + offset)
+  return r
 
+-- | Configuration for a 'StackWidget'
+data StackConfig = StackConfig
+  { _stackConfig_direction :: Direction
+  , _stackConfig_focusNextKey :: Set KeyCombo
+  , _stackConfig_focusPrevKey :: Set KeyCombo
+  }
+
+instance Default StackConfig where
+  def = StackConfig
+    { _stackConfig_direction = Direction_Column
+    , _stackConfig_focusNextKey = Set.singleton (V.KChar '\t', [])
+    , _stackConfig_focusPrevKey = Set.singleton (V.KBackTab, [])
+    }
+
+-- | Runs a 'StackWidget' with the provided configuration
 stack
-  :: (Reflex t, MonadFix m)
-  => Direction
+  :: (MonadFix m, PostBuild t m)
+  => StackConfig
   -> StackWidget t m a
   -> VtyWidget t m a
-stack dir w = fmap snd $ runStackWidget dir 0 w
+stack cfg w = fmap snd $ runStackWidget cfg 0 w
 
+-- | Runs a vertically-oriented 'StackWidget' (i.e., a column)
 col
-  :: (Reflex t, MonadFix m)
+  :: (MonadFix m, PostBuild t m)
   => StackWidget t m a
   -> VtyWidget t m a
-col = stack Direction_Column
+col = stack def
 
+-- | Runs a horizontally-oriented 'StackWidget' (i.e., a row)
 row
-  :: (Reflex t, MonadFix m)
+  :: (MonadFix m, PostBuild t m)
   => StackWidget t m a
   -> VtyWidget t m a
-row = stack Direction_Row
+row = stack $ def { _stackConfig_direction = Direction_Row }
 
-sized
-  :: (Reflex t, MonadFix m)
+-- | A 'tile' of a fixed size
+fixed
+  :: (Reflex t, MonadFix m, MonadHold t m)
   => Dynamic t Int
   -> VtyWidget t m a
   -> StackWidget t m a
-sized sz w = StackWidget $ do
-  tellDyn $ Sum <$> sz
-  lift $ lift w
+fixed sz w = tile $ (sz,) <$> w
+
+-- | A 'tile' that takes up the given fraction of the remaining
+-- main-axis space
+fraction
+  :: (Reflex t, MonadFix m, MonadHold t m)
+  => Dynamic t Rational
+  -> VtyWidget t m a
+  -> StackWidget t m a
+fraction n w = do
+  s <- askRemainingSpace
+  let sz = fmap round $ n * fmap fromIntegral s
+  fixed sz w
+
+-- | A 'tile' that takes up all of the remaining main-axis space
+remaining
+  :: (Reflex t, MonadHold t m, MonadFix m)
+  => VtyWidget t m a
+  -> StackWidget t m a
+remaining w = do
+  s <- askRemainingSpace
+  fixed s w

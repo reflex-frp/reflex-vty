@@ -16,5 +16,3 @@ instance (Num a, Reflex t) => Num (Dynamic t a) where
   fromInteger = pure . fromInteger
   negate = fmap negate
   (-) = liftA2 (-)
-
-

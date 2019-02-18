@@ -42,28 +42,16 @@ main = mainWidget $ do
   w <- displayWidth
   h <- displayHeight
 
-  row $ {- sized (div' w 2) $ col $ -} do
-      sized 5 $ textButtonStatic def "A"
-      sized 5 $ textButtonStatic def "B"
-      TextInput value lines <- sized 10 $ multilineTextInput def
-      TextInput value' lines' <- sized 10 $ multilineTextInput def
-      sized 10 $ textButton def ("\n" <> current value)
-      sized 5 $ textButtonStatic def "E"
-      sized 1 $ text "asdf"
-      sized 1 $ text "zxcv"
-
-  {-
-  let buttons = do
-        text $ pure "Select an example. Esc will bring you back here. Ctrl+c to quit."
-        let w' = fmap (`div`6) w
-            h' = fmap (`div`6) h
-            region1 = DynRegion w' h' w' h'
-            region2 = DynRegion (2 * w') h' w' h'
-        todo' <- pane region1 (pure True) $ textButtonStatic def "Todo List"
-        editor <- pane region2 (pure True) $ textButtonStatic def "Text Editor"
+  let buttons = col $ do
+        fixed 4 $ col $ do
+          fixed 1 $ text "Select an example."
+          fixed 1 $ text "Esc will bring you back here."
+          fixed 1 $ text "Ctrl+c to quit."
+        a <- fixed 5 $ textButtonStatic def "Todo List"
+        b <- fixed 5 $ textButtonStatic def "Text Editor"
         return $ leftmost
-          [ Left Example_TextEditor <$ editor
-          , Left Example_Todo <$ todo'
+          [ Left Example_Todo <$ a
+          , Left Example_TextEditor <$ b
           ]
       escapable w = do
         void w
@@ -75,7 +63,6 @@ main = mainWidget $ do
         Left Example_TextEditor -> escapable testBoxes
         Left Example_Todo -> escapable taskList
         Right () -> buttons
-  -}
   return $ fforMaybe inp $ \case
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
