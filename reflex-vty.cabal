@@ -22,13 +22,12 @@ library
                  , Reflex.Vty.Widget.Input
                  , Reflex.Vty.Widget.Input.Text
                  , Data.Text.Zipper
-                 , Control.Monad.TimeMachine
-                 , Reflex.Class.Orphans
                  , Reflex.Class.Switchable
-                 , Reflex.NotReady.Class.Orphans
                  , Reflex.Spider.Orphans
+  other-modules: Unsafe.NodeId
   build-depends:
     base,
+    bimap,
     containers,
     data-default,
     dependent-map,

@@ -8,7 +8,6 @@ Description: Orphan instances for SpiderTimeline and SpiderHost
 module Reflex.Spider.Orphans where
 
 import Reflex
-import Reflex.NotReady.Class
 import Reflex.Spider.Internal
 
 -- TODO move this to reflex

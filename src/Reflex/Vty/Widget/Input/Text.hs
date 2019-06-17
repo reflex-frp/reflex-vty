@@ -12,6 +12,7 @@ module Reflex.Vty.Widget.Input.Text
   , def
   ) where
 
+import Control.Monad (join)
 import Control.Monad.Fix (MonadFix)
 import Data.Default (Default(..))
 import Data.Text (Text)
@@ -98,12 +99,13 @@ textInputTile
   :: (Reflex t, MonadHold t m, MonadFix m)
   => VtyWidget t m (TextInput t)
   -> Dynamic t Int
-  -> StackWidget t m (TextInput t)
+  -> Layout t m (TextInput t)
 textInputTile txt width = do
+  o <- askOrientation
   rec t <- fixed sz txt
-      sz <- ffor askDirection $ \case
-        Direction_Column -> _textInput_lines t
-        Direction_Row -> width
+      let sz = join $ ffor o $ \case
+            Orientation_Column -> _textInput_lines t
+            Orientation_Row -> width
   return t
 
 -- | Default attributes for the text cursor

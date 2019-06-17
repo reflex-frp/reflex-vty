@@ -13,6 +13,7 @@
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Fix
+import Data.Either
 import Data.Map (Map)
 import Data.Maybe
 import qualified Data.Map as Map
@@ -21,7 +22,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Zipper as TZ
 import qualified Graphics.Vty as V
 import Reflex
-import Reflex.Class.Orphans
 import Reflex.Network
 import Reflex.Class.Switchable
 import Reflex.NotReady.Class

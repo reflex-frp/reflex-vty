@@ -33,7 +33,6 @@ import Data.Maybe (catMaybes)
 
 import Reflex
 import Reflex.Host.Class
-import Reflex.NotReady.Class
 import Reflex.Spider.Orphans ()
 import qualified Graphics.Vty as V
 import Graphics.Vty (DisplayRegion)
