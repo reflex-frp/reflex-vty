@@ -12,6 +12,8 @@ maintainer: maintainer@obsidian.systems
 category: FRP
 build-type: Simple
 cabal-version: >=1.10
+extra-source-files: README.md
+                    ChangeLog.md
 extra-doc-files: doc/welcome.gif
                , doc/tasks.png
 
