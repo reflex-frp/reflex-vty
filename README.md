@@ -1,4 +1,4 @@
-# reflex-vty ![hackage](https://img.shields.io/hackage/v/reflex-vty.svg)
+# reflex-vty ![hackage](https://img.shields.io/hackage/v/reflex-vty.svg) ![travis](https://api.travis-ci.org/reflex-frp/reflex-vty.svg?branch=develop)
 
 ## A library for building functional reactive terminal applications
 
