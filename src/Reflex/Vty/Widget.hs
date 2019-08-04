@@ -102,7 +102,7 @@ import Reflex.Class ()
 
 import Reflex.Vty.Host
 
-import Unsafe.NodeId
+import Control.Monad.NodeId
 
 -- | The context within which a 'VtyWidget' runs
 data VtyWidgetCtx t = VtyWidgetCtx
@@ -149,15 +149,20 @@ newtype VtyWidget t m a = VtyWidget
     , PostBuild t
     , TriggerEvent t
     , MonadReflexCreateTrigger t
+    , MonadIO
     )
 
 deriving instance PerformEvent t m => PerformEvent t (VtyWidget t m)
 instance MonadTrans (VtyWidget t) where
   lift f = VtyWidget $ lift $ lift f
 
+instance MonadNodeId m => MonadNodeId (VtyWidget t m) where
+  getNextNodeId = VtyWidget $ do
+    lift $ lift $ getNextNodeId
+
 -- | Runs a 'VtyWidget' with a given context
 runVtyWidget
-  :: (Reflex t, Monad m)
+  :: (Reflex t, MonadNodeId m)
   => VtyWidgetCtx t
   -> VtyWidget t m a
   -> m (a, Behavior t [Image])
@@ -166,7 +171,7 @@ runVtyWidget ctx w = runReaderT (runBehaviorWriterT (unVtyWidget w)) ctx
 -- | Sets up the top-level context for a 'VtyWidget' and runs it with that context
 mainWidgetWithHandle
   :: V.Vty
-  -> (forall t m. MonadVtyApp t m => VtyWidget t m (Event t ()))
+  -> (forall t m. (MonadVtyApp t m, MonadNodeId m) => VtyWidget t m (Event t ()))
   -> IO ()
 mainWidgetWithHandle vty child =
   runVtyAppWithHandle vty $ \dr0 inp -> do
@@ -182,7 +187,7 @@ mainWidgetWithHandle vty child =
           , _vtyWidgetCtx_input = inp'
           , _vtyWidgetCtx_focus = constDyn True
           }
-    (shutdown, images) <- runVtyWidget ctx $ do
+    (shutdown, images) <- runNodeIdT $ runVtyWidget ctx $ do
       tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
       child
     return $ VtyResult
@@ -192,7 +197,7 @@ mainWidgetWithHandle vty child =
 
 -- | Like 'mainWidgetWithHandle', but uses a default vty configuration
 mainWidget
-  :: (forall t m. MonadVtyApp t m => VtyWidget t m (Event t ()))
+  :: (forall t m. (MonadVtyApp t m, MonadNodeId m) => VtyWidget t m (Event t ()))
   -> IO ()
 mainWidget child = do
   vty <- getDefaultVty
@@ -217,6 +222,8 @@ instance HasDisplaySize t m => HasDisplaySize t (ReaderT x m)
 instance HasDisplaySize t m => HasDisplaySize t (BehaviorWriterT t x m)
 instance HasDisplaySize t m => HasDisplaySize t (DynamicWriterT t x m)
 instance HasDisplaySize t m => HasDisplaySize t (EventWriterT t x m)
+
+instance HasDisplaySize t m => HasDisplaySize t (NodeIdT m)
 
 -- | A class for things that can receive vty events as input
 class HasVtyInput t m | m -> t where
@@ -257,14 +264,6 @@ data DynRegion t = DynRegion
   , _dynRegion_height :: Dynamic t Int
   }
 
-switchDynRegion :: Reflex t => Dynamic t (DynRegion t) -> DynRegion t
-switchDynRegion r = DynRegion
-  { _dynRegion_left = _dynRegion_left =<< r
-  , _dynRegion_top = _dynRegion_top =<< r
-  , _dynRegion_width = _dynRegion_width =<< r
-  , _dynRegion_height = _dynRegion_height =<< r
-  }
-
 -- | The width and height of a 'Region'
 regionSize :: Region -> (Int, Int)
 regionSize (Region _ _ w h) = (w, h)
@@ -296,7 +295,7 @@ withinImage (Region left top width height)
 -- * mouse inputs inside the region have their coordinates translated such
 --   that (0,0) is the top-left corner of the region
 pane
-  :: (Reflex t, Monad m)
+  :: (Reflex t, Monad m, MonadNodeId m)
   => DynRegion t
   -> Dynamic t Bool -- ^ Whether the widget should be focused when the parent is.
   -> VtyWidget t m a
@@ -440,7 +439,7 @@ keyCombos ks = do
 
 -- | A plain split of the available space into vertically stacked panes.
 -- No visual separator is built in here.
-splitV :: (Reflex t, Monad m)
+splitV :: (Reflex t, Monad m, MonadNodeId m)
        => Dynamic t (Int -> Int)
        -- ^ Function used to determine size of first pane based on available size
        -> Dynamic t (Bool, Bool)
@@ -472,7 +471,7 @@ splitV sizeFunD focD wA wB = do
 -- | A split of the available space into two parts with a draggable separator.
 -- Starts with half the space allocated to each, and the first pane has focus.
 -- Clicking in a pane switches focus.
-splitVDrag :: (Reflex t, MonadFix m, MonadHold t m)
+splitVDrag :: (Reflex t, MonadFix m, MonadHold t m, MonadNodeId m)
   => VtyWidget t m ()
   -> VtyWidget t m a
   -> VtyWidget t m b
@@ -486,7 +485,7 @@ splitVDrag wS wA wB = do
   rec splitterCheckpoint <- holdDyn splitter0 $ leftmost [fst <$> ffilter snd dragSplitter, resizeSplitter]
       splitterPos <- holdDyn splitter0 $ leftmost [fst <$> dragSplitter, resizeSplitter]
       splitterFrac <- holdDyn ((1::Double) / 2) $ ffor (attach (current dh) (fst <$> dragSplitter)) $ \(h, x) ->
-        fromIntegral x / fromIntegral h
+        fromIntegral x / (max 1 (fromIntegral h))
       let dragSplitter = fforMaybe (attach (current splitterCheckpoint) dragE) $
             \(splitterY, Drag (_, fromY) (_, toY) _ _ end) ->
               if splitterY == fromY then Just (toY, end) else Nothing
@@ -559,7 +558,7 @@ roundedBoxStyle :: BoxStyle
 roundedBoxStyle = BoxStyle '╭' '─' '╮' '│' '╯' '─' '╰' '│'
 
 -- | Draws a box in the provided style and a child widget inside of that box
-box :: (Monad m, Reflex t)
+box :: (Monad m, Reflex t, MonadNodeId m)
     => Behavior t BoxStyle
     -> VtyWidget t m a
     -> VtyWidget t m a
@@ -600,7 +599,7 @@ box boxStyle child = do
 
 -- | A box whose style is static
 boxStatic
-  :: (Reflex t, Monad m)
+  :: (Reflex t, Monad m, MonadNodeId m)
   => BoxStyle
   -> VtyWidget t m a
   -> VtyWidget t m a
@@ -663,7 +662,7 @@ computeSizes available constraints =
         (_, Constraint_Min n) -> n
       leftover = max 0 (available - minTotal)
       numStretch = Map.size $ Map.filter (isMin . snd) constraints
-      szStretch = floor $ leftover % numStretch
+      szStretch = floor $ leftover % (max numStretch 1)
       adjustment = max 0 $ available - minTotal - szStretch * numStretch
   in snd $ Map.mapAccum (\adj (a, c) -> case c of
       Constraint_Fixed n -> (adj, (a, n))
@@ -684,8 +683,13 @@ data Orientation = Orientation_Column
                  | Orientation_Row
   deriving (Show, Read, Eq, Ord)
 
+data LayoutSegment = LayoutSegment
+  { _layoutSegment_offset :: Int
+  , _layoutSegment_size :: Int
+  }
+
 data LayoutCtx t = LayoutCtx
-  { _layoutCtx_regions :: Dynamic t (Map NodeId (DynRegion t))
+  { _layoutCtx_regions :: Dynamic t (Map NodeId LayoutSegment)
   , _layoutCtx_focusDemux :: Demux t (Maybe NodeId)
   , _layoutCtx_orientation :: Dynamic t Orientation
   }
@@ -706,6 +710,8 @@ newtype Layout t m a = Layout
     , PerformEvent t
     , NotReady t
     , MonadReflexCreateTrigger t
+    , HasDisplaySize t
+    , MonadNodeId
     )
 
 instance MonadTrans (Layout t) where
@@ -718,7 +724,7 @@ instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (Layout t m
   traverseDMapWithKeyWithAdjustWithMove f m e = Layout $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unLayout $ f k v) m e
 
 runLayout
-  :: (MonadFix m, MonadHold t m, PostBuild t m)
+  :: (MonadFix m, MonadHold t m, PostBuild t m, Monad m, MonadNodeId m)
   => Dynamic t Orientation
   -> Int
   -> Event t Int
@@ -741,19 +747,9 @@ runLayout ddir focus0 focusShift (Layout child) = do
             . Map.fromList
             . zip [0::Integer ..]
             $ qs
-          solutionMap = ffor solution $ \ss -> ffor ss $ \(offset, sz) -> DynRegion
-            { _dynRegion_left = ffor ddir $ \case
-              Orientation_Column -> 0
-              Orientation_Row -> offset
-            , _dynRegion_width = ffor2 dw ddir $ \w -> \case
-              Orientation_Column -> w
-              Orientation_Row -> sz
-            , _dynRegion_top = ffor ddir $ \case
-              Orientation_Column -> offset
-              Orientation_Row -> 0
-            , _dynRegion_height = ffor2 dh ddir $ \h -> \case
-              Orientation_Column -> sz
-              Orientation_Row -> h
+          solutionMap = ffor solution $ \ss -> ffor ss $ \(offset, sz) -> LayoutSegment
+            { _layoutSegment_offset = offset
+            , _layoutSegment_size = sz
             }
           focusable = fmap (Bimap.fromList . zip [0..]) $
             ffor queries $ \qs -> fforMaybe qs $ \(nodeId, (f, _)) ->
@@ -763,7 +759,7 @@ runLayout ddir focus0 focusShift (Layout child) = do
             -> Either Int NodeId
             -> (Int, Maybe NodeId)
           adjustFocus (fm, (cur, _)) (Left shift) =
-            let ix = (cur + shift) `mod` Bimap.size fm
+            let ix = (cur + shift) `mod` (max 1 $ Bimap.size fm)
             in (ix, Bimap.lookup ix fm)
           adjustFocus (fm, (cur, _)) (Right goto) =
             let ix = fromMaybe cur $ Bimap.lookupR goto fm
@@ -780,19 +776,39 @@ runLayout ddir focus0 focusShift (Layout child) = do
   return a
 
 tile
-  :: (Reflex t, Monad m)
+  :: (Reflex t, Monad m, MonadNodeId m)
   => Dynamic t Constraint
   -> Dynamic t Bool
   -> VtyWidget t m (Event t x, a)
   -> Layout t m a
 tile con focusable child = do
-  let nodeId = unsafeNodeId child
+  nodeId <- getNextNodeId
   Layout $ tellDyn $ ffor2 con focusable $ \c f -> Endo ((nodeId, (f, c)):)
-  reg <- fmap switchDynRegion $ Layout $ asks $
-    fmap (Map.findWithDefault (error "tile: Could not find solution for nodeId. This should be impossible.") nodeId) . _layoutCtx_regions
+  seg <- Layout $ asks $
+    fmap (Map.findWithDefault (LayoutSegment 0 0) nodeId) . _layoutCtx_regions
+  dw <- displayWidth
+  dh <- displayHeight
+  o <- askOrientation
+  let cross = join $ ffor o $ \case
+        Orientation_Column -> dw
+        Orientation_Row -> dh
+  let reg = DynRegion
+        { _dynRegion_top = ffor2 seg o $ \s -> \case
+            Orientation_Column -> _layoutSegment_offset s
+            Orientation_Row -> 0
+        , _dynRegion_left = ffor2 seg o $ \s -> \case
+            Orientation_Column -> 0
+            Orientation_Row -> _layoutSegment_offset s
+        , _dynRegion_width = ffor3 seg cross o $ \s c -> \case
+            Orientation_Column -> c
+            Orientation_Row -> _layoutSegment_size s
+        , _dynRegion_height = ffor3 seg cross o $ \s c -> \case
+            Orientation_Column -> _layoutSegment_size s
+            Orientation_Row -> c
+        }
   focussed <- Layout $ asks _layoutCtx_focusDemux
   (focusReq, a) <- Layout $ lift $ lift $ lift $
-    pane reg (demuxed focussed $ Just nodeId) child
+    pane reg (demuxed focussed $ Just nodeId) $ child
   Layout $ tellEvent $ First nodeId <$ focusReq
   return a
 
@@ -806,20 +822,20 @@ instance Reflex t => Default (TileConfig t) where
   def = TileConfig (pure $ Constraint_Min 0) (pure True) (pure True)
 
 fixed
-  :: (Reflex t, Monad m)
+  :: (Reflex t, Monad m, MonadNodeId m)
   => Dynamic t Int
   -> VtyWidget t m a
   -> Layout t m a
 fixed sz = tile (Constraint_Fixed <$> sz) (pure True) . clickable
 
 stretch
-  :: (Reflex t, Monad m)
+  :: (Reflex t, Monad m, MonadNodeId m)
   => VtyWidget t m a
   -> Layout t m a
 stretch = tile (Constraint_Min <$> 0) (pure True) . clickable
 
 col
-  :: (MonadFix m, MonadHold t m, PostBuild t m)
+  :: (MonadFix m, MonadHold t m, PostBuild t m, MonadNodeId m)
   => Layout t m a
   -> VtyWidget t m a
 col child = do
@@ -827,7 +843,7 @@ col child = do
   runLayout (pure Orientation_Column) 0 nav child
 
 row
-  :: (MonadFix m, MonadHold t m, PostBuild t m)
+  :: (MonadFix m, MonadHold t m, PostBuild t m, MonadNodeId m)
   => Layout t m a
   -> VtyWidget t m a
 row child = do

@@ -14,6 +14,7 @@ import Reflex.Vty.Widget.Input.Text as Export
 
 import Control.Monad (join)
 import Control.Monad.Fix (MonadFix)
+import Control.Monad.NodeId (MonadNodeId)
 import Data.Default (Default(..))
 import Data.Text (Text)
 import qualified Graphics.Vty as V
@@ -31,7 +32,7 @@ instance Reflex t => Default (ButtonConfig t) where
 
 -- | A button widget that contains a sub-widget
 button
-  :: (Reflex t, Monad m)
+  :: (Reflex t, Monad m, MonadNodeId m)
   => ButtonConfig t
   -> VtyWidget t m ()
   -> VtyWidget t m (Event t ())
@@ -49,7 +50,7 @@ button cfg child = do
 
 -- | A button widget that displays text that can change
 textButton
-  :: (Reflex t, Monad m)
+  :: (Reflex t, Monad m, MonadNodeId m)
   => ButtonConfig t
   -> Behavior t Text
   -> VtyWidget t m (Event t ())
@@ -57,7 +58,7 @@ textButton cfg = button cfg . text -- TODO Centering etc.
 
 -- | A button widget that displays a static bit of text
 textButtonStatic
-  :: (Reflex t, Monad m)
+  :: (Reflex t, Monad m, MonadNodeId m)
   => ButtonConfig t
   -> Text
   -> VtyWidget t m (Event t ())

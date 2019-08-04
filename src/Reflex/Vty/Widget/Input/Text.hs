@@ -14,6 +14,7 @@ module Reflex.Vty.Widget.Input.Text
 
 import Control.Monad (join)
 import Control.Monad.Fix (MonadFix)
+import Control.Monad.NodeId (MonadNodeId)
 import Data.Default (Default(..))
 import Data.Text (Text)
 import Data.Text.Zipper
@@ -96,7 +97,7 @@ multilineTextInput cfg = do
 -- the computed line count to greedily size the tile when vertically
 -- oriented, and uses the fallback width when horizontally oriented.
 textInputTile
-  :: (Reflex t, MonadHold t m, MonadFix m)
+  :: (Reflex t, MonadHold t m, MonadFix m, MonadNodeId m)
   => VtyWidget t m (TextInput t)
   -> Dynamic t Int
   -> Layout t m (TextInput t)

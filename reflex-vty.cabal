@@ -24,7 +24,7 @@ library
                  , Data.Text.Zipper
                  , Reflex.Class.Switchable
                  , Reflex.Spider.Orphans
-  other-modules: Unsafe.NodeId
+                 , Control.Monad.NodeId
   build-depends:
     base,
     bimap,
@@ -36,7 +36,7 @@ library
     mtl,
     primitive,
     ref-tf,
-    reflex,
+    reflex >= 0.6.1,
     stm,
     text,
     time,
