@@ -1,4 +1,4 @@
-# reflex-vty
+# reflex-vty ![hackage](https://img.shields.io/hackage/v/reflex-vty.svg)
 
 ## A library for building functional reactive terminal applications
 
