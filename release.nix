@@ -1,4 +1,2 @@
 { rp ? import ./reflex-platform {}
-}: { 
-  reflex-vty = rp.ghc.callCabal2nix ./. {};
-}
+}: rp.ghc.callCabal2nix "reflex-vty" ./. {}
