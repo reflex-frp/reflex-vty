@@ -25,3 +25,18 @@ From within the nix-shell you can:
 * Build the docs: `cabal haddock`
 * Run ghcid for immediate compiler feedback when you save a .hs file: `ghcid -c "cabal repl reflex-vty --ghc-options=-Wall"`
 * etc.
+
+#### With cabal
+
+Please see the `tested-with` field of the cabal file for known-compatible versions of GHC.
+
+From the reflex-vty project directory:
+
+```bash
+cabal new-configure
+cabal new-build # to build the library and example
+cabal new-repl # to enter a repl for the library
+cabal new-repl example # to enter a repl for the example executable
+```
+
+
