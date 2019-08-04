@@ -17,6 +17,7 @@ extra-source-files: README.md
                     ChangeLog.md
 extra-doc-files: doc/welcome.gif
                , doc/tasks.png
+tested-with: GHC ==8.6.5 || ==8.4.4 || ==8.2.2
 
 library
   exposed-modules: Reflex.Vty
