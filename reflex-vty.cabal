@@ -11,7 +11,7 @@ author: Obsidian Systems LLC
 maintainer: maintainer@obsidian.systems
 category: FRP
 build-type: Simple
-cabal-version: >=1.10
+cabal-version: >=1.18
 extra-source-files: README.md
                     ChangeLog.md
 extra-doc-files: doc/welcome.gif
@@ -29,7 +29,7 @@ library
                  , Reflex.Spider.Orphans
                  , Control.Monad.NodeId
   build-depends:
-    base,
+    base <= 4.13,
     bimap,
     containers,
     data-default,
