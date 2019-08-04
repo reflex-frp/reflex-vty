@@ -13,7 +13,7 @@ is still experimental, so big changes are possible!
 Enter a nix-shell for the project:
 ```bash
 git clone git@github.com:reflex-frp/reflex-platform
-git clone git@gitlab.com:obsidian.systems/reflex-vty
+git clone git@github.com:reflex-frp/reflex-vty
 cd reflex-vty
 ../reflex-platform/scripts/work-on ghc ./.
 ```
