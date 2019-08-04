@@ -22,6 +22,7 @@ import qualified Graphics.Vty as V
 import Reflex
 
 import Reflex.Vty.Widget
+import Reflex.Vty.Widget.Layout
 
 -- | Configuration options for a 'textInput'. For more information on
 -- 'TextZipper', see 'Data.Text.Zipper'.
@@ -121,7 +122,7 @@ images = map (V.horizCat . map spanToImage)
 image :: [[Span V.Attr]] -> V.Image
 image = V.vertCat . images
 
--- | Turn a 'Span' into an 'Image'
+-- | Turn a 'Span' into an 'Graphics.Vty.Image'
 spanToImage :: Span V.Attr -> V.Image
 spanToImage (Span attrs t) = V.text' attrs t
 

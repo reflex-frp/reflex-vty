@@ -7,7 +7,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -threaded #-}
 
 import Control.Applicative
@@ -30,9 +29,6 @@ import Reflex.Vty
 data Example = Example_TextEditor
              | Example_Todo
   deriving (Show, Read, Eq, Ord, Enum, Bounded)
-
-div' :: (Integral a, Applicative f) => f a -> f a -> f a
-div' = liftA2 div
 
 main :: IO ()
 main = mainWidget $ do
@@ -68,13 +64,18 @@ taskList
 taskList = do
   let btn = textButtonStatic def "Add another task"
   inp <- input
-  rec let todos' = todos [Todo "Find reflex-vty" True, Todo "Become functional reactive" False, Todo "Make vty apps" False] $ leftmost
+  let todos0 =
+        [ Todo "Find reflex-vty" True
+        , Todo "Become functional reactive" False
+        , Todo "Make vty apps" False
+        ]
+  rec let todos' = todos todos0 $ leftmost
             [ () <$ e
             , fforMaybe inp $ \case
                 V.EvKey V.KEnter [] -> Just ()
                 _ -> Nothing
             ]
-      (m, (e, _)) <- splitV (pure (subtract 6)) (pure (True, True)) todos' $ do
+      (m, (e, _)) <- splitV (pure (subtract 6)) (pure (True, True)) todos' $
         splitV (pure (subtract 3)) (pure (True, True)) btn (display $ Map.size <$> current m)
   return ()
 
@@ -88,8 +89,17 @@ testBoxes = do
       region2 = DynRegion (div' dw 4) (div' dh 4) (2 * div' dw 3) (2 * div' dh 3)
   pane region1 (constDyn False) . boxStatic singleBoxStyle $ debugInput
   _ <- pane region2 (constDyn True) . boxStatic singleBoxStyle $
-    splitVDrag (hRule doubleBoxStyle) (boxStatic roundedBoxStyle $ multilineTextInput def) (boxStatic roundedBoxStyle dragTest)
+    let cfg = def
+          { _textInputConfig_initialValue =
+            "This box is a text input. The box below responds to mouse drag inputs. You can also drag the separator between the boxes to resize them."
+          }
+        textBox = boxStatic roundedBoxStyle $ multilineTextInput cfg
+        dragBox = boxStatic roundedBoxStyle dragTest
+    in splitVDrag (hRule doubleBoxStyle) textBox dragBox
   return ()
+  where
+    div' :: (Integral a, Applicative f) => f a -> f a -> f a
+    div' = liftA2 div
 
 debugFocus :: (Reflex t, Monad m) => VtyWidget t m ()
 debugFocus = do
@@ -148,7 +158,7 @@ todo t0 = do
         let deleteSelf = attachWithMaybe backspaceOnEmpty (current $ _textInput_value v) i
         return (v, deleteSelf)
   return $ TodoOutput
-    { _todoOutput_todo = Todo <$> (_textInput_value ti) <*> value
+    { _todoOutput_todo = Todo <$> _textInput_value ti <*> value
     , _todoOutput_delete = d
     , _todoOutput_height = _textInput_lines ti
     }
@@ -158,7 +168,15 @@ todo t0 = do
       _ -> Nothing
 
 todos
-  :: forall t m. (MonadHold t m, MonadFix m, Reflex t, Adjustable t m, NotReady t m, PostBuild t m, MonadNodeId m)
+  :: forall t m.
+     ( MonadHold t m
+     , MonadFix m
+     , Reflex t
+     , Adjustable t m
+     , NotReady t m
+     , PostBuild t m
+     , MonadNodeId m
+     )
   => [Todo]
   -> Event t ()
   -> VtyWidget t m (Dynamic t (Map Int (TodoOutput t)))
@@ -167,10 +185,11 @@ todos todos0 newTodo = do
   rec tabNav <- tabNavigation
       let insertNav = 1 <$ insert
           nav = leftmost [tabNav, insertNav]
+          tileCfg = def { _tileConfig_constraint = pure $ Constraint_Fixed 1}
       listOut <- runLayout (pure Orientation_Column) 0 nav $
-        listHoldWithKey todosMap0 updates $ \k t -> tile (pure $ Constraint_Fixed 1) (pure True) $ do
+        listHoldWithKey todosMap0 updates $ \k t -> tile tileCfg $ do
           let sel = select selectOnDelete $ Const2 k
-          click <- fmap (const ()) <$> mouseDown V.BLeft
+          click <- void <$> mouseDown V.BLeft
           pb <- getPostBuild
           let focusMe = leftmost [ click, sel, pb ]
           r <- todo t
@@ -179,11 +198,11 @@ todos todos0 newTodo = do
           updates = leftmost [insert, delete]
           todoDelete = switch . current $
             leftmost .  Map.elems . Map.mapWithKey (\k -> (k <$) . _todoOutput_delete) <$> listOut
-          todosMap = joinDynThroughMap $ fmap (_todoOutput_todo) <$> listOut
+          todosMap = joinDynThroughMap $ fmap _todoOutput_todo <$> listOut
           insert = ffor (tag (current todosMap) newTodo) $ \m -> case Map.lookupMax m of
             Nothing -> Map.singleton 0 $ Just $ Todo "" False
             Just (k, _) -> Map.singleton (k+1) $ Just $ Todo "" False
-          selectOnDelete = fanMap $ fmap (flip Map.singleton ()) $ attachWithMaybe
+          selectOnDelete = fanMap $ (`Map.singleton` ()) <$> attachWithMaybe
             (\m k -> let (before, after) = Map.split k m
                       in  fmap fst $ Map.lookupMax before <|> Map.lookupMin after)
             (current todosMap)

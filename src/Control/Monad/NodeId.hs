@@ -1,10 +1,19 @@
+{-|
+Module: Control.Monad.NodeId
+Description: Monad providing a supply of unique identifiers
+-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
-module Control.Monad.NodeId where
+module Control.Monad.NodeId
+  ( NodeId
+  , MonadNodeId (..)
+  , NodeIdT
+  , runNodeIdT
+  ) where
 
 import Control.Monad.Reader
 import Control.Monad.Ref
@@ -13,14 +22,19 @@ import Data.IORef
 import Reflex
 import Reflex.Host.Class
 
+-- | A unique identifier with respect to the 'runNodeIdT' in which it was generated
 newtype NodeId = NodeId Integer
   deriving (Eq, Ord, Show)
 
+-- | Members of this class can request new identifiers that are unique in the action
+-- in which they are obtained (i.e., all calls to 'getNextNodeId' in a given 'runNodeIdT'
+-- will produce unique results)
 class Monad m => MonadNodeId m where
   getNextNodeId :: m NodeId
   default getNextNodeId :: (MonadTrans t, MonadNodeId n, m ~ t n) => m NodeId
   getNextNodeId = lift getNextNodeId
 
+-- | A monad transformer that internally keeps track of the next 'NodeId'
 newtype NodeIdT m a = NodeIdT { unNodeIdT :: ReaderT (IORef NodeId) m a }
   deriving
     ( Functor
@@ -52,6 +66,7 @@ instance Adjustable t m => Adjustable t (NodeIdT m) where
   traverseDMapWithKeyWithAdjust f m e = NodeIdT $ traverseDMapWithKeyWithAdjust (\k v -> unNodeIdT $ f k v) m e
   traverseDMapWithKeyWithAdjustWithMove f m e = NodeIdT $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unNodeIdT $ f k v) m e
 
+-- | Runs a 'NodeIdT' action
 runNodeIdT :: MonadIO m => NodeIdT m a -> m a
 runNodeIdT a = do
   ref <- liftIO $ newIORef $ NodeId 0

@@ -23,6 +23,7 @@ library
                  , Reflex.Vty.Widget
                  , Reflex.Vty.Widget.Input
                  , Reflex.Vty.Widget.Input.Text
+                 , Reflex.Vty.Widget.Layout
                  , Data.Text.Zipper
                  , Reflex.Class.Switchable
                  , Reflex.Spider.Orphans

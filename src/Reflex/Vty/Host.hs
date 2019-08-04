@@ -20,6 +20,7 @@ module Reflex.Vty.Host
 
 import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.Chan (newChan, readChan, writeChan)
+import Control.Exception (onException)
 import Control.Monad (forM, forM_, forever)
 import Control.Monad.Fix (MonadFix, fix)
 import Control.Monad.IO.Class (liftIO, MonadIO)
@@ -44,7 +45,7 @@ type VtyEvent = V.Event
 -- | The output of a 'VtyApp'.
 data VtyResult t = VtyResult
   { _vtyResult_picture :: Behavior t V.Picture
-  -- ^ The current vty output. 'runVtyAppWith' samples this value every time an
+  -- ^ The current vty output. 'runVtyAppWithHandle' samples this value every time an
   -- event fires and updates the display.
   , _vtyResult_shutdown :: Event t ()
   -- ^ An event that requests application termination.
@@ -84,14 +85,15 @@ type VtyApp t m = MonadVtyApp t m
   -- app instantiation ('PostBuild'), and allows actions to be run upon
   -- occurrences of events ('PerformEvent').
 
--- | Runs a 'VtyApp' in a given 'Vty'.
+-- | Runs a 'VtyApp' in a given 'Graphics.Vty.Vty'.
 runVtyAppWithHandle
   :: V.Vty
-  -- ^ A 'Vty' handle.
+  -- ^ A 'Graphics.Vty.Vty' handle.
   -> (forall t m. VtyApp t m)
   -- ^ A functional reactive vty application.
   -> IO ()
-runVtyAppWithHandle vty vtyGuest =
+runVtyAppWithHandle vty vtyGuest = flip onException (V.shutdown vty) $
+
   -- We are using the 'Spider' implementation of reflex. Running the host
   -- allows us to take actions on the FRP timeline. The scoped type signature
   -- specifies that our host runs on the Global timeline.
@@ -195,7 +197,7 @@ runVtyAppWithHandle vty vtyGuest =
       if or stop
         then liftIO $ do             -- If we received a shutdown 'Event'
           killThread nextEventThread -- then stop reading input events and
-          V.shutdown vty             -- call the 'Vty's shutdown command.
+          V.shutdown vty             -- call the 'Graphics.Vty.Vty's shutdown command.
 
         else do                      -- Otherwise, update the display and loop.
           updateVty
@@ -219,7 +221,7 @@ runVtyAppWithHandle vty vtyGuest =
       liftIO $ forM_ ers $ \(_ :=> TriggerInvocation _ cb) -> cb
       return a
 
--- | Run a 'VtyApp' with a 'Vty' handle with a standard configuration.
+-- | Run a 'VtyApp' with a 'Graphics.Vty.Vty' handle with a standard configuration.
 runVtyApp
   :: (forall t m. VtyApp t m)
   -> IO ()

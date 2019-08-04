@@ -9,7 +9,6 @@ Description: Basic set of widgets and building blocks for reflex-vty application
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -62,33 +61,13 @@ module Reflex.Vty.Widget
   , keys
   , keyCombos
   , blank
-  , Orientation(..)
-  , Constraint(..)
-  , Layout
-  , runLayout
-  , tile
-  , fixed
-  , stretch
-  , col
-  , row
-  , tabNavigation
-  , askOrientation
   ) where
 
 import Control.Applicative (liftA2)
 import Control.Monad.Fix (MonadFix)
-import Control.Monad.Trans.Class
-import Control.Monad.Trans (lift)
 import Control.Monad.Reader
-import Data.Bimap (Bimap)
-import qualified Data.Bimap as Bimap
+import Control.Monad.Trans (lift)
 import Data.Default (Default(..))
-import Data.Map (Map)
-import qualified Data.Map as Map
-import Data.Maybe (fromMaybe)
-import Data.Monoid hiding (First(..))
-import Data.Ratio
-import Data.Semigroup (First(..))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
@@ -97,8 +76,8 @@ import qualified Data.Text.Zipper as TZ
 import Graphics.Vty (Image)
 import qualified Graphics.Vty as V
 import Reflex
-import Reflex.Host.Class (MonadReflexCreateTrigger)
 import Reflex.Class ()
+import Reflex.Host.Class (MonadReflexCreateTrigger)
 
 import Reflex.Vty.Host
 
@@ -646,224 +625,6 @@ display
   -> VtyWidget t m ()
 display a = text $ T.pack . show <$> a
 
-data Constraint = Constraint_Fixed Int
-                | Constraint_Min Int
-  deriving (Show, Read, Eq, Ord)
-
--- | Compute the size of each widget "@k@" based on the total set of 'Constraint's
-computeSizes
-  :: Ord k
-  => Int
-  -> Map k (a, Constraint)
-  -> Map k (a, Int)
-computeSizes available constraints =
-  let minTotal = sum $ ffor (Map.elems constraints) $ \case
-        (_, Constraint_Fixed n) -> n
-        (_, Constraint_Min n) -> n
-      leftover = max 0 (available - minTotal)
-      numStretch = Map.size $ Map.filter (isMin . snd) constraints
-      szStretch = floor $ leftover % (max numStretch 1)
-      adjustment = max 0 $ available - minTotal - szStretch * numStretch
-  in snd $ Map.mapAccum (\adj (a, c) -> case c of
-      Constraint_Fixed n -> (adj, (a, n))
-      Constraint_Min n -> (0, (a, n + szStretch + adj))) adjustment constraints
-  where
-    isMin (Constraint_Min _) = True
-    isMin _ = False
-
-computeEdges :: (Ord k) => Map k (a, Int) -> Map k (a, (Int, Int))
-computeEdges = fst . Map.foldlWithKey' (\(m, offset) k (a, sz) ->
-  (Map.insert k (a, (offset, sz)) m, sz + offset)) (Map.empty, 0)
-
+-- | A widget that draws nothing
 blank :: Monad m => VtyWidget t m ()
 blank = return ()
-
--- | The main-axis orientation of a 'StackWidget' widget
-data Orientation = Orientation_Column
-                 | Orientation_Row
-  deriving (Show, Read, Eq, Ord)
-
-data LayoutSegment = LayoutSegment
-  { _layoutSegment_offset :: Int
-  , _layoutSegment_size :: Int
-  }
-
-data LayoutCtx t = LayoutCtx
-  { _layoutCtx_regions :: Dynamic t (Map NodeId LayoutSegment)
-  , _layoutCtx_focusDemux :: Demux t (Maybe NodeId)
-  , _layoutCtx_orientation :: Dynamic t Orientation
-  }
-
-newtype Layout t m a = Layout
-  { unLayout :: EventWriterT t (First NodeId)
-      (DynamicWriterT t (Endo [(NodeId, (Bool, Constraint))])
-        (ReaderT (LayoutCtx t)
-          (VtyWidget t m))) a
-  } deriving
-    ( Functor
-    , Applicative
-    , Monad
-    , MonadHold t
-    , MonadSample t
-    , MonadFix
-    , TriggerEvent t
-    , PerformEvent t
-    , NotReady t
-    , MonadReflexCreateTrigger t
-    , HasDisplaySize t
-    , MonadNodeId
-    )
-
-instance MonadTrans (Layout t) where
-  lift x = Layout $ lift $ lift $ lift $ lift x
-
-instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (Layout t m) where
-  runWithReplace (Layout a) e = Layout $ runWithReplace a $ fmap unLayout e
-  traverseIntMapWithKeyWithAdjust f m e = Layout $ traverseIntMapWithKeyWithAdjust (\k v -> unLayout $ f k v) m e
-  traverseDMapWithKeyWithAdjust f m e = Layout $ traverseDMapWithKeyWithAdjust (\k v -> unLayout $ f k v) m e
-  traverseDMapWithKeyWithAdjustWithMove f m e = Layout $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unLayout $ f k v) m e
-
-runLayout
-  :: (MonadFix m, MonadHold t m, PostBuild t m, Monad m, MonadNodeId m)
-  => Dynamic t Orientation
-  -> Int
-  -> Event t Int
-  -> Layout t m a
-  -> VtyWidget t m a
-runLayout ddir focus0 focusShift (Layout child) = do
-  dw <- displayWidth
-  dh <- displayHeight
-  let main = ffor3 ddir dw dh $ \d w h -> case d of
-        Orientation_Column -> h
-        Orientation_Row -> w
-  pb <- getPostBuild
-  rec ((a, focusReq), queriesEndo) <- runReaderT (runDynamicWriterT $ runEventWriterT child) $ LayoutCtx solutionMap focusDemux ddir
-      let queries = flip appEndo [] <$> queriesEndo
-          solution = ffor2 main queries $ \sz qs -> Map.fromList
-            . Map.elems
-            . computeEdges
-            . computeSizes sz
-            . fmap (fmap snd)
-            . Map.fromList
-            . zip [0::Integer ..]
-            $ qs
-          solutionMap = ffor solution $ \ss -> ffor ss $ \(offset, sz) -> LayoutSegment
-            { _layoutSegment_offset = offset
-            , _layoutSegment_size = sz
-            }
-          focusable = fmap (Bimap.fromList . zip [0..]) $
-            ffor queries $ \qs -> fforMaybe qs $ \(nodeId, (f, _)) ->
-              if f then Just nodeId else Nothing
-          adjustFocus
-            :: (Bimap Int NodeId, (Int, Maybe NodeId))
-            -> Either Int NodeId
-            -> (Int, Maybe NodeId)
-          adjustFocus (fm, (cur, _)) (Left shift) =
-            let ix = (cur + shift) `mod` (max 1 $ Bimap.size fm)
-            in (ix, Bimap.lookup ix fm)
-          adjustFocus (fm, (cur, _)) (Right goto) =
-            let ix = fromMaybe cur $ Bimap.lookupR goto fm
-            in (ix, Just goto)
-          focusChange = attachWith
-            adjustFocus
-            (current $ (,) <$> focusable <*> focussed)
-            $ leftmost [Left <$> focusShift, Left 0 <$ pb, Right . getFirst <$> focusReq]
-      -- A pair (Int, Maybe NodeId) which represents the index
-      -- that we're trying to focus, and the node that actually gets
-      -- focused (at that index) if it exists
-      focussed <- holdDyn (focus0, Nothing) focusChange
-      let focusDemux = demux $ snd <$> focussed
-  return a
-
-tile
-  :: (Reflex t, Monad m, MonadNodeId m)
-  => Dynamic t Constraint
-  -> Dynamic t Bool
-  -> VtyWidget t m (Event t x, a)
-  -> Layout t m a
-tile con focusable child = do
-  nodeId <- getNextNodeId
-  Layout $ tellDyn $ ffor2 con focusable $ \c f -> Endo ((nodeId, (f, c)):)
-  seg <- Layout $ asks $
-    fmap (Map.findWithDefault (LayoutSegment 0 0) nodeId) . _layoutCtx_regions
-  dw <- displayWidth
-  dh <- displayHeight
-  o <- askOrientation
-  let cross = join $ ffor o $ \case
-        Orientation_Column -> dw
-        Orientation_Row -> dh
-  let reg = DynRegion
-        { _dynRegion_top = ffor2 seg o $ \s -> \case
-            Orientation_Column -> _layoutSegment_offset s
-            Orientation_Row -> 0
-        , _dynRegion_left = ffor2 seg o $ \s -> \case
-            Orientation_Column -> 0
-            Orientation_Row -> _layoutSegment_offset s
-        , _dynRegion_width = ffor3 seg cross o $ \s c -> \case
-            Orientation_Column -> c
-            Orientation_Row -> _layoutSegment_size s
-        , _dynRegion_height = ffor3 seg cross o $ \s c -> \case
-            Orientation_Column -> _layoutSegment_size s
-            Orientation_Row -> c
-        }
-  focussed <- Layout $ asks _layoutCtx_focusDemux
-  (focusReq, a) <- Layout $ lift $ lift $ lift $
-    pane reg (demuxed focussed $ Just nodeId) $ child
-  Layout $ tellEvent $ First nodeId <$ focusReq
-  return a
-
-data TileConfig t = TileConfig
-  { _tileConfig_constraint :: Dynamic t Constraint
-  , _tileConfig_focusable :: Dynamic t Bool
-  , _tileConfig_clickable :: Behavior t Bool
-  }
-
-instance Reflex t => Default (TileConfig t) where
-  def = TileConfig (pure $ Constraint_Min 0) (pure True) (pure True)
-
-fixed
-  :: (Reflex t, Monad m, MonadNodeId m)
-  => Dynamic t Int
-  -> VtyWidget t m a
-  -> Layout t m a
-fixed sz = tile (Constraint_Fixed <$> sz) (pure True) . clickable
-
-stretch
-  :: (Reflex t, Monad m, MonadNodeId m)
-  => VtyWidget t m a
-  -> Layout t m a
-stretch = tile (Constraint_Min <$> 0) (pure True) . clickable
-
-col
-  :: (MonadFix m, MonadHold t m, PostBuild t m, MonadNodeId m)
-  => Layout t m a
-  -> VtyWidget t m a
-col child = do
-  nav <- tabNavigation
-  runLayout (pure Orientation_Column) 0 nav child
-
-row
-  :: (MonadFix m, MonadHold t m, PostBuild t m, MonadNodeId m)
-  => Layout t m a
-  -> VtyWidget t m a
-row child = do
-  nav <- tabNavigation
-  runLayout (pure Orientation_Column) 0 nav child
-
-tabNavigation :: (Reflex t, Monad m) => VtyWidget t m (Event t Int)
-tabNavigation = do
-  fwd <- fmap (const 1) <$> key (V.KChar '\t')
-  back <- fmap (const (-1)) <$> key V.KBackTab
-  return $ leftmost [fwd, back]
-
-clickable
-  :: (Reflex t, Monad m)
-  => VtyWidget t m a
-  -> VtyWidget t m (Event t (), a)
-clickable child = do
-  click <- mouseDown V.BLeft
-  a <- child
-  return (() <$ click, a)
-
-askOrientation :: Monad m => Layout t m (Dynamic t Orientation)
-askOrientation = Layout $ asks _layoutCtx_orientation

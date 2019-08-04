@@ -16,6 +16,7 @@ import Data.Char (isSpace)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
+import Data.String
 import Control.Monad.State (evalState, forM, get, put)
 
 import Data.Text (Text)
@@ -34,6 +35,9 @@ data TextZipper = TextZipper
   , _textZipper_linesAfter :: [Text]
   }
   deriving (Show)
+
+instance IsString TextZipper where
+  fromString = fromText . T.pack
 
 -- | Move the cursor left one character, if possible
 left :: TextZipper -> TextZipper
