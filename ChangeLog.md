@@ -1,6 +1,6 @@
 # Revision history for reflex-vty
 
-## Unreleased
+## 0.1.1.0
 
 * Set version bounds in cabal file
 * Add travis CI config

@@ -1,5 +1,5 @@
 name: reflex-vty
-version: 0.1.0.0
+version: 0.1.1.0
 synopsis: Reflex FRP host and widgets for vty applications
 description:
   Host and widget library for Reflex-based FRP applications
