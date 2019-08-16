@@ -4,7 +4,7 @@
 
 ![reflex-vty example animation](doc/welcome.gif)
 
-Feature requests, pull requests, and other feedback are welcome and appreciated. This library
+Feature requests, pull requests, and other feedback are welcome and appreciated (see the [contribution guide](CONTRIBUTING.md)). This library
 is still experimental, so big changes are possible!
 ### How to Build
 
