@@ -1,5 +1,5 @@
 name: reflex-vty
-version: 0.1.1.0
+version: 0.1.1.1
 synopsis: Reflex FRP host and widgets for vty applications
 description:
   Host and widget library for Reflex-based FRP applications
@@ -31,7 +31,7 @@ library
                  , Reflex.Spider.Orphans
                  , Control.Monad.NodeId
   build-depends:
-    base                              >= 4.11.0 && < 4.13,
+    base                              >= 4.10.0 && < 4.13,
     bimap                             >= 0.3.3 && < 0.4,
     containers                        >= 0.5.0 && < 0.7,
     mtl                               >= 2.2.2 && < 2.3,
@@ -44,7 +44,7 @@ library
     exception-transformers            >= 0.4.0 && < 0.5,
     primitive                         >= 0.6.3 && < 0.7,
     ref-tf                            >= 0.4.0 && < 0.5,
-    reflex                            >= 0.6 && < 0.7,
+    reflex                            >= 0.6.2.4 && < 0.7,
     time                              >= 1.8.0 && < 1.9,
     vty                               >= 5.21 && < 5.26
   hs-source-dirs: src

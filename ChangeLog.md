@@ -1,5 +1,9 @@
 # Revision history for reflex-vty
 
+## 0.1.1.1
+
+* Bump minimum version of reflex
+
 ## 0.1.1.0
 
 * Set version bounds in cabal file
