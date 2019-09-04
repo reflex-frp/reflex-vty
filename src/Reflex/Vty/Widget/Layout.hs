@@ -226,7 +226,7 @@ row
   -> VtyWidget t m a
 row child = do
   nav <- tabNavigation
-  runLayout (pure Orientation_Column) 0 nav child
+  runLayout (pure Orientation_Row) 0 nav child
 
 -- | Produces an 'Event' that navigates forward one tile when the Tab key is pressed
 -- and backward one tile when Shift+Tab is pressed.
