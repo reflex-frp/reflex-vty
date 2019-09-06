@@ -30,13 +30,13 @@ data TextInputConfig t = TextInputConfig
   { _textInputConfig_initialValue :: TextZipper
   , _textInputConfig_modify :: Event t (TextZipper -> TextZipper)
   , _textInputConfig_tabWidth :: Int
-  , _textInputConfig_display :: Char -> Char
+  , _textInputConfig_display :: Dynamic t (Char -> Char)
   -- ^ Transform the characters in a text input before displaying them. This is useful, e.g., for
   -- masking characters when entering passwords.
   }
 
 instance Reflex t => Default (TextInputConfig t) where
-  def = TextInputConfig empty never 4 id
+  def = TextInputConfig empty never 4 (pure id)
 
 -- | The output produced by text input widgets, including the text
 -- value and the number of display lines (post-wrapping). Note that some
@@ -67,7 +67,7 @@ textInput cfg = do
       let cursorAttrs = ffor f $ \x -> if x then cursorAttributes else V.defAttr
       let rows = (\w s c -> displayLines w V.defAttr c s)
             <$> dw
-            <*> (mapZipper (_textInputConfig_display cfg) <$> v)
+            <*> (mapZipper <$> _textInputConfig_display cfg <*> v)
             <*> cursorAttrs
           img = images . _displayLines_spans <$> rows
       y <- holdUniqDyn $ _displayLines_cursorY <$> rows
