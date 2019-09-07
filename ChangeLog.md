@@ -3,6 +3,7 @@
 ## 0.1.2.0
 * Allow TextZipper contents to be tranformed before being displayed
 * Fix bug in `row` orientation
+* Handle wrapping of lines containing fullwidth unicode characters in `textInput`
 
 ## 0.1.1.1
 
