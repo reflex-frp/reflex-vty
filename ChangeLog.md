@@ -1,5 +1,9 @@
 # Revision history for reflex-vty
 
+## 0.1.2.0
+* Allow TextZipper contents to be tranformed before being displayed
+* Fix bug in `row` orientation
+
 ## 0.1.1.1
 
 * Bump minimum version of reflex
