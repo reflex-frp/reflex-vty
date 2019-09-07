@@ -7,6 +7,7 @@ Description: A zipper for text documents that allows convenient editing and navi
 'TextZipper's can be converted into 'DisplayLines', which describe how the contents of the zipper will be displayed when wrapped to fit within a container of a certain width. It also provides some convenience facilities for converting interactions with the rendered DisplayLines back into manipulations of the underlying TextZipper.
 
 -}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -21,6 +22,11 @@ import Control.Monad.State (evalState, forM, get, put)
 
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Text.ICU.Char
+import Data.Text.Internal (Text(..), text)
+import Data.Text.Internal.Fusion (stream)
+import Data.Text.Internal.Fusion.Types (Stream(..), Step(..))
+import Data.Text.Unsafe
 
 -- | A zipper of the logical text input contents (the "document"). The lines
 -- before the line containing the cursor are stored in reverse order.
@@ -154,7 +160,7 @@ deleteLeftWord (TextZipper lb b a la) =
 -- | Insert up to n spaces to get to the next logical column that is a multiple of n
 tab :: Int -> TextZipper -> TextZipper
 tab n z@(TextZipper _ b _ _) =
-  insert (T.replicate (fromEnum $ n - (T.length b `mod` (max 1 n))) " ") z
+  insert (T.replicate (fromEnum $ n - (T.length b `mod` max 1 n)) " ") z
 
 -- | The plain text contents of the zipper
 value :: TextZipper -> Text
@@ -215,10 +221,13 @@ displayLines width tag cursorTag (TextZipper lb b a la) =
       (spansCurrentBefore, spansCurLineBefore) = fromMaybe ([], []) $
         initLast $ map ((:[]) . Span tag) (wrapWithOffset width 0 b)
       -- Calculate the number of columns on the cursor's display line before the cursor
-      curLineOffset = spansLength spansCurLineBefore
+      curLineOffset = spansWidth spansCurLineBefore
       -- Check whether the spans on the current display line are long enough that
       -- the cursor has to go to the next line
       cursorAfterEOL = curLineOffset == width
+      cursorCharWidth = case T.uncons a of
+        Nothing -> 1
+        Just (c, _) -> charWidth c
       -- Separate the span after the cursor into
       -- * spans that are on the same display line, and
       -- * spans that are on later display lines (though on the same logical line)
@@ -226,7 +235,7 @@ displayLines width tag cursorTag (TextZipper lb b a la) =
         headTail $ case T.uncons a of
           Nothing -> [[Span cursorTag " "]]
           Just (c, rest) ->
-            let o = if cursorAfterEOL then 1 else curLineOffset + 1
+            let o = if cursorAfterEOL then cursorCharWidth else curLineOffset + cursorCharWidth
                 cursor = Span cursorTag (T.singleton c)
             in  case map ((:[]) . Span tag) (wrapWithOffset width o rest) of
                   [] -> [[cursor]]
@@ -245,7 +254,7 @@ displayLines width tag cursorTag (TextZipper lb b a la) =
         , _displayLines_cursorY = sum
           [ length spansBefore
           , length spansCurrentBefore
-          , if cursorAfterEOL then 1 else 0
+          , if cursorAfterEOL then cursorCharWidth else 0
           ]
         }
   where
@@ -263,11 +272,56 @@ displayLines width tag cursorTag (TextZipper lb b a la) =
 -- | Wraps a logical line of text to fit within the given width. The first
 -- wrapped line is offset by the number of columns provided. Subsequent wrapped
 -- lines are not.
-wrapWithOffset :: Int -> Int -> Text -> [Text]
+wrapWithOffset
+  :: Int -- ^ Maximum width
+  -> Int -- ^ Offset for first line
+  -> Text -- ^ Text to be wrapped
+  -> [Text]
 wrapWithOffset maxWidth _ _ | maxWidth <= 0 = []
 wrapWithOffset maxWidth n xs =
-  let (firstLine, rest) = T.splitAt (maxWidth - n) xs
-  in firstLine : (fmap (T.take maxWidth) . takeWhile (not . T.null) . iterate (T.drop maxWidth) $ rest)
+  let (firstLine, rest) = splitAtWidth (maxWidth - n) xs
+  in firstLine : (fmap (takeWidth maxWidth) . takeWhile (not . T.null) . iterate (dropWidth maxWidth) $ rest)
+
+-- | Split a 'Text' at the given column index. For example
+-- > splitAtWidth 3 "ᄀabc" == ("ᄀa", "bc")
+-- becaues the first character has a width of two (see 'charWidth' for more on that).
+splitAtWidth :: Int -> Text -> (Text, Text)
+splitAtWidth n t@(Text arr off len)
+    | n <= 0 = (T.empty, t)
+    | n >= textWidth t = (t, T.empty)
+    | otherwise = let k = iterNWidth n t
+                  in (text arr off k, text arr (off+k) (len-k))
+  where
+    iterNWidth :: Int -> Text -> Int
+    iterNWidth n' t'@(Text _ _ len') = loop 0 0
+      where loop !i !cnt
+                | i >= len' || cnt + w > n' = i
+                | otherwise = loop (i+d) (cnt + w)
+              where Iter c d = iter t' i
+                    w = charWidth c
+
+-- | Takes the given number of columns of characters. For example
+-- > takeWidth 3 "ᄀabc" == "ᄀa"
+-- because the first character has a width of 2 (see 'charWidth' for more on that).
+-- This function will not take a character if its width exceeds the width it seeks to take.
+takeWidth :: Int -> Text -> Text
+takeWidth n = fst . splitAtWidth n
+
+-- | Drops the given number of columns of characters. For example
+-- > dropWidth 2 "ᄀabc" == "abc"
+-- because the first character has a width of 2 (see 'charWidth' for more on that).
+-- This function will not drop a character if its width exceeds the width it seeks to drop.
+dropWidth :: Int -> Text -> Text
+dropWidth n = snd . splitAtWidth n
+
+-- | Get the display width of a 'Char'. "Full width" and "wide" characters
+-- take two columns and everything else takes a single column. See
+-- <https://www.unicode.org/reports/tr11/> for more information.
+charWidth :: Char -> Int
+charWidth c = case property EastAsianWidth c of
+  EAFull -> 2
+  EAWide -> 2
+  _ -> 1
 
 -- | For a given set of wrapped logical lines, computes a map
 -- from display line index to text offset in the original text.
@@ -313,9 +367,29 @@ goToDisplayLinePosition x y dl tz =
         Just o ->
           let displayLineLength = case drop y $ _displayLines_spans dl of
                 [] -> x
-                (s:_) -> spansLength s
-          in  rightN (o + (min displayLineLength x)) $ top tz
+                (s:_) -> spansWidth s
+          in  rightN (o + min displayLineLength x) $ top tz
 
--- | Get the length of the text in a set of 'Span's
+-- | Get the width of the text in a set of 'Span's, taking into account unicode character widths
+spansWidth :: [Span tag] -> Int
+spansWidth = sum . map (\(Span _ t) -> textWidth t)
+
+-- | Get the length (number of characters) of the text in a set of 'Span's
 spansLength :: [Span tag] -> Int
 spansLength = sum . map (\(Span _ t) -> T.length t)
+
+-- | Compute the width of some 'Text', taking into account fullwidth
+-- unicode forms.
+textWidth :: Text -> Int
+textWidth t = widthI (stream t)
+
+-- | Compute the width of a stream of characters, taking into account
+-- fullwidth unicode forms.
+widthI :: Stream Char -> Int
+widthI (Stream next s0 _len) = loop_length 0 s0
+    where
+      loop_length !z s  = case next s of
+                           Done       -> z
+                           Skip    s' -> loop_length z s'
+                           Yield c s' -> loop_length (z + charWidth c) s'
+{-# INLINE[0] widthI #-}
