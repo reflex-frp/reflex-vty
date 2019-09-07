@@ -45,6 +45,15 @@ data TextZipper = TextZipper
 instance IsString TextZipper where
   fromString = fromText . T.pack
 
+-- | Map a replacement function over the characters in a 'TextZipper'
+mapZipper :: (Char -> Char) -> TextZipper -> TextZipper
+mapZipper f (TextZipper lb b a la) = TextZipper
+  { _textZipper_linesBefore = fmap (T.map f) lb
+  , _textZipper_before = T.map f b
+  , _textZipper_after = T.map f a
+  , _textZipper_linesAfter = fmap (T.map f) la
+  }
+
 -- | Move the cursor left one character, if possible
 left :: TextZipper -> TextZipper
 left = leftN 1
