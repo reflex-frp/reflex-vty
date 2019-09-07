@@ -292,8 +292,10 @@ wrapWithOffset maxWidth n xs =
   in firstLine : (fmap (takeWidth maxWidth) . takeWhile (not . T.null) . iterate (dropWidth maxWidth) $ rest)
 
 -- | Split a 'Text' at the given column index. For example
+--
 -- > splitAtWidth 3 "ᄀabc" == ("ᄀa", "bc")
--- becaues the first character has a width of two (see 'charWidth' for more on that).
+--
+-- because the first character has a width of two (see 'charWidth' for more on that).
 splitAtWidth :: Int -> Text -> (Text, Text)
 splitAtWidth n t@(Text arr off len)
     | n <= 0 = (T.empty, t)
@@ -310,14 +312,18 @@ splitAtWidth n t@(Text arr off len)
                     w = charWidth c
 
 -- | Takes the given number of columns of characters. For example
+--
 -- > takeWidth 3 "ᄀabc" == "ᄀa"
+--
 -- because the first character has a width of 2 (see 'charWidth' for more on that).
 -- This function will not take a character if its width exceeds the width it seeks to take.
 takeWidth :: Int -> Text -> Text
 takeWidth n = fst . splitAtWidth n
 
 -- | Drops the given number of columns of characters. For example
+--
 -- > dropWidth 2 "ᄀabc" == "abc"
+--
 -- because the first character has a width of 2 (see 'charWidth' for more on that).
 -- This function will not drop a character if its width exceeds the width it seeks to drop.
 dropWidth :: Int -> Text -> Text
