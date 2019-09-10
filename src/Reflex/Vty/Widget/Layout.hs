@@ -186,7 +186,7 @@ data TileConfig t = TileConfig
   { _tileConfig_constraint :: Dynamic t Constraint
     -- ^ 'Constraint' on the tile's size
   , _tileConfig_focusable :: Dynamic t Bool
-    -- ^ Whether the tile is focusable       data TileConfig t = TileConfig
+    -- ^ Whether the tile is focusable
   }
 
 instance Reflex t => Default (TileConfig t) where
