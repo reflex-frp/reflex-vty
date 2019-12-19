@@ -59,6 +59,7 @@ module Reflex.Vty.Widget
   , KeyCombo
   , key
   , keys
+  , keyCombo
   , keyCombos
   , blank
   ) where
@@ -402,6 +403,13 @@ key = keyCombos . Set.singleton . (,[])
 -- | Emits an event that fires on particular key presses (without modifiers)
 keys :: (Monad m, Reflex t) => [V.Key] -> VtyWidget t m (Event t KeyCombo)
 keys = keyCombos . Set.fromList . fmap (,[])
+
+-- | Emit an event that fires whenever the provided key combination occurs
+keyCombo
+  :: (Reflex t, Monad m)
+  => KeyCombo
+  -> VtyWidget t m (Event t KeyCombo)
+keyCombo = keyCombos . Set.singleton
 
 -- | Emit an event that fires whenever any of the provided key combinations occur
 keyCombos

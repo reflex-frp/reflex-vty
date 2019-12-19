@@ -1,5 +1,9 @@
 # Revision history for reflex-vty
 
+## Unreleased
+
+* Add `keyCombo` function (single-key-combination version of `keyCombos`)
+
 ## 0.1.2.0
 * Allow TextZipper contents to be tranformed before being displayed
 * Fix bug in `row` orientation
