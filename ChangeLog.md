@@ -3,6 +3,7 @@
 ## Unreleased
 
 * Add `keyCombo` function (single-key-combination version of `keyCombos`)
+* Add Reflex.Process module for interacting with shell commands using `Event`s
 
 ## 0.1.2.0
 * Allow TextZipper contents to be tranformed before being displayed
