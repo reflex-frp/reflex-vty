@@ -37,16 +37,21 @@ main = withSystemTempDirectory "asdf" $ \fp -> mainWidget $ do
         text $ pure $ "$> touch " <> T.pack tmpfile
         createProcess (P.proc "touch" [tmpfile]) never
       fixed 1 $ text <=< hold "" $ "File created." <$ touchExit
-      fixed 1 $ text $ pure $ "$>  rm -i " <> T.pack tmpfile
-      fixed 4 $ do
-        rec pout <- createProcess (P.proc "rm" ["-i", fp <> "/my-temporary-file"]) $ fmap T.encodeUtf8 $
-              tag (current (_textInput_value i)) enter
-            (i, enter) <- col $ do
-              fixed 1 $ text <=< hold "" $ T.decodeUtf8 <$> _process_stderr pout
-              fixed 3 $ do
-                i <- boxStatic def $ textInput def
-                enter <- key V.KEnter
-                return (i, enter)
-        display <=< hold Nothing $ Just <$> _process_exit pout
-        return ()
+      fixed 1 $ text $ pure $ "$> rm -i " <> T.pack tmpfile
+      rec pout <- fixed 3 $ do
+            pout <- createProcess (P.proc "rm" ["-i", fp <> "/my-temporary-file"]) userInput
+            col $ do
+              _ <- fixed 1 $ text <=< hold "<no stdout yet>" $ T.decodeUtf8 <$> _process_stdout pout
+              _ <- fixed 1 $ text <=< hold "<no stderr yet>" $ T.decodeUtf8 <$> _process_stderr pout
+              _ <- fixed 1 $ display =<< hold Nothing (Just <$> _process_exit pout)
+              return pout
+          (i, enter) <- fixed 3 $ do
+            i <- boxStatic def $ textInput def
+            enter <- key V.KEnter
+            return (i, enter)
+          let userInput = fmap T.encodeUtf8 $ tag (current (_textInput_value i)) enter
+      fixed 1 $ display <=< hold Nothing $ Just <$> _process_exit pout
+      fixed 1 $ display <=< hold Nothing $ Just <$> enter
+      fixed 1 $ display <=< hold Nothing $ Just <$> userInput
+      return ()
   return $ () <$ exit

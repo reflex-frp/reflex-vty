@@ -89,7 +89,7 @@ createProcess = createRedirectedProcess input output
             readable <- H.hIsReadable h
             if open && readable
               then do
-                out <- BS.hGet h 32768
+                out <- BS.hGetSome h 32768
                 if BS.null out
                   then return ()
                   else do
