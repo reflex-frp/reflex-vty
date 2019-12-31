@@ -3,6 +3,7 @@
 ## Unreleased
 
 * Add `keyCombo` function (single-key-combination version of `keyCombos`)
+* Use upstream `NotReady` instances instead of orphans defined in this package if reflex-0.6.3 is available
 
 ## 0.1.2.0
 * Allow TextZipper contents to be tranformed before being displayed
