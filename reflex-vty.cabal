@@ -40,7 +40,6 @@ library
     dependent-map                     >= 0.2.4 && < 0.4,
     dependent-sum                     >= 0.3 && < 0.7,
     exception-transformers            >= 0.4.0 && < 0.5,
-    io-streams                        >= 1.5 && < 1.6,
     mtl                               >= 2.2.2 && < 2.3,
     primitive                         >= 0.6.3 && < 0.7,
     process                           >= 1.6.4 && < 1.7,
@@ -81,6 +80,7 @@ executable process
     process,
     reflex,
     reflex-vty,
+    temporary,
     text,
     vty
   default-language: Haskell2010

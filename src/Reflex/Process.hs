@@ -7,18 +7,29 @@ Description: Run interactive shell commands in reflex
 {-# LANGUAGE LambdaCase #-}
 module Reflex.Process
   ( createProcess
+  , Process(..)
   ) where
 
 import Control.Concurrent (forkIO, killThread)
 import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.ByteString (ByteString)
-import GHC.IO.Handle (Handle, hClose)
-import qualified System.IO.Streams as S
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as Char8
+import qualified GHC.IO.Handle as H
+import GHC.IO.Handle (Handle)
+import System.Exit (ExitCode)
 import qualified System.Process as P
 import System.Process hiding (createProcess)
 
 import Reflex
+
+-- | The output of a process
+data Process t = Process
+  { _process_exit :: Event t ExitCode
+  , _process_stdout :: Event t ByteString
+  , _process_stderr :: Event t ByteString
+  }
 
 createRedirectedProcess
   :: (MonadIO m, TriggerEvent t m, PerformEvent t m, MonadIO (Performable m))
@@ -26,7 +37,7 @@ createRedirectedProcess
   -> (Handle -> (ByteString -> IO ()) -> IO (IO ()))
   -> CreateProcess
   -> Event t ByteString
-  -> m (Event t ByteString, Event t ByteString) 
+  -> m (Process t)
 createRedirectedProcess mkWriteInput mkReadOutput p input = do
   let redirectedProc = p
         { std_in = CreatePipe
@@ -45,11 +56,17 @@ createRedirectedProcess mkWriteInput mkReadOutput p input = do
             return (e, t)
       (out, outThread) <- output hOut
       (err, errThread) <- output hErr
-      void $ liftIO $ forkIO $ waitForProcess ph >> do
+      (ecOut, ecTrigger) <- newTriggerEvent
+      void $ liftIO $ forkIO $ waitForProcess ph >>= \ec -> do
+        ecTrigger ec
         P.cleanupProcess po
         killThread outThread
         killThread errThread 
-      return (out, err)
+      return $ Process
+        { _process_exit = ecOut
+        , _process_stdout = out
+        , _process_stderr = err
+        }
     _ -> error "Reflex.Vty.Process.createProcess: Created pipes were not returned by System.Process.createProcess."
 
 -- | Run a shell process, feeding it input using an 'Event' and exposing its output
@@ -62,24 +79,21 @@ createProcess
   :: (MonadIO m, TriggerEvent t m, PerformEvent t m, MonadIO (Performable m))
   => CreateProcess
   -> Event t ByteString
-  -> m (Event t ByteString, Event t ByteString)
+  -> m (Process t)
 createProcess = createRedirectedProcess input output
   where
-    input h = do
-      s <- toOutputStreamWithLocking h
-      return $ flip S.write s . Just
-    output :: Handle -> (ByteString -> IO ()) -> IO (IO ())
+    input h = return $ Char8.hPutStrLn h
     output h trigger = do
-      s <- toInputStreamWithLocking h
-      let go = S.read s >>= \case
-            Nothing -> return ()
-            Just x -> trigger x >> go
+      let go = do
+            open <- H.hIsOpen h
+            readable <- H.hIsReadable h
+            if open && readable
+              then do
+                out <- BS.hGet h 32768
+                if BS.null out
+                  then return ()
+                  else do
+                    void $ trigger out
+                    go
+              else go
       return go
-    toInputStreamWithLocking :: Handle -> IO (S.InputStream ByteString)
-    toInputStreamWithLocking h = S.handleToInputStream h >>=
-      S.atEndOfInput (hClose h) >>=
-        S.lockingInputStream
-    toOutputStreamWithLocking :: Handle -> IO (S.OutputStream ByteString)
-    toOutputStreamWithLocking hin = S.handleToOutputStream hin >>=
-      S.atEndOfOutput (hClose hin) >>=
-        S.lockingOutputStream
