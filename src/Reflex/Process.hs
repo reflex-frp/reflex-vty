@@ -11,7 +11,7 @@ module Reflex.Process
   ) where
 
 import Control.Concurrent (forkIO, killThread)
-import Control.Monad (void)
+import Control.Monad (void, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -82,18 +82,18 @@ createProcess
   -> m (Process t)
 createProcess = createRedirectedProcess input output
   where
-    input h = return $ Char8.hPutStrLn h
+    input h = do
+      H.hSetBuffering h H.NoBuffering
+      return $ Char8.hPutStrLn h
     output h trigger = do
       let go = do
             open <- H.hIsOpen h
             readable <- H.hIsReadable h
-            if open && readable
-              then do
-                out <- BS.hGetSome h 32768
-                if BS.null out
-                  then return ()
-                  else do
-                    void $ trigger out
-                    go
-              else go
+            when (open && readable) $ do
+              out <- BS.hGetSome h 32768
+              if BS.null out
+                then return ()
+                else do
+                  void $ trigger out
+                  go
       return go
