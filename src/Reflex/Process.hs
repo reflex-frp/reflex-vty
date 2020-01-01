@@ -4,9 +4,9 @@ Description: Run interactive shell commands in reflex
 -}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE LambdaCase #-}
 module Reflex.Process
   ( createProcess
+  , createRedirectedProcess
   , Process(..)
   ) where
 
@@ -31,10 +31,18 @@ data Process t = Process
   , _process_stderr :: Event t ByteString
   }
 
+-- | Runs a process and uses the given input and output handler functions
+-- to interact with the process.
+--
+-- NB: The 'std_in', 'std_out', and 'std_err' parameters of the
+-- provided 'CreateProcess' are replaced with new pipes and all output is redirected
+-- to those pipes.
 createRedirectedProcess
   :: (MonadIO m, TriggerEvent t m, PerformEvent t m, MonadIO (Performable m))
   => (Handle -> IO (ByteString -> IO ()))
+  -- ^ Builder for the stdin handler
   -> (Handle -> (ByteString -> IO ()) -> IO (IO ()))
+  -- ^ Builder for the stdout and stderr handlers
   -> CreateProcess
   -> Event t ByteString
   -> m (Process t)
@@ -67,10 +75,10 @@ createRedirectedProcess mkWriteInput mkReadOutput p input = do
         , _process_stdout = out
         , _process_stderr = err
         }
-    _ -> error "Reflex.Vty.Process.createProcess: Created pipes were not returned by System.Process.createProcess."
+    _ -> error "Reflex.Vty.Process.createRedirectedProcess: Created pipes were not returned by System.Process.createProcess."
 
 -- | Run a shell process, feeding it input using an 'Event' and exposing its output
--- as a pair of 'Event's representing stdout and stderr respectively.
+-- 'Event's representing the process exit code, stdout and stderr.
 --
 -- NB: The 'std_in', 'std_out', and 'std_err' parameters of the
 -- provided 'CreateProcess' are replaced with new pipes and all output is redirected
