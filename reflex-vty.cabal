@@ -77,6 +77,25 @@ executable process
   ghc-options: -threaded
   build-depends:
     base,
+    fsnotify,
+    process,
+    reflex,
+    reflex-vty,
+    temporary,
+    text,
+    vty
+  default-language: Haskell2010
+
+executable ghcid
+  hs-source-dirs: src-bin
+  main-is: ghcid.hs
+  ghc-options: -threaded
+  build-depends:
+    base,
+    containers,
+    directory,
+    filepath,
+    fsnotify,
     process,
     reflex,
     reflex-vty,
