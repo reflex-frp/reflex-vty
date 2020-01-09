@@ -116,7 +116,7 @@ ghcid tempDir = do
     , _ghci_execOut = gate (current testMode) $ _process_stdout proc
     , _ghci_execErr = gate (current testMode) $ _process_stderr proc
     , _ghci_filesystem = batchedFsEvents
-    , _ghci_loadState = loadState
+    , _ghci_status = (\ls t -> if t then Status_Exec else Status_Load ls) <$> loadState <*> testMode
     }
   where
     noDebounce :: FS.WatchConfig -> FS.WatchConfig
@@ -128,8 +128,12 @@ data Ghci t = Ghci
   , _ghci_execOut :: Event t BS.ByteString
   , _ghci_execErr :: Event t BS.ByteString
   , _ghci_filesystem :: Event t (Seq FS.Event)
-  , _ghci_loadState :: Dynamic t LoadState
+  , _ghci_status :: Dynamic t Status
   }
+
+data Status = Status_Load LoadState
+            | Status_Exec
+  deriving (Show, Read, Eq, Ord)
 
 data LoadState
   = LoadState_Loading
@@ -142,10 +146,11 @@ main = withSystemTempDirectory "reflex-ghcid" $ \tempDir -> mainWidget $ do
   exit <- keyCombo (V.KChar 'c', [V.MCtrl])
   ghci <- ghcid tempDir
   let ghciLoadStatus = col $ do
-        fixed 3 $ boxStatic def $ text $ (<>) <$> "Status: " <*> ffor (current $ _ghci_loadState ghci) (\case
-          LoadState_Succeeded -> "Success!"
-          LoadState_Failed -> "Failure!"
-          LoadState_Loading -> "Loading...")
+        fixed 3 $ boxStatic def $ text $ (<>) <$> "Status: " <*> ffor (current $ _ghci_status ghci) (\case
+          Status_Exec -> "Running..."
+          Status_Load LoadState_Succeeded -> "Success!"
+          Status_Load LoadState_Failed -> "Failure!"
+          Status_Load LoadState_Loading -> "Loading...")
         out <- foldDyn ($) "" $ leftmost
           [ flip mappend <$> _ghci_moduleOut ghci
           , flip mappend <$> _ghci_moduleErr ghci
