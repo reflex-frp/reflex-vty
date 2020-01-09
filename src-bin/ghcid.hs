@@ -167,4 +167,3 @@ test = do
   let go :: Int -> IO ()
       go n = putStrLn ("Iteration No. " <> show n) >> threadDelay 1000000 >> go (n+1)
   go 1
-  return ()
