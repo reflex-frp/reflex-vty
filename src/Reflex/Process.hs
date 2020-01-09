@@ -18,6 +18,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as Char8
+import Data.Default
 import qualified GHC.IO.Handle as H
 import GHC.IO.Handle (Handle)
 import System.Exit (ExitCode)
@@ -32,6 +33,9 @@ data ProcessConfig t = ProcessConfig
   { _processConfig_stdin :: Event t ByteString
   , _processConfig_signal :: Event t P.Signal
   }
+
+instance Reflex t => Default (ProcessConfig t) where
+  def = ProcessConfig never never
 
 -- | The output of a process
 data Process t = Process

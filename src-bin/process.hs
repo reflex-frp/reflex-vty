@@ -24,7 +24,7 @@ main = withSystemTempDirectory "asdf" $ \fp -> mainWidget $ do
     fixed 6 $ boxStatic def $ col $ do
       fixed 1 $ text "Call the date command every second and display the result."
       out <- fixed 2 $ fmap (switch . current) $ networkHold (return never) $ ffor t $ \tick -> do
-        Process { _process_stdout = out } <- createProcess (P.proc "date" []) never
+        Process { _process_stdout = out } <- createProcess (P.proc "date" []) def
         row $ do
           fixed 10 $ text $ pure "Tick:"
           stretch $ display $ pure tick
@@ -38,11 +38,11 @@ main = withSystemTempDirectory "asdf" $ \fp -> mainWidget $ do
       let tmpfile = fp <> "/my-temporary-file"
       Process { _process_exit = touchExit } <- fixed 1 $ do
         text $ pure $ "$> touch " <> T.pack tmpfile
-        createProcess (P.proc "touch" [tmpfile]) never
+        createProcess (P.proc "touch" [tmpfile]) def
       fixed 1 $ text <=< hold "" $ "File created." <$ touchExit
       fixed 1 $ text $ pure $ "$> rm -i " <> T.pack tmpfile
       rec pout <- fixed 3 $ do
-            p <- createProcess (P.proc "rm" ["-i", fp <> "/my-temporary-file"]) userInput
+            p <- createProcess (P.proc "rm" ["-i", fp <> "/my-temporary-file"]) $ def { _processConfig_stdin = userInput }
             col $ do
               _ <- fixed 1 $ prefix "stdout:" $
                 text <=< hold "<no stdout yet>" $ T.decodeUtf8 <$> _process_stdout p
