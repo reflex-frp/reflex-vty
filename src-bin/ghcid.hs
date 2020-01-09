@@ -45,7 +45,7 @@ prompt = "~WAITING~"
 ghcid
   :: (TriggerEvent t m, PerformEvent t m, MonadIO (Performable m), PostBuild t m, MonadIO m, MonadFix m, MonadHold t m)
   => FilePath
-  -> m (Process t, Event t (Seq FS.Event), Dynamic t LoadState, Event t ())
+  -> m (Ghci t)
 ghcid tempDir = do
   dir <- liftIO Dir.getCurrentDirectory
   let dotGhci = tempDir FS.</> ".ghci"
@@ -110,7 +110,14 @@ ghcid tempDir = do
         if o Regex.=~ ("GHCi, version.*: http://www.haskell.org/ghc/" :: BS.ByteString)
           then Just True
           else Nothing
-  return (proc, batchedFsEvents, loadState, interrupt)
+  return $ Ghci
+    { _ghci_moduleOut = gate (not <$> current testMode) $ _process_stdout proc
+    , _ghci_moduleErr = gate (not <$> current testMode) $ _process_stderr proc
+    , _ghci_execOut = gate (current testMode) $ _process_stdout proc
+    , _ghci_execErr = gate (current testMode) $ _process_stderr proc
+    , _ghci_filesystem = batchedFsEvents
+    , _ghci_loadState = loadState
+    }
   where
     noDebounce :: FS.WatchConfig -> FS.WatchConfig
     noDebounce cfg = cfg { FS.confDebounce = FS.NoDebounce }
@@ -120,7 +127,7 @@ data Ghci t = Ghci
   , _ghci_moduleErr :: Event t BS.ByteString
   , _ghci_execOut :: Event t BS.ByteString
   , _ghci_execErr :: Event t BS.ByteString
-  , _ghci_filesystem :: Event t FS.Event
+  , _ghci_filesystem :: Event t (Seq FS.Event)
   , _ghci_loadState :: Dynamic t LoadState
   }
 
@@ -133,20 +140,26 @@ data LoadState
 main :: IO ()
 main = withSystemTempDirectory "reflex-ghcid" $ \tempDir -> mainWidget $ do
   exit <- keyCombo (V.KChar 'c', [V.MCtrl])
-  col $ do
-    (p, fs, ready, interrupt) <- fixed 1 $ ghcid tempDir
-    output <- foldDyn ($) "" $ leftmost
-      [ flip mappend <$> _process_stdout p
-      , flip mappend <$> _process_stderr p
-      , const "" <$ fs
-      ]
-    fixed 3 $ boxStatic def $ text $ (<>) <$> "Status: " <*> ffor (current ready) (\case
-      LoadState_Succeeded -> "Success!"
-      LoadState_Failed -> "Failure!"
-      LoadState_Loading -> "Loading...")
-    stretch $ text $ T.decodeUtf8 <$> current output
-    fixed 1 $ display <=< hold Nothing $ Just <$> _process_signal p
-    fixed 1 $ display <=< hold Nothing $ leftmost [ Just <$> interrupt, Nothing <$ fs ]
+  ghci <- ghcid tempDir
+  let ghciLoadStatus = col $ do
+        fixed 3 $ boxStatic def $ text $ (<>) <$> "Status: " <*> ffor (current $ _ghci_loadState ghci) (\case
+          LoadState_Succeeded -> "Success!"
+          LoadState_Failed -> "Failure!"
+          LoadState_Loading -> "Loading...")
+        out <- foldDyn ($) "" $ leftmost
+          [ flip mappend <$> _ghci_moduleOut ghci
+          , flip mappend <$> _ghci_moduleErr ghci
+          , const "" <$ _ghci_filesystem ghci
+          ]
+        stretch $ text $ T.decodeUtf8 <$> current out
+      ghciExecOutput = do
+        out <- foldDyn ($) "" $ leftmost
+          [ flip mappend <$> _ghci_execOut ghci
+          , flip mappend <$> _ghci_execErr ghci
+          , const "" <$ _ghci_filesystem ghci
+          ]
+        text $ T.decodeUtf8 <$> current out
+  splitVDrag (hRule doubleBoxStyle) ghciLoadStatus ghciExecOutput
   return $ () <$ exit
 
 test :: IO ()
@@ -155,6 +168,3 @@ test = do
       go n = putStrLn ("Iteration No. " <> show n) >> threadDelay 1000000 >> go (n+1)
   go 1
   return ()
-
--- TODO
--- Wait until ghci loads before allowing any interrupts
