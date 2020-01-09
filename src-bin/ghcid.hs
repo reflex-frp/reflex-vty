@@ -7,7 +7,6 @@ import Reflex.Process
 import Reflex.Vty
 
 import Control.Concurrent
-import Control.Exception (finally)
 import Control.Monad
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (liftIO, MonadIO)
@@ -16,7 +15,6 @@ import qualified Data.ByteString.Char8 as C8
 import qualified Data.List as List
 import Data.Sequence (Seq)
 import Data.String (IsString)
-import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Graphics.Vty as V
 import Text.Regex.TDFA as Regex
@@ -25,7 +23,6 @@ import qualified System.Directory as Dir
 import qualified System.FilePath.Posix as FS
 import qualified System.FSNotify as FS
 import System.IO.Temp (withSystemTempDirectory)
-import qualified System.Posix.Signals as P
 import qualified System.Process as P
 
 watchDirectory
@@ -43,7 +40,14 @@ prompt :: IsString a => a
 prompt = "~WAITING~"
 
 ghcid
-  :: (TriggerEvent t m, PerformEvent t m, MonadIO (Performable m), PostBuild t m, MonadIO m, MonadFix m, MonadHold t m)
+  :: ( TriggerEvent t m
+     , PerformEvent t m
+     , MonadIO (Performable m)
+     , PostBuild t m
+     , MonadIO m
+     , MonadFix m
+     , MonadHold t m
+     )
   => FilePath
   -> m (Ghci t)
 ghcid tempDir = do
@@ -74,15 +78,13 @@ ghcid tempDir = do
   rec proc <- createProcess cabalRepl $ ProcessConfig
         { _processConfig_stdin = leftmost
             [ reload
-            , fforMaybe (updated testMode) $ \case
-                True -> Just "test"
-                False -> Nothing
+            , fmap (const "test") $ ffilter id $ updated testMode
             ]
         , _processConfig_signal = never
         }
-      let interruptible ls init = init && ls == LoadState_Loading
+      let interruptible ls ready = ready && ls == LoadState_Loading
           requestInterrupt = gate (interruptible <$> current loadState <*> initialized) batchedFsEvents
-      interrupt <- performEvent $ ffor requestInterrupt $
+      performEvent_ $ ffor requestInterrupt $
         const $ liftIO $ P.interruptProcessGroupOf $ _process_handle proc
       testMode <- holdDyn False $ leftmost
         [ False <$ requestInterrupt
@@ -164,7 +166,7 @@ main = withSystemTempDirectory "reflex-ghcid" $ \tempDir -> mainWidget $ do
           , const "" <$ _ghci_filesystem ghci
           ]
         text $ T.decodeUtf8 <$> current out
-  splitVDrag (hRule doubleBoxStyle) ghciLoadStatus ghciExecOutput
+  _ <- splitVDrag (hRule doubleBoxStyle) ghciLoadStatus ghciExecOutput
   return $ () <$ exit
 
 test :: IO ()
