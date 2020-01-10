@@ -1,6 +1,6 @@
 # Revision history for reflex-vty
 
-## Unreleased
+## 0.1.2.1
 
 * Add `keyCombo` function (single-key-combination version of `keyCombos`)
 * Use upstream `NotReady` instances instead of orphans defined in this package if reflex-0.6.3 is available
