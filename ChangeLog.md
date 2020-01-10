@@ -3,12 +3,13 @@
 ## Unreleased
 
 * Add a sample "ghcid" application using reflex-process
+
+## 0.1.3.0
 * Add `mouseScroll` to capture scroll wheel events
 * Add `scrollableText`: a text display widget that can be scrolled using the mouse or keyboard
 * Add widget to the example executable that displays scrollable text
 
 ## 0.1.2.1
-
 * Add `keyCombo` function (single-key-combination version of `keyCombos`)
 * Use upstream `NotReady` instances instead of orphans defined in this package if reflex-0.6.3 is available
 

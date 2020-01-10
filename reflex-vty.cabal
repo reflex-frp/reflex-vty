@@ -1,5 +1,5 @@
 name: reflex-vty
-version: 0.1.2.1
+version: 0.1.3.0
 synopsis: Reflex FRP host and widgets for vty applications
 description:
   Host and widget library for Reflex-based FRP applications
@@ -47,6 +47,7 @@ library
     stm                               >= 2.4 && < 2.6,
     text                              >= 1.2.3 && < 1.3,
     text-icu                          >= 0.7 && < 0.8,
+    reflex                            >= 0.6.2 && < 0.7,
     time                              >= 1.8.0 && < 1.9,
     transformers                      >= 0.5.5 && < 0.6,
     unix                              >= 2.7 && < 2.8,
