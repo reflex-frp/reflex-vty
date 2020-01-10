@@ -39,6 +39,8 @@ module Reflex.Vty.Widget
   , MouseUp(..)
   , mouseDown
   , mouseUp
+  , ScrollDirection(..)
+  , mouseScroll
   , pane
   , splitV
   , splitVDrag
@@ -47,6 +49,7 @@ module Reflex.Vty.Widget
   , RichTextConfig(..)
   , richText
   , text
+  , scrollableText
   , display
   , BoxStyle(..)
   , hyphenBoxStyle
@@ -393,6 +396,22 @@ data MouseUp = MouseUp
   }
   deriving (Eq, Ord, Show)
 
+-- | Mouse scroll direction
+data ScrollDirection = ScrollDirection_Up | ScrollDirection_Down
+  deriving (Eq, Ord, Show)
+
+-- | Produce an event that fires when the mouse wheel is scrolled
+mouseScroll
+  :: (Reflex t, Monad m)
+  => VtyWidget t m (Event t ScrollDirection)
+mouseScroll = do
+  up <- mouseDown V.BScrollUp
+  down <- mouseDown V.BScrollDown
+  return $ leftmost
+    [ ScrollDirection_Up <$ up
+    , ScrollDirection_Down <$ down
+    ]
+
 -- | Type synonym for a key and modifier combination
 type KeyCombo = (V.Key, [V.Modifier])
 
@@ -624,6 +643,38 @@ text
   => Behavior t Text
   -> VtyWidget t m ()
 text = richText def
+
+-- | Scrollable text widget. The output pair exposes the current scroll position and total number of lines (including those
+-- that are hidden)
+scrollableText
+  :: forall t m. (Reflex t, MonadHold t m, MonadFix m)
+  => Event t Int
+  -- ^ Number of lines to scroll by
+  -> Behavior t Text
+  -> VtyWidget t m (Behavior t (Int, Int))
+  -- ^ (Current scroll position, total number of lines)
+scrollableText scrollBy t = do
+  dw <- displayWidth
+  let imgs = wrap <$> current dw <*> t
+  kup <- key V.KUp
+  kdown <- key V.KDown
+  m <- mouseScroll
+  let requestedScroll :: Event t Int
+      requestedScroll = leftmost
+        [ 1 <$ kdown
+        , (-1) <$ kup
+        , ffor m $ \case
+            ScrollDirection_Up -> (-1)
+            ScrollDirection_Down -> 1
+        , scrollBy
+        ]
+      updateLine maxN delta ix = min (max 0 (ix + delta)) maxN
+  lineIndex :: Dynamic t Int <- foldDyn (\(maxN, delta) ix -> updateLine (maxN - 1) delta ix) 0 $
+    attach (length <$> imgs) requestedScroll
+  tellImages $ fmap ((:[]) . V.vertCat) $ drop <$> current lineIndex <*> imgs
+  return $ (,) <$> ((+) <$> current lineIndex <*> pure 1) <*> (length <$> imgs)
+  where
+    wrap maxWidth = concatMap (fmap (V.string V.defAttr . T.unpack) . TZ.wrapWithOffset maxWidth 0) . T.split (=='\n')
 
 -- | Renders any behavior whose value can be converted to
 -- 'String' as text

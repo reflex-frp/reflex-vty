@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -158,14 +159,20 @@ main = withSystemTempDirectory "reflex-ghcid" $ \tempDir -> mainWidget $ do
           , flip mappend <$> _ghci_moduleErr ghci
           , const "" <$ _ghci_filesystem ghci
           ]
-        stretch $ text $ T.decodeUtf8 <$> current out
+        stretch $ scrollableText never $ T.decodeUtf8 <$> current out
       ghciExecOutput = do
-        out <- foldDyn ($) "" $ leftmost
+        out <- fmap (fmap T.decodeUtf8) $ foldDyn ($) "" $ leftmost
           [ flip mappend <$> _ghci_execOut ghci
           , flip mappend <$> _ghci_execErr ghci
           , const "" <$ _ghci_filesystem ghci
           ]
-        text $ T.decodeUtf8 <$> current out
+        dh <- displayHeight
+        rec scroll <- scrollableText (tagMaybe (scrollBy <$> current dh <*> scroll) $ updated out) $ current out
+            let scrollBy h (ix, n) =
+                  if | ix == 0 && n <= h -> Nothing -- Scrolled to the top and we don't have to scroll down
+                     | n > h && n - ix - h == 0 -> Just 1
+                     | otherwise -> Nothing
+        return ()
   _ <- splitVDrag (hRule doubleBoxStyle) ghciLoadStatus ghciExecOutput
   return $ () <$ exit
 

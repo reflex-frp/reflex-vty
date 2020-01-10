@@ -28,6 +28,7 @@ import Reflex.Vty
 
 data Example = Example_TextEditor
              | Example_Todo
+             | Example_ScrollableTextDisplay
   deriving (Show, Read, Eq, Ord, Enum, Bounded)
 
 main :: IO ()
@@ -40,9 +41,11 @@ main = mainWidget $ do
           fixed 1 $ text "Ctrl+c to quit."
         a <- fixed 5 $ textButtonStatic def "Todo List"
         b <- fixed 5 $ textButtonStatic def "Text Editor"
+        c <- fixed 5 $ textButtonStatic def "Scrollable text display"
         return $ leftmost
           [ Left Example_Todo <$ a
           , Left Example_TextEditor <$ b
+          , Left Example_ScrollableTextDisplay <$ c
           ]
       escapable w = do
         void w
@@ -53,11 +56,12 @@ main = mainWidget $ do
   rec out <- networkHold buttons $ ffor (switch (current out)) $ \case
         Left Example_TextEditor -> escapable testBoxes
         Left Example_Todo -> escapable taskList
+        Left Example_ScrollableTextDisplay -> escapable scrolling
         Right () -> buttons
   return $ fforMaybe inp $ \case
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
-
+ 
 taskList
   :: (Reflex t, MonadHold t m, MonadFix m, Adjustable t m, NotReady t m, PostBuild t m, MonadNodeId m)
   => VtyWidget t m ()
@@ -166,6 +170,12 @@ todo t0 = do
     backspaceOnEmpty v = \case
       V.EvKey V.KBS _ | T.null v -> Just ()
       _ -> Nothing
+
+scrolling :: (Reflex t, MonadHold t m, MonadFix m, PostBuild t m, MonadNodeId m) => VtyWidget t m ()
+scrolling = col $ do
+  fixed 2 $ text "Use your mouse wheel or up and down arrows to scroll:"
+  out <- fixed 5 $ boxStatic def $ scrollableText never $ "Gallia est omnis divisa in partes tres, quarum unam incolunt Belgae, aliam Aquitani, tertiam qui ipsorum lingua Celtae, nostra Galli appellantur. Hi omnes lingua, institutis, legibus inter se differunt. Gallos ab Aquitanis Garumna flumen, a Belgis Matrona et Sequana dividit. Horum omnium fortissimi sunt Belgae, propterea quod a cultu atque humanitate provinciae longissime absunt, minimeque ad eos mercatores saepe commeant atque ea quae ad effeminandos animos pertinent important, proximique sunt Germanis, qui trans Rhenum incolunt, quibuscum continenter bellum gerunt. Qua de causa Helvetii quoque reliquos Gallos virtute praecedunt, quod fere cotidianis proeliis cum Germanis contendunt, cum aut suis finibus eos prohibent aut ipsi in eorum finibus bellum gerunt. Eorum una pars, quam Gallos obtinere dictum est, initium capit a flumine Rhodano, continetur Garumna flumine, Oceano, finibus Belgarum, attingit etiam ab Sequanis et Helvetiis flumen Rhenum, vergit ad septentriones. Belgae ab extremis Galliae finibus oriuntur, pertinent ad inferiorem partem fluminis Rheni, spectant in septentrionem et orientem solem. Aquitania a Garumna flumine ad Pyrenaeos montes et eam partem Oceani quae est ad Hispaniam pertinet; spectat inter occasum solis et septentriones.\nApud Helvetios longe nobilissimus fuit et ditissimus Orgetorix. Is M. Messala, [et P.] M. Pisone consulibus regni cupiditate inductus coniurationem nobilitatis fecit et civitati persuasit ut de finibus suis cum omnibus copiis exirent: perfacile esse, cum virtute omnibus praestarent, totius Galliae imperio potiri. Id hoc facilius iis persuasit, quod undique loci natura Helvetii continentur: una ex parte flumine Rheno latissimo atque altissimo, qui agrum Helvetium a Germanis dividit; altera ex parte monte Iura altissimo, qui est inter Sequanos et Helvetios; tertia lacu Lemanno et flumine Rhodano, qui provinciam nostram ab Helvetiis dividit. His rebus fiebat ut et minus late vagarentur et minus facile finitimis bellum inferre possent; qua ex parte homines bellandi cupidi magno dolore adficiebantur. Pro multitudine autem hominum et pro gloria belli atque fortitudinis angustos se fines habere arbitrabantur, qui in longitudinem milia passuum CCXL, in latitudinem CLXXX patebant."
+  fixed 1 $ text $ ffor out $ \(ix, total) -> "Scrolled to line " <> T.pack (show ix) <> " of " <> T.pack (show total)
 
 todos
   :: forall t m.
