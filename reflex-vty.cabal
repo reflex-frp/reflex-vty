@@ -27,7 +27,6 @@ library
                  , Reflex.Vty.Widget.Input
                  , Reflex.Vty.Widget.Input.Text
                  , Reflex.Vty.Widget.Layout
-                 , Reflex.Process
                  , Data.Text.Zipper
                  , Reflex.Class.Switchable
                  , Reflex.Spider.Orphans
@@ -81,6 +80,8 @@ executable process
     fsnotify,
     process,
     reflex,
+    reflex-fsnotify >= 0.1 && < 0.2,
+    reflex-process >= 0.1 && < 0.2,
     reflex-vty,
     temporary,
     text,
@@ -100,6 +101,8 @@ executable ghcid
     fsnotify,
     process,
     reflex,
+    reflex-fsnotify >= 0.1 && < 0.2,
+    reflex-process >= 0.1 && < 0.2,
     reflex-vty,
     regex-tdfa,
     temporary,

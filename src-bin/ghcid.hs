@@ -4,6 +4,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+
+import Reflex.FSNotify (watchDirectory)
+import Reflex.Network (networkHold)
 import Reflex.Process
 import Reflex.Vty
 
@@ -18,7 +21,6 @@ import Data.Sequence (Seq)
 import Data.String (IsString)
 import qualified Data.Text.Encoding as T
 import qualified Graphics.Vty as V
-import Reflex.Network (networkHold)
 import Text.Regex.TDFA as Regex
 import Text.Regex.TDFA.ByteString ()
 import qualified System.Directory as Dir
@@ -26,18 +28,6 @@ import qualified System.FilePath.Posix as FS
 import qualified System.FSNotify as FS
 import System.IO.Temp (withSystemTempDirectory)
 import qualified System.Process as P
-
--- TODO: Move this to a common module
-watchDirectory
-  :: (Reflex t, TriggerEvent t m, PerformEvent t m, MonadIO (Performable m))
-  => FS.WatchConfig
-  -> Event t FilePath
-  -> m (Event t FS.Event)
-watchDirectory cfg path =
-  performEventAsync $ ffor path $ \p cb -> liftIO $ void $ forkIO $
-    FS.withManagerConf cfg $ \mgr -> do
-      _ <- FS.watchTree mgr p (const True) cb
-      forever $ threadDelay 1000000
 
 prompt :: IsString a => a
 prompt = "~WAITING~"

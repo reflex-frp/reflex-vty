@@ -2,9 +2,7 @@
 
 ## Unreleased
 
-* Add Reflex.Process module for interacting with shell commands using `Event`s
-* Use upstream `NotReady` instances instead of orphans defined in this package if reflex-0.6.3 is available
-* Add a sample "ghcid" application
+* Add a sample "ghcid" application using reflex-process
 * Add `mouseScroll` to capture scroll wheel events
 * Add `scrollableText`: a text display widget that can be scrolled using the mouse or keyboard
 * Add widget to the example executable that displays scrollable text

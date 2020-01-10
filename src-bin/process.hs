@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+import Reflex.FSNotify (watchDirectory)
 import Reflex.Network
 import Reflex.Process
 import Reflex.Vty
@@ -71,14 +72,3 @@ main = withSystemTempDirectory "asdf" $ \fp -> mainWidget $ do
     prefix t a = row $ do
       fixed (pure $ T.length t + 1) $ text $ pure t
       stretch a
-
-watchDirectory
-  :: (Reflex t, TriggerEvent t m, PerformEvent t m, MonadIO (Performable m))
-  => FS.WatchConfig
-  -> Event t FilePath
-  -> m (Event t FS.Event)
-watchDirectory cfg path =
-  performEventAsync $ ffor path $ \p cb -> liftIO $ void $ forkIO $
-    FS.withManagerConf cfg $ \mgr -> do
-      void $ FS.watchTree mgr p (const True) cb
-      forever $ threadDelay 1000000
