@@ -338,13 +338,13 @@ drag btn = do
       f Nothing = \case
         V.EvMouseDown x y btn' mods
           | btn == btn' -> Just $ Drag (x,y) (x,y) btn' mods False
-          | otherwise -> Nothing
+          | otherwise   -> Nothing
         _ -> Nothing
       f (Just (Drag from _ _ mods end)) = \case
         V.EvMouseDown x y btn' mods'
-          | end         -> Just $ Drag (x,y) (x,y) btn' mods' False
-          | btn == btn' -> Just $ Drag from (x,y) btn mods' False
-          | otherwise   -> Nothing -- Ignore other buttons.
+          | end && btn == btn'  -> Just $ Drag (x,y) (x,y) btn' mods' False
+          | btn == btn'         -> Just $ Drag from (x,y) btn mods' False
+          | otherwise           -> Nothing -- Ignore other buttons.
         V.EvMouseUp x y (Just btn')
           | end         -> Nothing
           | btn == btn' -> Just $ Drag from (x,y) btn mods True
