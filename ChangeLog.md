@@ -1,5 +1,9 @@
 # Revision history for reflex-vty
 
+## 0.1.3.1
+* Add `boxTitle`: a box with a title
+* Update the text editing example to use `boxTitle`
+
 ## 0.1.3.0
 * Add `mouseScroll` to capture scroll wheel events
 * Add `scrollableText`: a text display widget that can be scrolled using the mouse or keyboard

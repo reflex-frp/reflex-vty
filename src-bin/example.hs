@@ -97,7 +97,8 @@ testBoxes = do
           { _textInputConfig_initialValue =
             "This box is a text input. The box below responds to mouse drag inputs. You can also drag the separator between the boxes to resize them."
           }
-        textBox = boxStatic roundedBoxStyle $ multilineTextInput cfg
+        textBox = boxTitle (pure roundedBoxStyle) "Text Edit" $
+          multilineTextInput cfg
         dragBox = boxStatic roundedBoxStyle dragTest
     in splitVDrag (hRule doubleBoxStyle) textBox dragBox
   return ()
