@@ -44,6 +44,7 @@ module Reflex.Vty.Widget
   , pane
   , splitV
   , splitVDrag
+  , boxTitle
   , box
   , boxStatic
   , RichTextConfig(..)
@@ -563,12 +564,13 @@ doubleBoxStyle = BoxStyle '╔' '═' '╗' '║' '╝' '═' '╚' '║'
 roundedBoxStyle :: BoxStyle
 roundedBoxStyle = BoxStyle '╭' '─' '╮' '│' '╯' '─' '╰' '│'
 
--- | Draws a box in the provided style and a child widget inside of that box
-box :: (Monad m, Reflex t, MonadNodeId m)
+-- | Draws a titled box in the provided style and a child widget inside of that box
+boxTitle :: (Monad m, Reflex t, MonadNodeId m)
     => Behavior t BoxStyle
+    -> Text
     -> VtyWidget t m a
     -> VtyWidget t m a
-box boxStyle child = do
+boxTitle boxStyle title child = do
   dh <- displayHeight
   dw <- displayWidth
   let boxReg = DynRegion (pure 0) (pure 0) dw dh
@@ -583,7 +585,8 @@ box boxStyle child = do
           bottom = top + height - 1
           sides =
             [ withinImage (Region (left + 1) top (width - 2) 1) $
-                V.charFill V.defAttr (_boxStyle_n style) (width - 2) 1
+                V.text' V.defAttr $
+                  hPadText title (_boxStyle_n style) (width - 2)
             , withinImage (Region right (top + 1) 1 (height - 2)) $
                 V.charFill V.defAttr (_boxStyle_e style) 1 (height - 2)
             , withinImage (Region (left + 1) bottom (width - 2) 1) $
@@ -602,6 +605,23 @@ box boxStyle child = do
                 V.char V.defAttr (_boxStyle_sw style)
             ]
       in sides ++ if width > 1 && height > 1 then corners else []
+    hPadText :: T.Text -> Char -> Int -> T.Text
+    hPadText t c l = if lt >= l
+                     then t
+                     else left <> t <> right
+      where
+        lt = T.length t
+        delta = l - lt
+        mkHalf n = T.replicate (n `div` 2) (T.singleton c)
+        left = mkHalf $ delta + 1
+        right = mkHalf delta
+
+-- | A box without a title
+box :: (Monad m, Reflex t, MonadNodeId m)
+    => Behavior t BoxStyle
+    -> VtyWidget t m a
+    -> VtyWidget t m a
+box boxStyle = boxTitle boxStyle mempty
 
 -- | A box whose style is static
 boxStatic
