@@ -4,7 +4,6 @@ Description: A class for things that can be switched on the firing of an event
 -}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
 module Reflex.Class.Switchable where
 
@@ -26,5 +25,5 @@ instance Reflex t => Switchable t (Behavior t a) where
 
 instance (Reflex t, Switchable t a, Switchable t b) => Switchable t (a, b) where
   switching (a, b) e = (,)
-    <$> (switching a $ fmap fst e)
-    <*> (switching b $ fmap snd e)
+    <$> switching a (fmap fst e)
+    <*> switching b (fmap snd e)

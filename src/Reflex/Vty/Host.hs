@@ -28,8 +28,7 @@ import Control.Monad.Identity (Identity(..))
 import Control.Monad.Primitive (PrimMonad)
 import Control.Monad.Ref (MonadRef, Ref, readRef)
 import Data.Dependent.Sum (DSum ((:=>)))
-import Data.IORef (IORef)
-import Data.IORef (readIORef)
+import Data.IORef (IORef, readIORef)
 import Data.Maybe (catMaybes)
 
 import Reflex
@@ -76,7 +75,7 @@ type MonadVtyApp t m =
 type VtyApp t m = MonadVtyApp t m
   => DisplayRegion
   -- ^ The initial display size (updates to this come as events)
-  -> Event t (V.Event)
+  -> Event t V.Event
   -- ^ Vty input events.
   -> m (VtyResult t)
   -- ^ The output of the 'VtyApp'. The application runs in a context that,
@@ -115,7 +114,7 @@ runVtyAppWithHandle vty vtyGuest = flip onException (V.shutdown vty) $
     -- processed.
     events <- liftIO newChan
 
-    displayRegion0 <- V.displayBounds $ V.outputIface vty
+    displayRegion0 <- liftIO $ V.displayBounds $ V.outputIface vty
 
     -- Run the vty "guest" application, providing the appropriate context. The
     -- result is a 'VtyResult', and a 'FireCommand' that will be used to
@@ -179,7 +178,7 @@ runVtyAppWithHandle vty vtyGuest = flip onException (V.shutdown vty) $
           triggerInvocation = TriggerInvocation ne $ return ()
       -- Write our input event's 'EventTrigger' with the newly created
       -- 'TriggerInvocation' value to the queue of events.
-      writeChan events $ [triggerRef :=> triggerInvocation]
+      writeChan events [triggerRef :=> triggerInvocation]
 
     -- The main application loop. We wait for new events, fire those that
     -- have subscribers, and update the display. If we detect a shutdown

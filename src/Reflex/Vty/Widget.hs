@@ -71,8 +71,9 @@ module Reflex.Vty.Widget
 
 import Control.Applicative (liftA2)
 import Control.Monad.Fix (MonadFix)
-import Control.Monad.Reader
-import Control.Monad.Trans (lift)
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Reader (ReaderT, ask, asks, runReaderT)
+import Control.Monad.Trans (MonadTrans, lift)
 import Data.Default (Default(..))
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -143,7 +144,7 @@ instance MonadTrans (VtyWidget t) where
 
 instance MonadNodeId m => MonadNodeId (VtyWidget t m) where
   getNextNodeId = VtyWidget $ do
-    lift $ lift $ getNextNodeId
+    lift $ lift getNextNodeId
 
 -- | Runs a 'VtyWidget' with a given context
 runVtyWidget
@@ -522,7 +523,7 @@ splitVDrag wS wA wB = do
   rec splitterCheckpoint <- holdDyn splitter0 $ leftmost [fst <$> ffilter snd dragSplitter, resizeSplitter]
       splitterPos <- holdDyn splitter0 $ leftmost [fst <$> dragSplitter, resizeSplitter]
       splitterFrac <- holdDyn ((1::Double) / 2) $ ffor (attach (current dh) (fst <$> dragSplitter)) $ \(h, x) ->
-        fromIntegral x / (max 1 (fromIntegral h))
+        fromIntegral x / max 1 (fromIntegral h)
       let dragSplitter = fforMaybe (attach (current splitterCheckpoint) dragE) $
             \(splitterY, Drag (_, fromY) (_, toY) _ _ end) ->
               if splitterY == fromY then Just (toY, end) else Nothing
