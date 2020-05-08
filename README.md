@@ -33,10 +33,9 @@ Please see the `tested-with` field of the cabal file for known-compatible versio
 From the reflex-vty project directory:
 
 ```bash
+# nix-shell -p cabal-install binutils icu # for nix users
 cabal new-configure
 cabal new-build # to build the library and example
 cabal new-repl # to enter a repl for the library
 cabal new-repl example # to enter a repl for the example executable
 ```
-
-
