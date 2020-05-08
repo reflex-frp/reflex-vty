@@ -43,6 +43,7 @@ module Reflex.Vty.Widget
   , mouseScroll
   , pane
   , splitV
+  , splitH
   , splitVDrag
   , boxTitle
   , box
@@ -474,6 +475,35 @@ splitV sizeFunD focD wA wB = do
   ra <- pane regA (fst <$> focD) wA
   rb <- pane regB (snd <$> focD) wB
   return (ra,rb)
+
+-- | A plain split of the available space into horizontally stacked panes.
+-- No visual separator is built in here.
+splitH :: (Reflex t, Monad m, MonadNodeId m)
+       => Dynamic t (Int -> Int)
+       -- ^ Function used to determine size of first pane based on available size
+       -> Dynamic t (Bool, Bool)
+       -- ^ How to focus the two sub-panes, given that we are focused.
+       -> VtyWidget t m a
+       -- ^ Widget for first pane
+       -> VtyWidget t m b
+       -- ^ Widget for second pane
+       -> VtyWidget t m (a,b)
+splitH sizeFunD focD wA wB = do
+  dw <- displayWidth
+  dh <- displayHeight
+  let regA = DynRegion
+        { _dynRegion_left   = pure 0
+        , _dynRegion_top    = pure 0
+        , _dynRegion_width  = sizeFunD <*> dw
+        , _dynRegion_height = dh
+        }
+      regB = DynRegion
+        { _dynRegion_left   = _dynRegion_width regA
+        , _dynRegion_top    = pure 0
+        , _dynRegion_width  = liftA2 (-) dw (_dynRegion_width regA)
+        , _dynRegion_height = dh
+        }
+  liftA2 (,) (pane regA (fmap fst focD) wA) (pane regB (fmap snd focD) wB)
 
 -- | A split of the available space into two parts with a draggable separator.
 -- Starts with half the space allocated to each, and the first pane has focus.

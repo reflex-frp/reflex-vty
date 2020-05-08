@@ -1,6 +1,7 @@
 # Revision history for reflex-vty
 
 ## 0.1.3.1
+* Add `splitH` to implement horizontal functionality of `splitV`.
 * Add `boxTitle`: a box with a title
 * Update the text editing example to use `boxTitle`
 
