@@ -78,6 +78,7 @@ newtype Layout t m a = Layout
     , MonadReflexCreateTrigger t
     , HasDisplaySize t
     , MonadNodeId
+    , PostBuild t
     )
 
 instance MonadTrans (Layout t) where
