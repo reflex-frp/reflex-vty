@@ -1,6 +1,7 @@
 # Revision history for reflex-vty
 
 ## 0.1.4.0
+* ([#15](https://github.com/reflex-frp/reflex-vty/pull/15)) Add `PostBuild` instance for `Layout`.
 * ([#17](https://github.com/reflex-frp/reflex-vty/pull/17)) Add `splitH` to implement horizontal functionality of `splitV`.
 * ([#19](https://github.com/reflex-frp/reflex-vty/pull/19)) Add `boxTitle`: a box with a title.
 * ([#19](https://github.com/reflex-frp/reflex-vty/pull/19)) Update the text editing example to use `boxTitle`.
