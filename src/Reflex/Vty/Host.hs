@@ -115,7 +115,7 @@ runVtyAppWithHandle vty vtyGuest = flip onException (V.shutdown vty) $
     -- processed.
     events <- liftIO newChan
 
-    displayRegion0 <- V.displayBounds $ V.outputIface vty
+    displayRegion0 <- liftIO $ V.displayBounds $ V.outputIface vty
 
     -- Run the vty "guest" application, providing the appropriate context. The
     -- result is a 'VtyResult', and a 'FireCommand' that will be used to
