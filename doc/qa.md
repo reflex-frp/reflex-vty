@@ -7,12 +7,10 @@ This QA guide takes you through the process of testing `reflex-vty` from a visua
 Clone and examples
 
 ```bash
+nix-shell -p git
 cd $(mktemp -d)
-nix run -f https://releases.nixos.org/nixos/20.03/nixos-20.03.2059.05a32d8e771/nixexprs.tar.xz binutils git ghc cabal-install icu
-git clone https://github.com/reflex-frp/reflex-vty.git
-cd reflex-vty
-cabal update
-cabal run example
+git clone https://github.com/reflex-frp/reflex-vty.git --branch develop
+nix run -f reflex-vty/release.nix reflex-vty --command example
 ```
 
 The build may take a while to complete.
