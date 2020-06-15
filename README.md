@@ -4,7 +4,7 @@
 
 Build terminal applications using functional reactive programming (FRP) with [Reflex FRP](https://reflex-frp.org).
 
-![reflex-vty example animation](doc/welcome.gif)
+![Example Animation](https://i.imgur.com/FULQNtu.gif)
 
 Feature requests, pull requests, and other feedback are welcome and appreciated (see the [contribution guide](CONTRIBUTING.md)). This library
 is still experimental, so big changes are possible!
