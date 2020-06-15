@@ -1,6 +1,6 @@
 # reflex-vty
 
-[![Hackage](https://img.shields.io/hackage/v/reflex-vty.svg)](https://hackage.haskell.org/package/reflex-vty) [![Hackage CI](https://matrix.hackage.haskell.org/api/v2/packages/reflex-vty/badge)](https://matrix.hackage.haskell.org/#/package/reflex-vty) [![Travis CI](https://api.travis-ci.org/reflex-frp/reflex-vty.svg?branch=develop)](https://travis-ci.org/reflex-frp/reflex-vty)
+[![Haskell](https://img.shields.io/badge/language-Haskell-orange.svg)](https://haskell.org) [![Hackage](https://img.shields.io/hackage/v/reflex-vty.svg)](https://hackage.haskell.org/package/reflex-vty) [![Hackage CI](https://matrix.hackage.haskell.org/api/v2/packages/reflex-vty/badge)](https://matrix.hackage.haskell.org/#/package/reflex-vty) [![Travis CI](https://api.travis-ci.org/reflex-frp/reflex-vty.svg?branch=develop)](https://travis-ci.org/reflex-frp/reflex-vty) [![BSD3 License](https://img.shields.io/badge/license-BSD3-blue.svg)](https://github.com/reflex-frp/reflex-vty/blob/master/LICENSE)
 
 Build terminal applications using functional reactive programming (FRP) with [Reflex FRP](https://reflex-frp.org).
 
