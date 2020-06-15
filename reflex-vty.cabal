@@ -1,11 +1,10 @@
 name: reflex-vty
 version: 0.1.4.0
-synopsis: Reflex FRP host and widgets for vty applications
+synopsis: Reflex FRP host and widgets for VTY applications
 description:
-  Host and widget library for Reflex-based FRP applications
+  Build terminal applications using functional reactive programming (FRP) with Reflex FRP (<https://reflex-frp.org>).
   .
   <<https://i.imgur.com/FULQNtu.gif>>
-  .
 license: BSD3
 license-file: LICENSE
 author: Obsidian Systems LLC
