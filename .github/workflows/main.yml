@@ -1,0 +1,29 @@
+name: github-action
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        ghc: ['8.4.4', '8.6.5', '8.8.4', 8.10.2]
+        os: ['ubuntu-latest', 'macos-latest']
+    name: Haskell GHC ${{ matrix.ghc }} on ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Haskell
+        uses: actions/setup-haskell@v1.1
+        with:
+          ghc-version: ${{ matrix.ghc }}
+          cabal-version: ${{ matrix.cabal }}
+      - name: Cache ~/.cabal/packages, ~/.cabal/store and dist-newstyle
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cabal/packages
+            ~/.cabal/store
+            dist-newstyle
+          key: ${{ runner.os }}-${{ matrix.ghc }}
+      - name: build all
+        run: cabal build
