@@ -1,5 +1,9 @@
 # Revision history for reflex-vty
 
+## 0.1.4.1
+
+* Migrate to new dependent-sum / dependent-map (after the "some" package split)
+
 ## 0.1.4.0
 * ([#15](https://github.com/reflex-frp/reflex-vty/pull/15)) Add `PostBuild` instance for `Layout`.
 * ([#17](https://github.com/reflex-frp/reflex-vty/pull/17)) Add `splitH` to implement horizontal functionality of `splitV`.
