@@ -14,8 +14,8 @@ is still experimental, so big changes are possible!
 
 Enter a nix-shell for the project:
 ```bash
-git clone git@github.com:reflex-frp/reflex-platform
-git clone git@github.com:reflex-frp/reflex-vty
+git clone https://github.com/reflex-frp/reflex-platform.git
+git clone https://github.com/reflex-frp/reflex-vty.git
 cd reflex-vty
 ../reflex-platform/scripts/work-on ghc ./.
 ```
