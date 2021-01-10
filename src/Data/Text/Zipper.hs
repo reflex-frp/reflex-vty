@@ -22,11 +22,12 @@ import Control.Monad.State (evalState, forM, get, put)
 
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.ICU.Char
 import Data.Text.Internal (Text(..), text)
 import Data.Text.Internal.Fusion (stream)
 import Data.Text.Internal.Fusion.Types (Stream(..), Step(..))
 import Data.Text.Unsafe
+
+import Graphics.Text.Width (wcwidth)
 
 -- | A zipper of the logical text input contents (the "document"). The lines
 -- before the line containing the cursor are stored in reverse order.
@@ -331,12 +332,13 @@ dropWidth n = snd . splitAtWidth n
 
 -- | Get the display width of a 'Char'. "Full width" and "wide" characters
 -- take two columns and everything else takes a single column. See
--- <https://www.unicode.org/reports/tr11/> for more information.
+-- <https://www.unicode.org/reports/tr11/> for more information
+-- This is implemented using wcwidth from Vty such that it matches what will
+-- be displayed on the terminal. Note that this method can change depending
+-- on how vty is configed. Please see vty documentation for details.
 charWidth :: Char -> Int
-charWidth c = case property EastAsianWidth c of
-  EAFull -> 2
-  EAWide -> 2
-  _ -> 1
+charWidth = wcwidth
+
 
 -- | For a given set of wrapped logical lines, computes a map
 -- from display line index to text offset in the original text.
@@ -380,10 +382,12 @@ goToDisplayLinePosition x y dl tz =
   in  case offset of
         Nothing -> tz
         Just o ->
-          let displayLineLength = case drop y $ _displayLines_spans dl of
-                [] -> x
-                (s:_) -> spansWidth s
-          in  rightN (o + min displayLineLength x) $ top tz
+          let
+            moveRight = case drop y $ _displayLines_spans dl of
+                []    -> x
+                (s:_) -> charIndexAt x . stream . mconcat . fmap (\(Span _ t) -> t) $ s
+          in  rightN (o + min moveRight x) $ top tz
+
 
 -- | Get the width of the text in a set of 'Span's, taking into account unicode character widths
 spansWidth :: [Span tag] -> Int
@@ -408,3 +412,15 @@ widthI (Stream next s0 _len) = loop_length 0 s0
                            Skip    s' -> loop_length z s'
                            Yield c s' -> loop_length (z + charWidth c) s'
 {-# INLINE[0] widthI #-}
+
+-- | Compute the width of a stream of characters, taking into account
+-- fullwidth unicode forms.
+charIndexAt :: Int -> Stream Char -> Int
+charIndexAt pos (Stream next s0 _len) = loop_length 0 0 s0
+    where
+      loop_length i !z s  = case next s of
+                           Done       -> i
+                           Skip    s' -> loop_length i z s'
+                           Yield c s' -> if w > pos then i else loop_length (i+1) w s' where
+                             w = z + charWidth c
+{-# INLINE[0] charIndexAt #-}
