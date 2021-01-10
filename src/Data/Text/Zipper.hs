@@ -413,8 +413,8 @@ widthI (Stream next s0 _len) = loop_length 0 s0
                            Yield c s' -> loop_length (z + charWidth c) s'
 {-# INLINE[0] widthI #-}
 
--- | Compute the width of a stream of characters, taking into account
--- fullwidth unicode forms.
+-- | Compute the logical index position of a stream of characters from a visual
+-- position taking into account fullwidth unicode forms.
 charIndexAt :: Int -> Stream Char -> Int
 charIndexAt pos (Stream next s0 _len) = loop_length 0 0 s0
     where
