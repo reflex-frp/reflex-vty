@@ -1,7 +1,10 @@
 # Revision history for reflex-vty
 
-## 0.1.4.1
+## Unreleased
+* Remove text-icu dependency and switch to `wcwidth` from vty package to compute character width in `Data.Text.Zipper`.
+* `goToDisplayLinePosition` in `Data.Text.Zipper` correctly accounts for character width now.
 
+## 0.1.4.1
 * Migrate to new dependent-sum / dependent-map (after the "some" package split)
 
 ## 0.1.4.0
