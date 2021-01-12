@@ -9,7 +9,7 @@ jobs:
     strategy:
       matrix:
         ghc: ['8.4.4', '8.6.5', '8.8.4']
-        os: ['ubuntu-latest']
+        os: ['ubuntu-latest', 'macos-latest']
     steps:
     - uses: actions/checkout@v2
     - uses: actions/setup-haskell@v1
