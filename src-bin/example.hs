@@ -26,6 +26,38 @@ import Reflex.Network
 import Reflex.Class.Switchable
 import Reflex.Vty
 
+easyExample :: IO ()
+easyExample = mainWidget $ do
+  beginLayoutD $ col $ do
+    (a1,b1,c1) <- fixedD 3 $ row $ do
+      a <- fixed 15 $ textButtonStatic def "POTATO"
+      b <- fixed 15 $ textButtonStatic def "TOMATO"
+      --c <- stretch $ textButtonStatic def "EGGPLANT"
+      c <- stretchD $ row $ do
+        stretch $ textButtonStatic def "A"
+        stretch $ textButtonStatic def "B"
+        stretch $ textButtonStatic def "C"
+      return (a,b,c)
+    (a2,b2,c2) <- fixedD 3 $ row $ do
+      a <- stretch $ textButtonStatic def "CHEESE"
+      b <- stretch $ textButtonStatic def "BEES"
+      c <- stretch $ textButtonStatic def "ARROW IN MY KNEE"
+      stretch $ textButtonStatic def "boop"
+      stretch $ textButtonStatic def "doop"
+      stretch $ textButtonStatic def "goop"
+      return (a,b,c)
+    (a3,b3,c3) <- fixedD 3 $ row $ do
+      a <- stretch $ textButtonStatic def "TIME"
+      b <- stretch $ textButtonStatic def "RHYME"
+      c <- stretch $ textButtonStatic def "A BIG CRIME"
+      return (a,b,c)
+    return ()
+  inp <- input
+  return $ fforMaybe inp $ \case
+    V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
+    _ -> Nothing
+
+
 data Example = Example_TextEditor
              | Example_Todo
              | Example_ScrollableTextDisplay
@@ -61,7 +93,7 @@ main = mainWidget $ do
   return $ fforMaybe inp $ \case
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
- 
+
 taskList
   :: (Reflex t, MonadHold t m, MonadFix m, Adjustable t m, NotReady t m, PostBuild t m, MonadNodeId m)
   => VtyWidget t m ()
@@ -153,7 +185,7 @@ todo t0 = do
           checkboxRegion = DynRegion 0 0 checkboxWidth 1
           labelHeight = _textInput_lines ti
           labelWidth = w - 1 - checkboxWidth
-          labelLeft = checkboxWidth + 1 
+          labelLeft = checkboxWidth + 1
           labelTop = constDyn 0
           labelRegion = DynRegion labelLeft labelTop labelWidth labelHeight
       value <- pane checkboxRegion (pure True) $ checkbox def $ _todo_done t0
