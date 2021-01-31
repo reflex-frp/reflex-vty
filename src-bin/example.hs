@@ -7,12 +7,16 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RecordWildCards #-}
+
+
 {-# OPTIONS_GHC -threaded #-}
 
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Fix
 import Control.Monad.NodeId
+import Data.Functor
 import Data.Functor.Misc
 import Data.Map (Map)
 import Data.Maybe
@@ -28,30 +32,28 @@ import Reflex.Vty
 
 easyExample :: IO ()
 easyExample = mainWidget $ do
-  beginLayoutD $ col $ do
-    (a1,b1,c1) <- fixedD 3 $ row $ do
-      a <- fixed 15 $ textButtonStatic def "POTATO"
-      b <- fixed 15 $ textButtonStatic def "TOMATO"
-      --c <- stretch $ textButtonStatic def "EGGPLANT"
-      c <- stretchD $ row $ do
-        stretch $ textButtonStatic def "A"
-        stretch $ textButtonStatic def "B"
-        stretch $ textButtonStatic def "C"
+  beginLayout $ row $ fixedL 39 $ col $ do
+    (a1,b1,c1) <- fixedL 3 $ row $ do
+      a <- stretch $ textButtonStatic def "POTATO"
+      b <- stretch $ textButtonStatic def "TOMATO"
+      c <- stretch $ textButtonStatic def "EGGPLANT"
       return (a,b,c)
-    (a2,b2,c2) <- fixedD 3 $ row $ do
+    (a2,b2,c2) <- fixedL 3 $ row $ do
       a <- stretch $ textButtonStatic def "CHEESE"
       b <- stretch $ textButtonStatic def "BEES"
-      c <- stretch $ textButtonStatic def "ARROW IN MY KNEE"
-      stretch $ textButtonStatic def "boop"
-      stretch $ textButtonStatic def "doop"
-      stretch $ textButtonStatic def "goop"
+      c <- stretch $ textButtonStatic def "MY KNEES"
       return (a,b,c)
-    (a3,b3,c3) <- fixedD 3 $ row $ do
+    (a3,b3,c3) <- fixedL 3 $ row $ do
       a <- stretch $ textButtonStatic def "TIME"
       b <- stretch $ textButtonStatic def "RHYME"
       c <- stretch $ textButtonStatic def "A BIG CRIME"
       return (a,b,c)
-    return ()
+    -- NOTE the box will most likely not render correctly once you put emoji's
+    -- you need to initialize vty with an updated char width map to fix this
+    fixed 7 $ boxTitle (constant def) "CLICK BUTTONS TO DRAW" $ do
+      outputDyn <- foldDyn (<>) "" $ mergeWith (<>)
+        [a1 $> "\129364", b1 $> "🍅", c1 $> "🍆", a2 $> "\129472", b2 $> "🐝🐝", c2 $> "💘", a3 $> "⏰", b3 $> "📜", c3 $> "💰🔪🔒"]
+      text (current outputDyn)
   inp <- input
   return $ fforMaybe inp $ \case
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
@@ -66,8 +68,8 @@ data Example = Example_TextEditor
 main :: IO ()
 main = mainWidget $ do
   inp <- input
-  let buttons = col $ do
-        fixed 4 $ col $ do
+  let buttons = beginLayout $ col $ do
+        fixedL 4 $ col $ do
           fixed 1 $ text "Select an example."
           fixed 1 $ text "Esc will bring you back here."
           fixed 1 $ text "Ctrl+c to quit."
@@ -205,7 +207,7 @@ todo t0 = do
       _ -> Nothing
 
 scrolling :: (Reflex t, MonadHold t m, MonadFix m, PostBuild t m, MonadNodeId m) => VtyWidget t m ()
-scrolling = col $ do
+scrolling = beginLayout $ col $ do
   fixed 2 $ text "Use your mouse wheel or up and down arrows to scroll:"
   out <- fixed 5 $ boxStatic def $ scrollableText never $ "Gallia est omnis divisa in partes tres, quarum unam incolunt Belgae, aliam Aquitani, tertiam qui ipsorum lingua Celtae, nostra Galli appellantur. Hi omnes lingua, institutis, legibus inter se differunt. Gallos ab Aquitanis Garumna flumen, a Belgis Matrona et Sequana dividit. Horum omnium fortissimi sunt Belgae, propterea quod a cultu atque humanitate provinciae longissime absunt, minimeque ad eos mercatores saepe commeant atque ea quae ad effeminandos animos pertinent important, proximique sunt Germanis, qui trans Rhenum incolunt, quibuscum continenter bellum gerunt. Qua de causa Helvetii quoque reliquos Gallos virtute praecedunt, quod fere cotidianis proeliis cum Germanis contendunt, cum aut suis finibus eos prohibent aut ipsi in eorum finibus bellum gerunt. Eorum una pars, quam Gallos obtinere dictum est, initium capit a flumine Rhodano, continetur Garumna flumine, Oceano, finibus Belgarum, attingit etiam ab Sequanis et Helvetiis flumen Rhenum, vergit ad septentriones. Belgae ab extremis Galliae finibus oriuntur, pertinent ad inferiorem partem fluminis Rheni, spectant in septentrionem et orientem solem. Aquitania a Garumna flumine ad Pyrenaeos montes et eam partem Oceani quae est ad Hispaniam pertinet; spectat inter occasum solis et septentriones.\nApud Helvetios longe nobilissimus fuit et ditissimus Orgetorix. Is M. Messala, [et P.] M. Pisone consulibus regni cupiditate inductus coniurationem nobilitatis fecit et civitati persuasit ut de finibus suis cum omnibus copiis exirent: perfacile esse, cum virtute omnibus praestarent, totius Galliae imperio potiri. Id hoc facilius iis persuasit, quod undique loci natura Helvetii continentur: una ex parte flumine Rheno latissimo atque altissimo, qui agrum Helvetium a Germanis dividit; altera ex parte monte Iura altissimo, qui est inter Sequanos et Helvetios; tertia lacu Lemanno et flumine Rhodano, qui provinciam nostram ab Helvetiis dividit. His rebus fiebat ut et minus late vagarentur et minus facile finitimis bellum inferre possent; qua ex parte homines bellandi cupidi magno dolore adficiebantur. Pro multitudine autem hominum et pro gloria belli atque fortitudinis angustos se fines habere arbitrabantur, qui in longitudinem milia passuum CCXL, in latitudinem CLXXX patebant."
   fixed 1 $ text $ ffor out $ \(ix, total) -> "Scrolled to line " <> T.pack (show ix) <> " of " <> T.pack (show total)
@@ -227,9 +229,10 @@ todos todos0 newTodo = do
   let todosMap0 = Map.fromList $ zip [0..] todos0
   rec tabNav <- tabNavigation
       let insertNav = 1 <$ insert
-          nav = leftmost [tabNav, insertNav]
+          navEv = leftmost [tabNav, insertNav]
+          focusEv = fmap (\(mcur, shift) -> maybe (Just 0) (\cur -> Just $ (shift + cur) `mod` _layoutReturnData_children) mcur) (attach (current _layoutReturnData_focus) navEv)
           tileCfg = def { _tileConfig_constraint = pure $ Constraint_Fixed 1}
-      listOut <- runLayout (pure Orientation_Column) 0 nav $
+      LayoutReturnData {..} <- flip runIsLayoutVtyWidget focusEv $ runLayoutL (pure Orientation_Column) (Just 0) $
         listHoldWithKey todosMap0 updates $ \k t -> tile tileCfg $ do
           let sel = select selectOnDelete $ Const2 k
           click <- void <$> mouseDown V.BLeft
@@ -240,8 +243,8 @@ todos todos0 newTodo = do
       let delete = ffor todoDelete $ \k -> Map.singleton k Nothing
           updates = leftmost [insert, delete]
           todoDelete = switch . current $
-            leftmost .  Map.elems . Map.mapWithKey (\k -> (k <$) . _todoOutput_delete) <$> listOut
-          todosMap = joinDynThroughMap $ fmap _todoOutput_todo <$> listOut
+            leftmost .  Map.elems . Map.mapWithKey (\k -> (k <$) . _todoOutput_delete) <$> _layoutReturnData_value
+          todosMap = joinDynThroughMap $ fmap _todoOutput_todo <$> _layoutReturnData_value
           insert = ffor (tag (current todosMap) newTodo) $ \m -> case Map.lookupMax m of
             Nothing -> Map.singleton 0 $ Just $ Todo "" False
             Just (k, _) -> Map.singleton (k+1) $ Just $ Todo "" False
@@ -250,4 +253,4 @@ todos todos0 newTodo = do
                       in  fmap fst $ Map.lookupMax before <|> Map.lookupMin after)
             (current todosMap)
             todoDelete
-  return listOut
+  return _layoutReturnData_value

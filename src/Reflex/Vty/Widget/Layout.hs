@@ -7,58 +7,60 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE RecursiveDo                #-}
 {-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE TypeApplications       #-}
+{-# LANGUAGE RankNTypes       #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
 
 
-module Potato.Reflex.Vty.Widget.Layout2
-  (  Orientation(..)
+module Reflex.Vty.Widget.Layout
+  ( Orientation(..)
   , Constraint(..)
   , Layout
+  , runLayoutL
   , runLayout
   , TileConfig(..)
   , tile
   , fixed
-  , fixedD
+  , fixedL
   , stretch
-  , stretchD
+  , stretchL
   , col
   , row
-  , dummy
+  , dummyCell
   , beginLayout
-  , beginLayoutD
+  , beginLayoutL
   , tabNavigation
   , askOrientation
+  , LayoutVtyWidget(..)
+  , LayoutDebugTree(..)
+  , IsLayoutVtyWidget(..)
+  , LayoutReturnData(..)
   ) where
 
 import           Prelude
 
-import qualified Relude                 as R
-
 import           Control.Monad.Identity (Identity (..))
-import           Control.Monad.NodeId   (MonadNodeId (..), NodeId (..))
+import           Control.Monad.NodeId   (MonadNodeId (..), NodeId)
 import           Control.Monad.Reader
 import           Data.Bimap             (Bimap)
 import qualified Data.Bimap             as Bimap
 import           Data.Default           (Default (..))
-import           Data.Dependent.Map     (DMap, DSum ((:=>)))
 import qualified Data.Dependent.Map     as DMap
+import Data.Dependent.Sum (DSum((:=>)))
 import           Data.Functor.Misc
 import           Data.Map               (Map)
 import qualified Data.Map               as Map
 import qualified Data.Map.Internal      as Map (Map (Bin, Tip))
-import           Data.Maybe             (fromMaybe, isJust)
+import           Data.Maybe             (fromMaybe)
 import           Data.Monoid            hiding (First (..))
 import           Data.Ratio             ((%))
 import           Data.Semigroup         (First (..))
 import           Data.Traversable       (mapAccumL)
-import           Data.Tuple.Extra
 import qualified Graphics.Vty           as V
-import           Unsafe.Coerce
 
 import           Reflex
 import           Reflex.Host.Class      (MonadReflexCreateTrigger)
 import           Reflex.Vty.Widget
-
-import           Control.Exception      (assert)
 
 -- | The main-axis orientation of a 'Layout' widget
 data Orientation = Orientation_Column
@@ -80,7 +82,7 @@ data LayoutCtx t = LayoutCtx
 
 -- | The Layout monad transformer keeps track of the configuration (e.g., 'Orientation') and
 -- 'Constraint's of its child widgets, apportions vty real estate to each, and acts as a
--- switchboard for focus requests. See 'tile' and 'runLayout'.
+-- switchboard for focus requests. See 'tile_' and 'runLayout'.
 newtype Layout t m a = Layout
   { unLayout :: EventWriterT t (First (NodeId, Int))
       (DynamicWriterT t (Endo [(NodeId, (Bool, Constraint), LayoutDebugTree t, Int)])
@@ -111,17 +113,16 @@ instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (Layout t m
   traverseDMapWithKeyWithAdjust f m e = Layout $ traverseDMapWithKeyWithAdjust (\k v -> unLayout $ f k v) m e
   traverseDMapWithKeyWithAdjustWithMove f m e = Layout $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unLayout $ f k v) m e
 
-
 findNearestFloor_ :: (Ord k) => k -> (k, a) -> (k, a) -> Map k a -> Maybe (k, a)
-findNearestFloor_ target leftmost parent Map.Tip = if target < fst leftmost
+findNearestFloor_ target leftValue parent Map.Tip = if target < fst leftValue
   then Nothing -- error $ "Map.findNearestFloorSure: map has no element <= " <> show target
   else if target < fst parent
-    then Just leftmost
+    then Just leftValue
     else Just parent
-findNearestFloor_ target leftmost _ (Map.Bin _ k a l r) = if target == k
+findNearestFloor_ target leftValue _ (Map.Bin _ k a l r) = if target == k
   then Just (k, a)
   else if target < k
-    then findNearestFloor_ target leftmost (k, a) l
+    then findNearestFloor_ target leftValue (k, a) l
     else findNearestFloor_ target (k, a) (k, a) r
 
 findNearestFloor :: (Ord k) => k -> Map k a -> Maybe (k,a)
@@ -129,29 +130,27 @@ findNearestFloor _ Map.Tip = Nothing
 -- TODO I don't think we need to do findMin here, just pass in (k,x) as a placeholder value
 findNearestFloor target m@(Map.Bin _ k x _ _) = findNearestFloor_ target (Map.findMin m) (k, x) m
 
-
-
 fanFocusEv :: (Reflex t) => Behavior t (Maybe (NodeId, Int)) -> Event t (Maybe (NodeId, Int)) -> EventSelector t (Const2 NodeId (Maybe Int))
 fanFocusEv focussed focusReqIx = fan $ attachWith attachfn focussed focusReqIx where
   attachfn mkv0 mkv1 = case mkv1 of
     Nothing -> case mkv0 of
       Nothing      -> DMap.empty
-      Just (k0,v0) -> DMap.fromList [Const2 k0 :=> Identity Nothing]
+      Just (k0,_) -> DMap.fromList [Const2 k0 :=> Identity Nothing]
     Just (k1,v1) -> case mkv0 of
       Nothing -> DMap.fromList [Const2 k1 :=> Identity (Just v1)]
       Just (k0,v0) | k0 == k1 && v0 == v1 -> DMap.empty
-      Just (k0,v0) | k0 == k1 -> DMap.fromList [Const2 k1 :=> Identity (Just v1)]
-      Just (k0,v0) -> DMap.fromList [Const2 k0 :=> Identity Nothing,
+      Just (k0,_) | k0 == k1 -> DMap.fromList [Const2 k1 :=> Identity (Just v1)]
+      Just (k0,_) -> DMap.fromList [Const2 k0 :=> Identity Nothing,
                           Const2 k1 :=> Identity (Just v1)]
 
 -- | Run a 'Layout' action
-runLayoutD
-  :: forall t m a. (Reflex t, MonadFix m, MonadHold t m, Monad m, MonadNodeId m)
+runLayoutL
+  :: forall t m a. (Reflex t, MonadFix m, MonadHold t m)
   => Dynamic t Orientation -- ^ The main-axis 'Orientation' of this 'Layout'
-  -> Maybe Int -- ^ The positional index of the initially focused tile
+  -> Maybe Int -- ^ The positional index of the initially focused tile_
   -> Layout t m a -- ^ The 'Layout' widget
-  -> LayoutVtyWidget t m (LayoutDebugTree t, Dynamic t (Maybe Int), Int, a)
-runLayoutD ddir mfocus0 (Layout child) = LayoutVtyWidget . ReaderT $ \focusReqIx -> mdo
+  -> LayoutVtyWidget t m (LayoutReturnData t a)
+runLayoutL ddir mfocus0 (Layout child) = LayoutVtyWidget . ReaderT $ \focusReqIx -> mdo
   dw <- displayWidth
   dh <- displayHeight
   let main = ffor3 ddir dw dh $ \d w h -> case d of
@@ -228,29 +227,34 @@ runLayoutD ddir mfocus0 (Layout child) = LayoutVtyWidget . ReaderT $ \focusReqIx
     focusReqWithNodeId = attachWith (\fm mix -> mix >>= \ix -> findChildFocus fm ix) (current focusable) (focusReqIx)
     focusChildSelector = fanFocusEv (current $ fmap (fmap snd) focussed) (focusReqWithNodeId)
 
-  return (emptyLayoutDebugTree, (fmap (fmap fst)) focussed, totalKiddos, a)
+  return LayoutReturnData {
+      _layoutReturnData_tree = emptyLayoutDebugTree
+      , _layoutReturnData_focus = (fmap (fmap fst)) focussed
+      , _layoutReturnData_children = totalKiddos
+      , _layoutReturnData_value = a
+    }
 
 -- | Run a 'Layout' action
 runLayout
-  :: (MonadFix m, MonadHold t m, PostBuild t m, Monad m, MonadNodeId m)
+  :: forall t m a. (Reflex t, MonadFix m, MonadHold t m, Monad m, MonadNodeId m)
   => Dynamic t Orientation -- ^ The main-axis 'Orientation' of this 'Layout'
-  -> Maybe Int -- ^ The positional index of the initially focused tile
+  -> Maybe Int -- ^ The positional index of the initially focused tile_
   -> Layout t m a -- ^ The 'Layout' widget
   -> LayoutVtyWidget t m a
-runLayout ddir mfocus0 layout = fmap (\(_,_,_,a)->a) $ runLayoutD ddir mfocus0 layout
+runLayout ddir mfocus0 layout = fmap _layoutReturnData_value $ runLayoutL ddir mfocus0 layout
 
--- | Tiles are the basic building blocks of 'Layout' widgets. Each tile has a constraint
--- on its size and ability to grow and on whether it can be focused. It also allows its child
--- widget to request focus.
-tile
-  :: forall t b widget x m a. (Reflex t, IsLayoutReturn t b a, IsLayoutVtyWidget widget t m, Monad m, MonadFix m, MonadNodeId m)
-  => TileConfig t -- ^ The tile's configuration
+swap :: (a,b) -> (b,a)
+swap (a,b) = (b,a)
+
+tile_
+  :: forall t b widget m a x. (Reflex t, IsLayoutReturn t b a, IsLayoutVtyWidget widget t m, MonadFix m, MonadNodeId m)
+  => TileConfig t -- ^ The tile_'s configuration
   -> widget t m (Event t x, b) -- ^ A child widget. The 'Event' that it returns is used to request that it be focused.
   -> Layout t m a
-tile (TileConfig con focusable) child = mdo
+tile_ (TileConfig con focusable) child = mdo
   nodeId <- getNextNodeId
   -- by calling getLayoutTree/getLayoutNumChildren here, we store the children's layout info inside the DynamicWriter
-  -- runLayoutD will extract this info later
+  -- runLayoutL will extract this info later
   Layout $ tellDyn $ ffor2 con focusable $ \c f -> Endo ((nodeId, (f, c), getLayoutTree @t @b @a b, nKiddos):)
   seg <- Layout $ asks $
     fmap (Map.findWithDefault (LayoutSegment 0 0) nodeId) . _layoutCtx_regions
@@ -286,80 +290,95 @@ tile (TileConfig con focusable) child = mdo
     else never
   return $ getLayoutResult @t b
 
+-- | Tiles are the basic building blocks of 'Layout' widgets. Each tile has a constraint
+-- on its size and ability to grow and on whether it can be focused. It also allows its child
+-- widget to request focus.
+tile
+  :: (Reflex t, IsLayoutVtyWidget widget t m, MonadFix m, MonadNodeId m)
+  => TileConfig t -- ^ The tile's configuration
+  -> widget t m (Event t x, a) -- ^ A child widget. The 'Event' that it returns is used to request that it be focused.
+  -> Layout t m a
+tile = tile_
 
--- | Configuration options for and constraints on 'tile'
+
+-- | Configuration options for and constraints on 'tile_'
 data TileConfig t = TileConfig
   { _tileConfig_constraint :: Dynamic t Constraint
-    -- ^ 'Constraint' on the tile's size
-  , _tileConfig_focusable  :: Dynamic t Bool
-    -- ^ Whether the tile is focusable
+    -- ^ 'Constraint' on the tile_'s size
+  , _tile_Config_focusable  :: Dynamic t Bool
+    -- ^ Whether the tile_ is focusable
   }
-
 
 instance Reflex t => Default (TileConfig t) where
   def = TileConfig (pure $ Constraint_Min 0) (pure True)
 
--- | A 'tile' of a fixed size that is focusable and gains focus on click
-fixed'
-  :: (Reflex t, IsLayoutReturn t b a, IsLayoutVtyWidget widget t m, Monad m, MonadFix m, MonadNodeId m)
+
+fixed_
+  :: (Reflex t, IsLayoutReturn t b a, IsLayoutVtyWidget widget t m, MonadFix m, MonadNodeId m)
   => Dynamic t Int
   -> widget t m b
   -> Layout t m a
-fixed' sz = tile (def { _tileConfig_constraint =  Constraint_Fixed <$> sz }) . clickable
+fixed_ sz = tile_ (def { _tileConfig_constraint =  Constraint_Fixed <$> sz }) . clickable
 
-fixedD
-  :: (Reflex t, Monad m, MonadFix m, MonadNodeId m)
+-- | Use this variant to start a sub layout.
+fixedL
+  :: (Reflex t, MonadFix m, MonadNodeId m)
   => Dynamic t Int
-  -> LayoutVtyWidget t m (LayoutDebugTree t, Dynamic t (Maybe Int), Int, a)
+  -> LayoutVtyWidget t m (LayoutReturnData t a)
   -> Layout t m a
-fixedD = fixed'
+fixedL = fixed_
 
+-- | A 'tile' of a fixed size that is focusable and gains focus on click
 fixed
-  :: (Reflex t, IsLayoutVtyWidget widget t m, Monad m, MonadFix m, MonadNodeId m)
+  :: (Reflex t, MonadFix m, MonadNodeId m)
   => Dynamic t Int
-  -> widget t m a
+  -> VtyWidget t m a
   -> Layout t m a
-fixed = fixed'
+fixed = fixed_
+
+stretch_
+  :: (Reflex t, IsLayoutReturn t b a, IsLayoutVtyWidget widget t m, MonadFix m, MonadNodeId m)
+  => widget t m b
+  -> Layout t m a
+stretch_ = tile_ def . clickable
+
+-- | Use this variant to start a sub layout.
+stretchL
+  :: (Reflex t, MonadFix m, MonadNodeId m)
+  => LayoutVtyWidget t m (LayoutReturnData t a)
+  -> Layout t m a
+stretchL = stretch_
 
 -- | A 'tile' that can stretch (i.e., has no fixed size) and has a minimum size of 0.
 -- This tile is focusable and gains focus on click.
-stretch'
-  :: (Reflex t, IsLayoutReturn t b a, IsLayoutVtyWidget widget t m, Monad m, MonadFix m, MonadNodeId m)
-  => widget t m b
-  -> Layout t m a
-stretch' = tile def . clickable
-
-stretchD
-  :: (Reflex t, Monad m, MonadFix m, MonadNodeId m)
-  => LayoutVtyWidget t m (LayoutDebugTree t, Dynamic t (Maybe Int), Int, a)
-  -> Layout t m a
-stretchD = stretch'
-
 stretch
-  :: (Reflex t, IsLayoutVtyWidget widget t m, Monad m, MonadFix m, MonadNodeId m)
-  => widget t m a
+  :: (Reflex t, MonadFix m, MonadNodeId m)
+  => VtyWidget t m a
   -> Layout t m a
-stretch = stretch'
+stretch = stretch_
 
--- | A version of 'runLayout' that arranges tiles in a column and uses 'tabNavigation' to
--- change tile focus.
+-- | A version of 'runLayout' that arranges tiles in a column
 col
-  :: (MonadFix m, MonadHold t m, PostBuild t m, MonadNodeId m)
+  :: (Reflex t, MonadFix m, MonadHold t m, MonadNodeId m)
   => Layout t m a
-  -> LayoutVtyWidget t m (LayoutDebugTree t, Dynamic t (Maybe Int), Int, a)
-col child = runLayoutD (pure Orientation_Column) (Just 0) child
+  -> LayoutVtyWidget t m (LayoutReturnData t a)
+col child = runLayoutL (pure Orientation_Column) (Just 0) child
 
--- | A version of 'runLayout' that arranges tiles in a row and uses 'tabNavigation' to
--- change tile focus.
+-- | A version of 'runLayout' that arranges tiles in a row
 row
-  :: (MonadFix m, MonadHold t m, PostBuild t m, MonadNodeId m)
+  :: (Reflex t, MonadFix m, MonadHold t m, MonadNodeId m)
   => Layout t m a
-  -> LayoutVtyWidget t m (LayoutDebugTree t, Dynamic t (Maybe Int), Int, a)
-row child = runLayoutD (pure Orientation_Row) (Just 0) child
+  -> LayoutVtyWidget t m (LayoutReturnData t a)
+row child = runLayoutL (pure Orientation_Row) (Just 0) child
 
--- | Testing placeholder DELETE
-dummy :: (Reflex t, Monad m) => LayoutVtyWidget t m (LayoutDebugTree t, Dynamic t (Maybe Int), Int, ())
-dummy = return (emptyLayoutDebugTree, constDyn Nothing, 0, ())
+-- | Use to make placeholder empty cells in sub layouts.
+dummyCell :: (Reflex t, Monad m) => LayoutVtyWidget t m (LayoutReturnData t ())
+dummyCell = return LayoutReturnData {
+    _layoutReturnData_tree = emptyLayoutDebugTree
+    , _layoutReturnData_focus = constDyn Nothing
+    , _layoutReturnData_children = 0
+    , _layoutReturnData_value = ()
+  }
 
 -- | Produces an 'Event' that navigates forward one tile when the Tab key is pressed
 -- and backward one tile when Shift+Tab is pressed.
@@ -380,24 +399,26 @@ clickable child = LayoutVtyWidget . ReaderT $ \focusEv -> do
   a <- runIsLayoutVtyWidget child focusEv
   return (() <$ click, a)
 
-beginLayoutD ::
-  forall m t a. (MonadHold t m, PostBuild t m, MonadFix m, MonadNodeId m)
-  => LayoutVtyWidget t m (LayoutDebugTree t, Dynamic t (Maybe Int), Int, a)
-  -> VtyWidget t m (LayoutDebugTree t, a)
-beginLayoutD child = mdo
+-- TODO look into making a variant of this function that takes a navigation event
+-- | Use this variant to begin a layout if you need its "LayoutReturnData"
+beginLayoutL
+  :: (Reflex t, MonadHold t m, MonadFix m)
+  => LayoutVtyWidget t m (LayoutReturnData t a)
+  -> VtyWidget t m (LayoutReturnData t a)
+beginLayoutL child = mdo
   -- TODO consider unfocusing if this loses focus
   --focussed <- focus
   tabEv <- tabNavigation
-  let focusChildEv = fmap (\(mcur, shift) -> maybe (Just 0) (\cur -> Just $ (shift + cur) `mod` totalKiddos) mcur) (attach (current indexDyn) tabEv)
-  (ldt, indexDyn, totalKiddos, a) <- runIsLayoutVtyWidget child focusChildEv
-  return (ldt, a)
+  let focusChildEv = fmap (\(mcur, shift) -> maybe (Just 0) (\cur -> Just $ (shift + cur) `mod` _layoutReturnData_children) mcur) (attach (current _layoutReturnData_focus) tabEv)
+  lrd@LayoutReturnData{..} <- runIsLayoutVtyWidget child focusChildEv
+  return lrd
 
--- |
-beginLayout ::
-  forall m t b a. (MonadHold t m, PostBuild t m, MonadFix m, MonadNodeId m)
-  => LayoutVtyWidget t m (LayoutDebugTree t, Dynamic t (Maybe Int), Int, a)
+-- | Begin a layout using tab and shift-tab to navigate
+beginLayout
+  :: (Reflex t, MonadHold t m, MonadFix m, MonadNodeId m)
+  => LayoutVtyWidget t m (LayoutReturnData t a)
   -> VtyWidget t m a
-beginLayout = fmap snd . beginLayoutD
+beginLayout = fmap _layoutReturnData_value . beginLayoutL
 
 -- | Retrieve the current orientation of a 'Layout'
 askOrientation :: Monad m => Layout t m (Dynamic t Orientation)
@@ -410,8 +431,7 @@ data Constraint = Constraint_Fixed Int
 
 -- | Compute the size of each widget "@k@" based on the total set of 'Constraint's
 computeSizes
-  :: Ord k
-  => Int
+  :: Int
   -> Map k (a, Constraint)
   -> Map k (a, Int)
 computeSizes available constraints =
@@ -433,15 +453,9 @@ computeEdges :: (Ord k) => Map k (a, Int) -> Map k (a, (Int, Int))
 computeEdges = fst . Map.foldlWithKey' (\(m, offset) k (a, sz) ->
   (Map.insert k (a, (offset, sz)) m, sz + offset)) (Map.empty, 0)
 
-
-
-
-
-
-
-
--- TODO should prob be (Branch [LayoutDebugTree] | Leaf PosDim
+-- TODO FINISH
 -- but it's weird cuz a leaf node won't know it's PosDim until combined with a Region...
+-- | Dynamic sizing information on a layout hierarchy (intended for testing)
 data LayoutDebugTree t = LayoutDebugTree_Branch [LayoutDebugTree t] | LayoutDebugTree_Leaf
 
 emptyLayoutDebugTree :: LayoutDebugTree t
@@ -453,12 +467,18 @@ class IsLayoutReturn t b a where
   getLayoutFocussedDyn :: b -> Dynamic t (Maybe Int)
   getLayoutTree :: b -> LayoutDebugTree t
 
+data LayoutReturnData t a = LayoutReturnData {
+    _layoutReturnData_tree :: LayoutDebugTree t
+    , _layoutReturnData_focus :: Dynamic t (Maybe Int)
+    , _layoutReturnData_children :: Int
+    , _layoutReturnData_value :: a
+  }
 
-instance IsLayoutReturn t (LayoutDebugTree t, Dynamic t (Maybe Int), Int, a) a where
-  getLayoutResult (_,_,_,a) = a
-  getLayoutNumChildren (_,_,d,_) = d
-  getLayoutFocussedDyn (_,d,_,_) = d
-  getLayoutTree (tree,_,_,_) = tree
+instance IsLayoutReturn t (LayoutReturnData t a) a where
+  getLayoutResult lrd = _layoutReturnData_value lrd
+  getLayoutNumChildren lrd = _layoutReturnData_children lrd
+  getLayoutFocussedDyn lrd = _layoutReturnData_focus lrd
+  getLayoutTree lrd = _layoutReturnData_tree lrd
 
 instance Reflex t => IsLayoutReturn t a a where
   getLayoutResult = id
@@ -466,7 +486,7 @@ instance Reflex t => IsLayoutReturn t a a where
   getLayoutFocussedDyn _ = constDyn Nothing
   getLayoutTree _ = emptyLayoutDebugTree
 
-class IsLayoutVtyWidget l t (m :: * -> *) where
+class IsLayoutVtyWidget l t m where
   runIsLayoutVtyWidget :: l t m a -> Event t (Maybe Int) -> VtyWidget t m a
 
 newtype LayoutVtyWidget t m a = LayoutVtyWidget {
