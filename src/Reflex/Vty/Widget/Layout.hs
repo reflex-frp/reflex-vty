@@ -1,3 +1,7 @@
+{-|
+Module: Reflex.Vty.Widget.Layout
+Description: Monad transformer and tools for arranging widgets and building screen layouts
+-}
 {-# LANGUAGE AllowAmbiguousTypes        #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
