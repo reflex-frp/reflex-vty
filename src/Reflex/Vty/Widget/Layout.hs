@@ -8,12 +8,12 @@ Description: Monad transformer and tools for arranging widgets and building scre
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE RecursiveDo                #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE UndecidableInstances       #-}
-{-# LANGUAGE TypeApplications       #-}
-{-# LANGUAGE RankNTypes       #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
 
 
 module Reflex.Vty.Widget.Layout
@@ -50,7 +50,7 @@ import           Data.Bimap             (Bimap)
 import qualified Data.Bimap             as Bimap
 import           Data.Default           (Default (..))
 import qualified Data.Dependent.Map     as DMap
-import Data.Dependent.Sum (DSum((:=>)))
+import           Data.Dependent.Sum     (DSum ((:=>)))
 import           Data.Functor.Misc
 import           Data.Map               (Map)
 import qualified Data.Map               as Map
@@ -68,20 +68,20 @@ import           Reflex.Vty.Widget
 
 -- | The main-axis orientation of a 'Layout' widget
 data Orientation = Orientation_Column
-                 | Orientation_Row
-  deriving (Show, Read, Eq, Ord)
+    | Orientation_Row
+    deriving (Show, Read, Eq, Ord)
 
 data LayoutSegment = LayoutSegment
-  { _layoutSegment_offset :: Int
-  , _layoutSegment_size   :: Int
-  }
+    { _layoutSegment_offset :: Int
+    , _layoutSegment_size   :: Int
+    }
 
 data LayoutCtx t = LayoutCtx
-  { _layoutCtx_regions            :: Dynamic t (Map NodeId LayoutSegment)
-  , _layoutCtx_focusSelfDemux     :: Demux t (Maybe NodeId)
-  , _layoutCtx_orientation        :: Dynamic t Orientation
-  , _layoutCtx_focusChildSelector :: EventSelector t (Const2 NodeId (Maybe Int))
-  }
+    { _layoutCtx_regions :: Dynamic t (Map NodeId LayoutSegment)
+    , _layoutCtx_focusSelfDemux :: Demux t (Maybe NodeId)
+    , _layoutCtx_orientation :: Dynamic t Orientation
+    , _layoutCtx_focusChildSelector :: EventSelector t (Const2 NodeId (Maybe Int))
+    }
 
 
 -- | The Layout monad transformer keeps track of the configuration (e.g., 'Orientation') and
@@ -138,7 +138,7 @@ fanFocusEv :: (Reflex t) => Behavior t (Maybe (NodeId, Int)) -> Event t (Maybe (
 fanFocusEv focussed focusReqIx = fan $ attachWith attachfn focussed focusReqIx where
   attachfn mkv0 mkv1 = case mkv1 of
     Nothing -> case mkv0 of
-      Nothing      -> DMap.empty
+      Nothing     -> DMap.empty
       Just (k0,_) -> DMap.fromList [Const2 k0 :=> Identity Nothing]
     Just (k1,v1) -> case mkv0 of
       Nothing -> DMap.fromList [Const2 k1 :=> Identity (Just v1)]
@@ -307,11 +307,11 @@ tile = tile_
 
 -- | Configuration options for and constraints on 'tile_'
 data TileConfig t = TileConfig
-  { _tileConfig_constraint :: Dynamic t Constraint
+    { _tileConfig_constraint :: Dynamic t Constraint
     -- ^ 'Constraint' on the tile_'s size
-  , _tile_Config_focusable  :: Dynamic t Bool
+    , _tile_Config_focusable :: Dynamic t Bool
     -- ^ Whether the tile_ is focusable
-  }
+    }
 
 instance Reflex t => Default (TileConfig t) where
   def = TileConfig (pure $ Constraint_Min 0) (pure True)
@@ -430,8 +430,8 @@ askOrientation = Layout $ asks _layoutCtx_orientation
 
 -- | Datatype representing constraints on a widget's size along the main axis (see 'Orientation')
 data Constraint = Constraint_Fixed Int
-                | Constraint_Min Int
-  deriving (Show, Read, Eq, Ord)
+    | Constraint_Min Int
+    deriving (Show, Read, Eq, Ord)
 
 -- | Compute the size of each widget "@k@" based on the total set of 'Constraint's
 computeSizes
@@ -460,7 +460,8 @@ computeEdges = fst . Map.foldlWithKey' (\(m, offset) k (a, sz) ->
 -- TODO FINISH
 -- but it's weird cuz a leaf node won't know it's PosDim until combined with a Region...
 -- | Dynamic sizing information on a layout hierarchy (intended for testing)
-data LayoutDebugTree t = LayoutDebugTree_Branch [LayoutDebugTree t] | LayoutDebugTree_Leaf
+data LayoutDebugTree t = LayoutDebugTree_Branch [LayoutDebugTree t]
+    | LayoutDebugTree_Leaf
 
 emptyLayoutDebugTree :: LayoutDebugTree t
 emptyLayoutDebugTree = LayoutDebugTree_Leaf
@@ -471,12 +472,12 @@ class IsLayoutReturn t b a where
   getLayoutFocussedDyn :: b -> Dynamic t (Maybe Int)
   getLayoutTree :: b -> LayoutDebugTree t
 
-data LayoutReturnData t a = LayoutReturnData {
-    _layoutReturnData_tree :: LayoutDebugTree t
-    , _layoutReturnData_focus :: Dynamic t (Maybe Int)
+data LayoutReturnData t a = LayoutReturnData
+    { _layoutReturnData_tree     :: LayoutDebugTree t
+    , _layoutReturnData_focus    :: Dynamic t (Maybe Int)
     , _layoutReturnData_children :: Int
-    , _layoutReturnData_value :: a
-  }
+    , _layoutReturnData_value    :: a
+    }
 
 instance IsLayoutReturn t (LayoutReturnData t a) a where
   getLayoutResult lrd = _layoutReturnData_value lrd
