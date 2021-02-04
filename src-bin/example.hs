@@ -230,9 +230,9 @@ todos todos0 newTodo = do
   rec tabNav <- tabNavigation
       let insertNav = 1 <$ insert
           navEv = leftmost [tabNav, insertNav]
-          focusEv = fmap (\(mcur, shift) -> maybe (Just 0) (\cur -> Just $ (shift + cur) `mod` _layoutReturnData_children) mcur) (attach (current _layoutReturnData_focus) navEv)
+          focusEv = layoutFocusEvFromNavigation navEv lrd
           tileCfg = def { _tileConfig_constraint = pure $ Constraint_Fixed 1}
-      LayoutReturnData {..} <- flip runIsLayoutVtyWidget focusEv $ runLayoutL (pure Orientation_Column) (Just 0) $
+      lrd@LayoutReturnData {..} <- flip runIsLayoutVtyWidget focusEv $ runLayoutL (pure Orientation_Column) (Just 0) $
         listHoldWithKey todosMap0 updates $ \k t -> tile tileCfg $ do
           let sel = select selectOnDelete $ Const2 k
           click <- void <$> mouseDown V.BLeft
