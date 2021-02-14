@@ -46,6 +46,7 @@ module Reflex.Vty.Widget.Layout
   , LayoutReturnData(..)
   ) where
 
+
 import           Prelude
 
 import           Control.Monad.Identity (Identity (..))
@@ -56,6 +57,7 @@ import qualified Data.Bimap             as Bimap
 import           Data.Default           (Default (..))
 import qualified Data.Dependent.Map     as DMap
 import           Data.Dependent.Sum     (DSum ((:=>)))
+import           Data.Functor
 import           Data.Functor.Misc
 import           Data.Map               (Map)
 import qualified Data.Map               as Map
@@ -206,18 +208,19 @@ runLayoutL ddir mfocus0 (Layout child) = LayoutVtyWidget . ReaderT $ \focusReqIx
 
       adjustFocus
         :: (Bimap Int NodeId)
-        -> Either Int (NodeId, Int) -- left is self index, right is (child id, child index)
+        -> Either (Maybe Int) (NodeId, Int) -- left is self index, right is (child id, child index)
         -> Maybe (Int, (NodeId, Int)) -- fst is self index, snd is (child id, child index)
-      adjustFocus fm (Left ix) = do
+      adjustFocus fm (Left (Just ix)) = do
         x <- findChildFocus fm ix
         return (ix, x)
+      adjustFocus fm (Left Nothing) = Nothing
       adjustFocus fm (Right (goto, ixrel)) = do
         ix <- Bimap.lookupR goto fm
         return (ix+ixrel, (goto, ixrel))
 
       focusChange = attachWith adjustFocus (current focusable)
         -- TODO handle Nothing case in both places (so that event produces Nothing in this case)
-        $ leftmost [ fmap Right . fmap getFirst $ focusReq, Left <$> (fmapMaybe id focusReqIx)]
+        $ leftmost [ fmap Right . fmap getFirst $ focusReq, Left <$> focusReqIx]
 
   let
     forestDyn :: Dynamic t [LayoutTree] = join . fmap distributeListOverDyn $ ffor2 queries ddir $ \qs dir -> ffor qs $ \(nid,_,dlt,_) -> translateLayoutTree dir nid solutionMapDyn dlt
@@ -427,12 +430,13 @@ clickable child = LayoutVtyWidget . ReaderT $ \focusEv -> do
 layoutFocusEvFromNavigation
   :: (Reflex t)
   => Event t Int
+  -> Event t ()
   -> LayoutReturnData t a
   -> Event t (Maybe Int)
-layoutFocusEvFromNavigation navEv LayoutReturnData {..} = r where
+layoutFocusEvFromNavigation navEv unfocusEv LayoutReturnData {..} = r where
   fmapfn (nKiddos, (mcur, shift)) = maybe (Just 0) (\cur -> Just $ (shift + cur) `mod` nKiddos) mcur
   navEv' = attach (current _layoutReturnData_children) $ attach (current _layoutReturnData_focus) navEv
-  r = fmap fmapfn navEv'
+  r = leftmost [unfocusEv $> Nothing, fmap fmapfn navEv']
 
 -- TODO look into making a variant of this function that takes a navigation event
 -- | Use this variant to begin a layout if you need its "LayoutReturnData"
@@ -445,7 +449,7 @@ beginLayoutL child = mdo
   --focussed <- focus
   tabEv <- tabNavigation
   let
-    focusChildEv = layoutFocusEvFromNavigation tabEv lrd
+    focusChildEv = layoutFocusEvFromNavigation tabEv never lrd
   lrd <- runIsLayoutVtyWidget child focusChildEv
   return lrd
 
@@ -455,6 +459,7 @@ beginLayout
   => LayoutVtyWidget t m (LayoutReturnData t a)
   -> VtyWidget t m a
 beginLayout = fmap _layoutReturnData_value . beginLayoutL
+
 
 {- something like this
 beginLayoutL
@@ -467,7 +472,7 @@ beginLayoutL mNavEv child = mdo
   --focussed <- focus
   let
     focusChildEv = case mNavEv of
-      Just navEv -> layoutFocusEvFromNavigation navEv lrd
+      Just navEv -> layoutFocusEvFromNavigation navEv never lrd
       Nothing -> never
   lrd <- runIsLayoutVtyWidget child focusChildEv
   return lrd

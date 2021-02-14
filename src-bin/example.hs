@@ -230,7 +230,7 @@ todos todos0 newTodo = do
   rec tabNav <- tabNavigation
       let insertNav = 1 <$ insert
           navEv = leftmost [tabNav, insertNav]
-          focusEv = layoutFocusEvFromNavigation navEv lrd
+          focusEv = layoutFocusEvFromNavigation navEv never lrd
           tileCfg = def { _tileConfig_constraint = pure $ Constraint_Fixed 1}
       lrd@LayoutReturnData {..} <- flip runIsLayoutVtyWidget focusEv $ runLayoutL (pure Orientation_Column) (Just 0) $
         listHoldWithKey todosMap0 updates $ \k t -> tile tileCfg $ do
