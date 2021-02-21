@@ -1,6 +1,3 @@
--- | forked from reflex-vty-0.1.4.1
--- adds alignment support
-
 {-|
 Module: Potato.Data.Text.Zipper
 Description: A zipper for text documents that allows convenient editing and navigation
@@ -19,8 +16,8 @@ module Data.Text.Zipper where
 
 import           Prelude
 
-import Control.Exception (assert)
-import Control.Monad (join)
+import           Control.Exception               (assert)
+import           Control.Monad                   (join)
 import           Control.Monad.State             (evalState, forM, get, put)
 import           Data.Char                       (isSpace)
 import           Data.Map                        (Map)
@@ -28,17 +25,17 @@ import qualified Data.Map                        as Map
 import           Data.Maybe                      (fromMaybe)
 import           Data.String
 
-import qualified Data.List as L
+import qualified Data.List                       as L
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Data.Text.Internal              (Text (..), text)
 import           Data.Text.Internal.Fusion       (stream)
 import           Data.Text.Internal.Fusion.Types (Step (..), Stream (..))
 import           Data.Text.Unsafe
-import Data.Tuple.Extra
+import           Data.Tuple.Extra
 
 
-import Graphics.Text.Width (wcwidth)
+import           Graphics.Text.Width             (wcwidth)
 
 -- | A zipper of the logical text input contents (the "document"). The lines
 -- before the line containing the cursor are stored in reverse order.
@@ -47,12 +44,13 @@ import Graphics.Text.Width (wcwidth)
 -- character (as compared to a "display" line, which is wrapped to fit within
 -- a given viewport width).
 data TextZipper = TextZipper
-  { _textZipper_linesBefore :: [Text] -- reversed
-  , _textZipper_before :: Text
-  , _textZipper_after :: Text -- The cursor is on top of the first character of this text
-  , _textZipper_linesAfter :: [Text]
-  }
-  deriving (Show)
+    { _textZipper_linesBefore :: [Text] -- reversed
+    , _textZipper_before      :: Text
+    -- The cursor is on top of the first character of this text
+    , _textZipper_after       :: Text -- The cursor is on top of the first character of this text
+    , _textZipper_linesAfter  :: [Text]
+    }
+    deriving (Show)
 
 instance IsString TextZipper where
   fromString = fromText . T.pack
@@ -135,7 +133,7 @@ end (TextZipper lb b a la) = TextZipper lb (b <> a) "" la
 -- | Move the cursor to the top of the document
 top :: TextZipper -> TextZipper
 top (TextZipper lb b a la) = case reverse lb of
-  [] -> TextZipper [] "" (b <> a) la
+  []           -> TextZipper [] "" (b <> a) la
   (start:rest) -> TextZipper [] "" start (rest <> [b <> a] <> la)
 
 -- | Insert a character at the current cursor position
@@ -147,14 +145,14 @@ insert :: Text -> TextZipper -> TextZipper
 insert i z@(TextZipper lb b a la) = case T.split (=='\n') i of
   [] -> z
   (start:rest) -> case reverse rest of
-    [] -> TextZipper lb (b <> start) a la
+    []     -> TextZipper lb (b <> start) a la
     (l:ls) -> TextZipper (ls <> [b <> start] <> lb) l a la
 
 -- | Delete the character to the left of the cursor
 deleteLeft :: TextZipper-> TextZipper
 deleteLeft z@(TextZipper lb b a la) = case T.unsnoc b of
   Nothing -> case lb of
-    [] -> z
+    []     -> z
     (l:ls) -> TextZipper ls l a la
   Just (b', _) -> TextZipper lb b' a la
 
@@ -162,7 +160,7 @@ deleteLeft z@(TextZipper lb b a la) = case T.unsnoc b of
 deleteRight :: TextZipper -> TextZipper
 deleteRight z@(TextZipper lb b a la) = case T.uncons a of
   Nothing -> case la of
-    [] -> z
+    []     -> z
     (l:ls) -> TextZipper lb b l ls
   Just (_, a') -> TextZipper lb b a' la
 
@@ -174,7 +172,7 @@ deleteLeftWord (TextZipper lb b a la) =
   let b' = T.dropWhileEnd isSpace b
   in  if T.null b'
         then case lb of
-          [] -> TextZipper [] b' a la
+          []     -> TextZipper [] b' a la
           (l:ls) -> deleteLeftWord $ TextZipper ls l a la
         else TextZipper lb (T.dropWhileEnd (not . isSpace) b') a la
 
@@ -202,15 +200,15 @@ fromText = flip insert empty
 -- | A span of text tagged with some metadata that makes up part of a display
 -- line.
 data Span tag = Span tag Text
-  deriving (Show)
+    deriving (Show)
 
 -- | Information about the document as it is displayed (i.e., post-wrapping)
 data DisplayLines tag = DisplayLines
-  { _displayLines_spans :: [[Span tag]]
-  , _displayLines_offsetMap :: Map Int Int
-  , _displayLines_cursorY :: Int
-  }
-  deriving (Show)
+    { _displayLines_spans     :: [[Span tag]]
+    , _displayLines_offsetMap :: Map Int Int
+    , _displayLines_cursorY   :: Int
+    }
+    deriving (Show)
 
 -- | Given a width and a 'TextZipper', produce a list of display lines
 -- (i.e., lines of wrapped text) with special attributes applied to
@@ -247,7 +245,7 @@ displayLines width tag cursorTag (TextZipper lb b a la) =
       -- the cursor has to go to the next line
       cursorAfterEOL = curLineOffset == width
       cursorCharWidth = case T.uncons a of
-        Nothing -> 1
+        Nothing     -> 1
         Just (c, _) -> charWidth c
       -- Separate the span after the cursor into
       -- * spans that are on the same display line, and
@@ -259,7 +257,7 @@ displayLines width tag cursorTag (TextZipper lb b a la) =
             let o = if cursorAfterEOL then cursorCharWidth else curLineOffset + cursorCharWidth
                 cursor = Span cursorTag (T.singleton c)
             in case map ((:[]) . Span tag) (wrapWithOffset width o rest) of
-                  [] -> [[cursor]]
+                  []     -> [[cursor]]
                   (l:ls) -> (cursor : l) : ls
   in  DisplayLines
         { _displayLines_spans = concat
@@ -283,7 +281,7 @@ displayLines width tag cursorTag (TextZipper lb b a la) =
     initLast = \case
       [] -> Nothing
       (x:xs) -> case initLast xs of
-        Nothing -> Just ([], x)
+        Nothing      -> Just ([], x)
         Just (ys, y) -> Just (x:ys, y)
     headTail :: [a] -> Maybe (a, [a])
     headTail = \case
@@ -439,27 +437,6 @@ charIndexAt pos (Stream next s0 _len) = loop_length 0 0 s0
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
--- NEW TEXT ALIGNMENT STUFF BELOW
-
-
 -- same as T.words except whitespace characters are included at end (i.e. ["line1 ", ...])
 -- 'Char's representing white space.
 wordsWithWhitespace :: Text -> [Text]
@@ -475,19 +452,18 @@ wordsWithWhitespace t@(Text arr off len) = loop 0 0 False
         where Iter c d = iter t n
 {-# INLINE wordsWithWhitespace #-}
 
--- TODO Check that this handles EOL space/newline stuff correctly
 -- take sum of word length, returns True if ends with trailng space
 splitWordsAtDisplayWidth :: Int -> [Text] -> [(Text, Bool)]
 splitWordsAtDisplayWidth maxWidth wwws = reverse $ loop wwws 0 [] where
   appendOut :: [(Text,Bool)] -> Text -> Bool -> [(Text,Bool)]
-  appendOut [] t b = [(t,b)]
+  appendOut [] t b           = [(t,b)]
   appendOut ((t',_):ts') t b = (t'<>t,b) : ts'
 
   -- remove the last whitespace in output
   modifyOutForNewLine :: [(Text,Bool)] -> [(Text,Bool)]
   modifyOutForNewLine [] = error "should never happen"
   modifyOutForNewLine ((t',_):ts) = case T.unsnoc t' of
-    Nothing -> error "should never happen"
+    Nothing           -> error "should never happen"
     Just (t,lastChar) -> assert (isSpace lastChar) $ (t,True):ts -- assume last char is whitespace
 
   loop :: [Text] -> Int -> [(Text,Bool)] -> [(Text,Bool)]
@@ -508,7 +484,9 @@ splitWordsAtDisplayWidth maxWidth wwws = reverse $ loop wwws 0 [] where
           else loop (x:xs) 0 [] <> modifyOutForNewLine out
       else loop xs newWidth $ appendOut out x False
 
-data TextAlignment = TextAlignment_Left | TextAlignment_Right | TextAlignment_Center
+data TextAlignment = TextAlignment_Left
+    | TextAlignment_Right
+    | TextAlignment_Center
 
 -- A map from the index (row) of display line to
 -- fst: leading empty spaces from left (may be negative) to adjust for alignment
@@ -518,11 +496,12 @@ type OffsetMapWithAlignment = Map Int (Int, Int)
 
 -- | Information about the document as it is displayed (i.e., post-wrapping)
 data DisplayLinesWithAlignment tag = DisplayLinesWithAlignment
-  { _displayLinesWithAlignment_spans     :: [[Span tag]]
-  , _displayLinesWithAlignment_offsetMap :: OffsetMapWithAlignment
-  , _displayLinesWithAlignment_cursorPos   :: (Int, Int) -- cursor position relative to upper left hand corner
-  }
-  deriving (Show)
+    { _displayLinesWithAlignment_spans     :: [[Span tag]]
+    , _displayLinesWithAlignment_offsetMap :: OffsetMapWithAlignment
+    -- cursor position relative to upper left hand corner
+    , _displayLinesWithAlignment_cursorPos :: (Int, Int) -- cursor position relative to upper left hand corner
+    }
+    deriving (Show)
 
 -- | Wraps a logical line of text to fit within the given width. The first
 -- wrapped line is offset by the number of columns provided. Subsequent wrapped
@@ -537,12 +516,12 @@ wrapWithOffsetAndAlignment _ maxWidth _ _ | maxWidth <= 0 = []
 wrapWithOffsetAndAlignment alignment maxWidth n text = assert (n <= maxWidth) r where
   r' = splitWordsAtDisplayWidth maxWidth $ T.replicate n " " : wordsWithWhitespace text
   fmapfn (t,b) = case alignment of
-    TextAlignment_Left -> (t,b,0)
-    TextAlignment_Right -> (t,b,maxWidth-l)
+    TextAlignment_Left   -> (t,b,0)
+    TextAlignment_Right  -> (t,b,maxWidth-l)
     TextAlignment_Center -> (t,b,(maxWidth-l) `div` 2)
     where l = textWidth t
   r'' =  case r' of
-    [] -> []
+    []       -> []
     (x,b):xs -> (T.drop n x,b):xs
   r = fmap fmapfn r''
 
