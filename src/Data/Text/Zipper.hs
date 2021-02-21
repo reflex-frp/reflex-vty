@@ -513,8 +513,8 @@ wrapWithOffsetAndAlignment
   -> Text -- ^ Text to be wrapped
   -> [(Text,Bool,Int)] -- (words on that line, hidden space char, offset from beginning of line)
 wrapWithOffsetAndAlignment _ maxWidth _ _ | maxWidth <= 0 = []
-wrapWithOffsetAndAlignment alignment maxWidth n text = assert (n <= maxWidth) r where
-  r' = splitWordsAtDisplayWidth maxWidth $ T.replicate n " " : wordsWithWhitespace text
+wrapWithOffsetAndAlignment alignment maxWidth n txt = assert (n <= maxWidth) r where
+  r' = splitWordsAtDisplayWidth maxWidth $ T.replicate n " " : wordsWithWhitespace txt
   fmapfn (t,b) = case alignment of
     TextAlignment_Left   -> (t,b,0)
     TextAlignment_Right  -> (t,b,maxWidth-l)
@@ -527,7 +527,7 @@ wrapWithOffsetAndAlignment alignment maxWidth n text = assert (n <= maxWidth) r 
 
 -- converts deleted eol spaces into logical lines
 eolSpacesToLogicalLines :: [[(Text, Bool, Int)]] -> [[(Text, Int)]]
-eolSpacesToLogicalLines = fmap (fmap (\(a, b, c) -> (a,c))) . join . fmap (L.groupBy (\(_,b,_) _ -> not b))
+eolSpacesToLogicalLines = fmap (fmap (\(a, _, c) -> (a,c))) . join . fmap (L.groupBy (\(_,b,_) _ -> not b))
 
 offsetMapWithAlignmentInternal :: [[(Text, Bool, Int)]] -> OffsetMapWithAlignment
 offsetMapWithAlignmentInternal = offsetMapWithAlignment . eolSpacesToLogicalLines

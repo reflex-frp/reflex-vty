@@ -73,7 +73,7 @@ test-suite reflex-vty-test
   type: exitcode-stdio-1.0
   ghc-options: -threaded
   other-modules:
-    Data.Text.Zipper
+    Data.Text.ZipperSpec
   build-depends:
     base,
     reflex,
