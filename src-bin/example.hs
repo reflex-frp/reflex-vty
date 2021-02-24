@@ -31,6 +31,15 @@ data Example = Example_TextEditor
              | Example_ScrollableTextDisplay
   deriving (Show, Read, Eq, Ord, Enum, Bounded)
 
+
+darkTheme :: V.Attr
+darkTheme = V.Attr {
+  V.attrStyle = V.SetTo V.standout
+  , V.attrForeColor = V.SetTo V.black
+  , V.attrBackColor = V.Default
+  , V.attrURL = V.Default
+}
+
 main :: IO ()
 main = mainWidget $ do
   inp <- input
@@ -54,14 +63,14 @@ main = mainWidget $ do
           V.EvKey V.KEsc [] -> Just $ Right ()
           _ -> Nothing
   rec out <- networkHold buttons $ ffor (switch (current out)) $ \case
-        Left Example_TextEditor -> escapable testBoxes
+        Left Example_TextEditor -> escapable $ withTheme (constant darkTheme) testBoxes
         Left Example_Todo -> escapable taskList
         Left Example_ScrollableTextDisplay -> escapable scrolling
         Right () -> buttons
   return $ fforMaybe inp $ \case
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
- 
+
 taskList
   :: (Reflex t, MonadHold t m, MonadFix m, Adjustable t m, NotReady t m, PostBuild t m, MonadNodeId m)
   => VtyWidget t m ()

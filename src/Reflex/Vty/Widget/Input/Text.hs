@@ -56,6 +56,8 @@ textInput cfg = do
   f <- focus
   dh <- displayHeight
   dw <- displayWidth
+  defTheme <- defaultTheme
+  attr0 <- sample defTheme
   rec v <- foldDyn ($) (_textInputConfig_initialValue cfg) $ mergeWith (.)
         [ uncurry (updateTextZipper (_textInputConfig_tabWidth cfg)) <$> attach (current dh) i
         , _textInputConfig_modify cfg
@@ -64,12 +66,20 @@ textInput cfg = do
             goToDisplayLinePosition mx (st + my) dl
         ]
       click <- mouseDown V.BLeft
-      let cursorAttrs = ffor f $ \x -> if x then cursorAttributes else V.defAttr
-      let rows = (\w s c -> displayLines w V.defAttr c s)
-            <$> dw
-            <*> (mapZipper <$> _textInputConfig_display cfg <*> v)
-            <*> cursorAttrs
-          img = images . _displayLines_spans <$> rows
+
+      let
+        toCursorAttrs attr = V.withStyle attr V.reverseVideo
+        rowInputDyn = (,,)
+          <$> dw
+          <*> (mapZipper <$> _textInputConfig_display cfg <*> v)
+          <*> f
+        toDisplayLines attr (w, s, x)  =
+          let c = if x then toCursorAttrs attr else attr
+          in displayLines w attr c s
+      attrDyn <- holdDyn attr0 $ pushAlways (\_ -> sample defTheme) (updated rowInputDyn)
+      let
+        rows = ffor2 attrDyn rowInputDyn toDisplayLines
+        img = images . _displayLines_spans <$> rows
       y <- holdUniqDyn $ _displayLines_cursorY <$> rows
       let newScrollTop :: Int -> (Int, Int) -> Int
           newScrollTop st (h, cursorY)

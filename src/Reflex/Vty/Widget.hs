@@ -27,6 +27,8 @@ module Reflex.Vty.Widget
   , mainWidgetWithHandle
   , HasDisplaySize(..)
   , HasFocus(..)
+  , HasTheme(..)
+  , withTheme
   , HasVtyInput(..)
   , DynRegion(..)
   , currentRegion
@@ -104,6 +106,9 @@ data VtyWidgetCtx t = VtyWidgetCtx
     --  * Keyboard inputs are restricted to focused widgets
     --  * Mouse inputs are restricted to the region in which the widget resides and are
     --  translated into its internal coordinates.
+
+  , _vtyWidgetCtx_defaultAttr :: Behavior t V.Attr
+    -- ^ Default attribute to use in all VtyWidgets
   }
 
 -- | The output of a 'VtyWidget'
@@ -172,9 +177,10 @@ mainWidgetWithHandle vty child =
           , _vtyWidgetCtx_height = fmap snd size
           , _vtyWidgetCtx_input = inp'
           , _vtyWidgetCtx_focus = constDyn True
+          , _vtyWidgetCtx_defaultAttr = constant V.defAttr
           }
     (shutdown, images) <- runNodeIdT $ runVtyWidget ctx $ do
-      tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
+      tellImages . ffor2 (current size) (_vtyWidgetCtx_defaultAttr ctx) $ \(w, h) attr -> [V.charFill attr ' ' w h]
       child
     return $ VtyResult
       { _vtyResult_picture = fmap (V.picForLayers . reverse) images
@@ -233,6 +239,28 @@ class (Reflex t, Monad m) => ImageWriter t m | m -> t where
 instance (Monad m, Reflex t) => ImageWriter t (BehaviorWriterT t [Image] m) where
   tellImages = tellBehavior
 
+-- | A class for theming
+class HasTheme t m | m -> t where
+  defaultTheme :: m (Behavior t V.Attr)
+
+instance (Reflex t, Monad m) => HasTheme t (VtyWidget t m) where
+  defaultTheme = VtyWidget . lift $ asks _vtyWidgetCtx_defaultAttr
+
+-- | Widget that runs a child 'VtyWidget' within with a different default theme
+withTheme
+  :: (Reflex t, Monad m, MonadNodeId m)
+  => Behavior t V.Attr
+  -> VtyWidget t m a
+  -> VtyWidget t m a
+withTheme attrBeh child = VtyWidget $ do
+  ctx <- lift ask
+  let ctx' = ctx
+        { _vtyWidgetCtx_defaultAttr = attrBeh
+        }
+  (result, images) <- lift . lift $ runVtyWidget ctx' child
+  tellImages images
+  return result
+
 -- | A chunk of the display area
 data Region = Region
   { _region_left :: Int
@@ -255,9 +283,9 @@ regionSize :: Region -> (Int, Int)
 regionSize (Region _ _ w h) = (w, h)
 
 -- | Produces an 'Image' that fills a region with space characters
-regionBlankImage :: Region -> Image
-regionBlankImage r@(Region _ _ width height) =
-  withinImage r $ V.charFill V.defAttr ' ' width height
+regionBlankImage :: V.Attr -> Region -> Image
+regionBlankImage attr r@(Region _ _ width height) =
+  withinImage r $ V.charFill attr ' ' width height
 
 -- | A behavior of the current display area represented by a 'DynRegion'
 currentRegion :: Reflex t => DynRegion t -> Behavior t Region
@@ -299,6 +327,7 @@ pane dr foc child = VtyWidget $ do
         , _vtyWidgetCtx_focus = liftA2 (&&) (_vtyWidgetCtx_focus ctx) foc
         , _vtyWidgetCtx_width = _dynRegion_width dr
         , _vtyWidgetCtx_height = _dynRegion_height dr
+        , _vtyWidgetCtx_defaultAttr = _vtyWidgetCtx_defaultAttr ctx
         }
   (result, images) <- lift . lift $ runVtyWidget ctx' child
   let images' = liftA2 (\r is -> map (withinImage r) is) reg images
@@ -551,7 +580,8 @@ fill :: (Reflex t, Monad m) => Char -> VtyWidget t m ()
 fill c = do
   dw <- displayWidth
   dh <- displayHeight
-  let fillImg = current $ liftA2 (\w h -> [V.charFill V.defAttr c w h]) dw dh
+  defTheme <- defaultTheme
+  let fillImg = ffor3 (current dw) (current dh) defTheme (\w h attr -> [V.charFill attr c w h])
   tellImages fillImg
 
 -- | Fill the background with the bottom
@@ -604,36 +634,37 @@ boxTitle :: (Monad m, Reflex t, MonadNodeId m)
 boxTitle boxStyle title child = do
   dh <- displayHeight
   dw <- displayWidth
+  defTheme <- defaultTheme
   let boxReg = DynRegion (pure 0) (pure 0) dw dh
       innerReg = DynRegion (pure 1) (pure 1) (subtract 2 <$> dw) (subtract 2 <$> dh)
-  tellImages (boxImages <$> boxStyle <*> currentRegion boxReg)
-  tellImages (fmap (\r -> [regionBlankImage r]) (currentRegion innerReg))
+  tellImages (boxImages <$> defTheme <*> boxStyle <*> currentRegion boxReg)
+  tellImages (ffor2 (currentRegion innerReg) defTheme (\r attr -> [regionBlankImage attr r]))
   pane innerReg (pure True) child
   where
-    boxImages :: BoxStyle -> Region -> [Image]
-    boxImages style (Region left top width height) =
+    boxImages :: V.Attr -> BoxStyle -> Region -> [Image]
+    boxImages attr style (Region left top width height) =
       let right = left + width - 1
           bottom = top + height - 1
           sides =
             [ withinImage (Region (left + 1) top (width - 2) 1) $
-                V.text' V.defAttr $
+                  V.text' attr $
                   hPadText title (_boxStyle_n style) (width - 2)
             , withinImage (Region right (top + 1) 1 (height - 2)) $
-                V.charFill V.defAttr (_boxStyle_e style) 1 (height - 2)
+                V.charFill attr (_boxStyle_e style) 1 (height - 2)
             , withinImage (Region (left + 1) bottom (width - 2) 1) $
-                V.charFill V.defAttr (_boxStyle_s style) (width - 2) 1
+                V.charFill attr (_boxStyle_s style) (width - 2) 1
             , withinImage (Region left (top + 1) 1 (height - 2)) $
-                V.charFill V.defAttr (_boxStyle_w style) 1 (height - 2)
+                V.charFill attr (_boxStyle_w style) 1 (height - 2)
             ]
           corners =
             [ withinImage (Region left top 1 1) $
-                V.char V.defAttr (_boxStyle_nw style)
+                V.char attr (_boxStyle_nw style)
             , withinImage (Region right top 1 1) $
-                V.char V.defAttr (_boxStyle_ne style)
+                V.char attr (_boxStyle_ne style)
             , withinImage (Region right bottom 1 1) $
-                V.char V.defAttr (_boxStyle_se style)
+                V.char attr (_boxStyle_se style)
             , withinImage (Region left bottom 1 1) $
-                V.char V.defAttr (_boxStyle_sw style)
+                V.char attr (_boxStyle_sw style)
             ]
       in sides ++ if width > 1 && height > 1 then corners else []
     hPadText :: T.Text -> Char -> Int -> T.Text
@@ -664,6 +695,7 @@ boxStatic = box . pure
 
 -- | Configuration options for displaying "rich" text
 data RichTextConfig t = RichTextConfig
+  -- TODO change to (Maybe Behavior t V.Attr)
   { _richTextConfig_attributes :: Behavior t V.Attr
   }
 
@@ -693,7 +725,9 @@ text
   :: (Reflex t, Monad m)
   => Behavior t Text
   -> VtyWidget t m ()
-text = richText def
+text t = do
+  defTheme <- defaultTheme
+  richText (RichTextConfig defTheme) t
 
 -- | Scrollable text widget. The output pair exposes the current scroll position and total number of lines (including those
 -- that are hidden)
@@ -706,7 +740,8 @@ scrollableText
   -- ^ (Current scroll position, total number of lines)
 scrollableText scrollBy t = do
   dw <- displayWidth
-  let imgs = wrap <$> current dw <*> t
+  defTheme <- defaultTheme
+  let imgs = wrap <$> defTheme <*> current dw <*> t
   kup <- key V.KUp
   kdown <- key V.KDown
   m <- mouseScroll
@@ -725,7 +760,7 @@ scrollableText scrollBy t = do
   tellImages $ fmap ((:[]) . V.vertCat) $ drop <$> current lineIndex <*> imgs
   return $ (,) <$> ((+) <$> current lineIndex <*> pure 1) <*> (length <$> imgs)
   where
-    wrap maxWidth = concatMap (fmap (V.string V.defAttr . T.unpack) . TZ.wrapWithOffset maxWidth 0) . T.split (=='\n')
+    wrap attr maxWidth = concatMap (fmap (V.string attr . T.unpack) . TZ.wrapWithOffset maxWidth 0) . T.split (=='\n')
 
 -- | Renders any behavior whose value can be converted to
 -- 'String' as text

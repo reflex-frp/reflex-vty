@@ -264,7 +264,7 @@ displayLines width tag cursorTag (TextZipper lb b a la) =
         , _displayLines_cursorY = sum
           [ length spansBefore
           , length spansCurrentBefore
-          , if cursorAfterEOL then cursorCharWidth else 0
+          , if cursorAfterEOL then 1 else 0
           ]
         }
   where

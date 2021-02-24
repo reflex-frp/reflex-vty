@@ -70,8 +70,9 @@ link
   => Behavior t Text
   -> VtyWidget t m (Event t MouseUp)
 link t = do
+  defTheme <- defaultTheme
   let cfg = RichTextConfig
-        { _richTextConfig_attributes = pure $ V.withStyle V.defAttr V.underline
+        { _richTextConfig_attributes = fmap (\attr -> V.withStyle attr V.underline) defTheme
         }
   richText cfg t
   mouseUp
@@ -109,6 +110,7 @@ checkboxStyleTick = CheckboxStyle
 -- | Configuration options for a checkbox
 data CheckboxConfig t = CheckboxConfig
   { _checkboxConfig_checkboxStyle :: Behavior t CheckboxStyle
+  -- TODO change to (Maybe Behavior t V.Attr)
   , _checkboxConfig_attributes :: Behavior t V.Attr
   }
 
