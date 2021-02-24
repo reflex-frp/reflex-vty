@@ -35,14 +35,14 @@ spec = do
       fmap fst (splitSentenceAtDisplayWidth 5 "1234   56") `shouldBe` ["1234 "," 56"]
       fmap fst (splitSentenceAtDisplayWidth 8 "1 2 3 4 5 6 7 8 9 1") `shouldBe` ["1 2 3 4","5 6 7 8", "9 1"]
     it "wrapWithOffsetAndAlignment" $ do
-      wrapWithOffsetAndAlignment TextAlignment_Left 5 0 someSentence `shouldBe` [("12345", True, 0), ("1234", True, 0), ("12", False, 0)]
-      wrapWithOffsetAndAlignment TextAlignment_Right 5 0 someSentence `shouldBe` [("12345", True, 0), ("1234", True, 1), ("12", False, 3)]
-      wrapWithOffsetAndAlignment TextAlignment_Center 5 0 someSentence `shouldBe` [("12345", True, 0), ("1234", True, 0), ("12", False, 1)]
+      wrapWithOffsetAndAlignment TextAlignment_Left 5 0 someSentence `shouldBe` [(WrappedLine "12345" True 0), (WrappedLine "1234" True 0), (WrappedLine "12" False 0)]
+      wrapWithOffsetAndAlignment TextAlignment_Right 5 0 someSentence `shouldBe` [(WrappedLine "12345" True 0), (WrappedLine "1234" True 1), (WrappedLine "12" False 3)]
+      wrapWithOffsetAndAlignment TextAlignment_Center 5 0 someSentence `shouldBe` [(WrappedLine "12345" True 0), (WrappedLine "1234" True 0), (WrappedLine "12" False 1)]
     it "eolSpacesToLogicalLines" $ do
       eolSpacesToLogicalLines
         [
-          [ ("😱",True,1), ("😱",False,2), ("😱",False,3) ]
-          , [ ("aa",True,1), ("aa",True,2), ("aa",False,3) ]
+          [ (WrappedLine "😱" True 1), (WrappedLine "😱" False 2), (WrappedLine "😱" False 3) ]
+          , [ (WrappedLine "aa" True 1), (WrappedLine "aa" True 2), (WrappedLine "aa" False 3) ]
         ]
         `shouldBe`
         [
@@ -55,8 +55,8 @@ spec = do
     it "offsetMapWithAlignmentInternal" $ do
       offsetMapWithAlignmentInternal
         [
-          [ ("😱",True,1), ("😱",False,2), ("😱",False,3) ]
-          , [ ("aa",True,1), ("aa",True,2), ("aa",False,3) ]
+          [ (WrappedLine "😱" True 1), (WrappedLine "😱" False 2), (WrappedLine "😱" False 3) ]
+          , [ (WrappedLine "aa" True 1), (WrappedLine "aa" True 2), (WrappedLine "aa" False 3) ]
         ]
         `shouldBe`
         Map.fromList
