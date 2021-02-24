@@ -7,35 +7,33 @@ Description: A zipper for text documents that allows convenient editing and navi
 'TextZipper's can be converted into 'DisplayLines', which describe how the contents of the zipper will be displayed when wrapped to fit within a container of a certain width. It also provides some convenience facilities for converting interactions with the rendered DisplayLines back into manipulations of the underlying TextZipper.
 
 -}
-{-# LANGUAGE BangPatterns      #-}
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Data.Text.Zipper where
 
 import           Prelude
 
-import           Control.Exception               (assert)
-import           Control.Monad                   (join)
-import           Control.Monad.State             (evalState, forM, get, put)
-import           Data.Char                       (isSpace)
-import           Data.Map                        (Map)
-import qualified Data.Map                        as Map
-import           Data.Maybe                      (fromMaybe)
-import           Data.String
+import Control.Exception (assert)
+import Control.Monad.State (evalState, forM, get, put, join)
+import Data.Char (isSpace)
+import Data.Map (Map)
+import Data.Maybe (fromMaybe)
+import Data.String
+import Data.Text (Text)
+import Data.Text.Internal (Text(..), text)
+import Data.Text.Internal.Fusion (stream)
+import Data.Text.Internal.Fusion.Types (Stream(..), Step(..))
+import Data.Text.Unsafe
+import Data.Tuple.Extra
+import qualified Data.List as L
+import qualified Data.Map as Map
+import qualified Data.Text as T
 
-import qualified Data.List                       as L
-import           Data.Text                       (Text)
-import qualified Data.Text                       as T
-import           Data.Text.Internal              (Text (..), text)
-import           Data.Text.Internal.Fusion       (stream)
-import           Data.Text.Internal.Fusion.Types (Step (..), Stream (..))
-import           Data.Text.Unsafe
-import           Data.Tuple.Extra
+import Graphics.Text.Width (wcwidth)
 
-
-import           Graphics.Text.Width             (wcwidth)
 
 -- | A zipper of the logical text input contents (the "document"). The lines
 -- before the line containing the cursor are stored in reverse order.
@@ -44,13 +42,12 @@ import           Graphics.Text.Width             (wcwidth)
 -- character (as compared to a "display" line, which is wrapped to fit within
 -- a given viewport width).
 data TextZipper = TextZipper
-    { _textZipper_linesBefore :: [Text] -- reversed
-    , _textZipper_before      :: Text
-    -- The cursor is on top of the first character of this text
-    , _textZipper_after       :: Text -- The cursor is on top of the first character of this text
-    , _textZipper_linesAfter  :: [Text]
-    }
-    deriving (Show)
+  { _textZipper_linesBefore :: [Text] -- reversed
+  , _textZipper_before :: Text
+  , _textZipper_after :: Text -- The cursor is on top of the first character of this text
+  , _textZipper_linesAfter :: [Text]
+  }
+  deriving (Show)
 
 instance IsString TextZipper where
   fromString = fromText . T.pack
@@ -133,7 +130,7 @@ end (TextZipper lb b a la) = TextZipper lb (b <> a) "" la
 -- | Move the cursor to the top of the document
 top :: TextZipper -> TextZipper
 top (TextZipper lb b a la) = case reverse lb of
-  []           -> TextZipper [] "" (b <> a) la
+  [] -> TextZipper [] "" (b <> a) la
   (start:rest) -> TextZipper [] "" start (rest <> [b <> a] <> la)
 
 -- | Insert a character at the current cursor position
@@ -145,14 +142,14 @@ insert :: Text -> TextZipper -> TextZipper
 insert i z@(TextZipper lb b a la) = case T.split (=='\n') i of
   [] -> z
   (start:rest) -> case reverse rest of
-    []     -> TextZipper lb (b <> start) a la
+    [] -> TextZipper lb (b <> start) a la
     (l:ls) -> TextZipper (ls <> [b <> start] <> lb) l a la
 
 -- | Delete the character to the left of the cursor
 deleteLeft :: TextZipper-> TextZipper
 deleteLeft z@(TextZipper lb b a la) = case T.unsnoc b of
   Nothing -> case lb of
-    []     -> z
+    [] -> z
     (l:ls) -> TextZipper ls l a la
   Just (b', _) -> TextZipper lb b' a la
 
@@ -172,7 +169,7 @@ deleteLeftWord (TextZipper lb b a la) =
   let b' = T.dropWhileEnd isSpace b
   in  if T.null b'
         then case lb of
-          []     -> TextZipper [] b' a la
+          [] -> TextZipper [] b' a la
           (l:ls) -> deleteLeftWord $ TextZipper ls l a la
         else TextZipper lb (T.dropWhileEnd (not . isSpace) b') a la
 
@@ -204,11 +201,11 @@ data Span tag = Span tag Text
 
 -- | Information about the document as it is displayed (i.e., post-wrapping)
 data DisplayLines tag = DisplayLines
-    { _displayLines_spans     :: [[Span tag]]
-    , _displayLines_offsetMap :: Map Int Int
-    , _displayLines_cursorY   :: Int
-    }
-    deriving (Show)
+  { _displayLines_spans :: [[Span tag]]
+  , _displayLines_offsetMap :: Map Int Int
+  , _displayLines_cursorY :: Int
+  }
+  deriving (Show)
 
 -- | Given a width and a 'TextZipper', produce a list of display lines
 -- (i.e., lines of wrapped text) with special attributes applied to
@@ -245,7 +242,7 @@ displayLines width tag cursorTag (TextZipper lb b a la) =
       -- the cursor has to go to the next line
       cursorAfterEOL = curLineOffset == width
       cursorCharWidth = case T.uncons a of
-        Nothing     -> 1
+        Nothing -> 1
         Just (c, _) -> charWidth c
       -- Separate the span after the cursor into
       -- * spans that are on the same display line, and
@@ -257,7 +254,7 @@ displayLines width tag cursorTag (TextZipper lb b a la) =
             let o = if cursorAfterEOL then cursorCharWidth else curLineOffset + cursorCharWidth
                 cursor = Span cursorTag (T.singleton c)
             in case map ((:[]) . Span tag) (wrapWithOffset width o rest) of
-                  []     -> [[cursor]]
+                  [] -> [[cursor]]
                   (l:ls) -> (cursor : l) : ls
   in  DisplayLines
         { _displayLines_spans = concat
@@ -281,7 +278,7 @@ displayLines width tag cursorTag (TextZipper lb b a la) =
     initLast = \case
       [] -> Nothing
       (x:xs) -> case initLast xs of
-        Nothing      -> Just ([], x)
+        Nothing -> Just ([], x)
         Just (ys, y) -> Just (x:ys, y)
     headTail :: [a] -> Maybe (a, [a])
     headTail = \case
@@ -393,7 +390,7 @@ goToDisplayLinePosition x y dl tz =
         Just o ->
           let
             moveRight = case drop y $ _displayLines_spans dl of
-                []    -> x
+                [] -> x
                 (s:_) -> charIndexAt x . stream . mconcat . fmap (\(Span _ t) -> t) $ s
           in  rightN (o + min moveRight x) $ top tz
 
