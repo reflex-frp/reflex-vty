@@ -156,7 +156,7 @@ deleteLeft z@(TextZipper lb b a la) = case T.unsnoc b of
 deleteRight :: TextZipper -> TextZipper
 deleteRight z@(TextZipper lb b a la) = case T.uncons a of
   Nothing -> case la of
-    []     -> z
+    [] -> z
     (l:ls) -> TextZipper lb b l ls
   Just (_, a') -> TextZipper lb b a' la
 
@@ -196,7 +196,7 @@ fromText = flip insert empty
 -- | A span of text tagged with some metadata that makes up part of a display
 -- line.
 data Span tag = Span tag Text
-    deriving (Show)
+  deriving (Show)
 
 -- | Information about the document as it is displayed (i.e., post-wrapping)
 data DisplayLines tag = DisplayLines
