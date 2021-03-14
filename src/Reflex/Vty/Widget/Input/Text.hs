@@ -103,18 +103,19 @@ multilineTextInput cfg = do
 -- | Wraps a 'textInput' or 'multilineTextInput' in a tile. Uses
 -- the computed line count to greedily size the tile when vertically
 -- oriented, and uses the fallback width when horizontally oriented.
-textInputTile
-  :: (Reflex t, MonadHold t m, MonadFix m, MonadNodeId m)
-  => VtyWidget t m (TextInput t)
-  -> Dynamic t Int
-  -> Layout t m (TextInput t)
-textInputTile txt width = do
-  o <- askOrientation
-  rec t <- fixed sz txt
-      let sz = join $ ffor o $ \case
-            Orientation_Column -> _textInput_lines t
-            Orientation_Row -> width
-  return t
+-- TODO
+-- textInputTile
+--   :: (Reflex t, MonadHold t m, MonadFix m, MonadNodeId m)
+--   => VtyWidget t m (TextInput t)
+--   -> Dynamic t Int
+--   -> Layout t m (TextInput t)
+-- textInputTile txt width = do
+--   o <- askOrientation
+--   rec t <- fixed sz txt
+--       let sz = join $ ffor o $ \case
+--             Orientation_Column -> _textInput_lines t
+--             Orientation_Row -> width
+--   return t
 
 -- | Default attributes for the text cursor
 cursorAttributes :: V.Attr

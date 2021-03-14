@@ -29,6 +29,10 @@ module Reflex.Vty.Widget
   , HasFocus(..)
   , HasVtyInput(..)
   , DynRegion(..)
+  -- TODO get rid of DynRegion?
+  , joinDynRegion
+  , dynRegion
+  , dynamicRegion
   , currentRegion
   , Region(..)
   , regionSize
@@ -70,6 +74,7 @@ module Reflex.Vty.Widget
   ) where
 
 import Control.Applicative (liftA2)
+import Control.Monad (join)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader (ReaderT, ask, asks, runReaderT)
@@ -262,6 +267,28 @@ regionBlankImage r@(Region _ _ width height) =
 -- | A behavior of the current display area represented by a 'DynRegion'
 currentRegion :: Reflex t => DynRegion t -> Behavior t Region
 currentRegion (DynRegion l t w h) = Region <$> current l <*> current t <*> current w <*> current h
+
+joinDynRegion :: Reflex t => Dynamic t (DynRegion t) -> DynRegion t
+joinDynRegion d = DynRegion
+  (_dynRegion_left =<< d)
+  (_dynRegion_top =<< d)
+  (_dynRegion_width =<< d)
+  (_dynRegion_height =<< d)
+
+dynRegion :: Reflex t => Dynamic t Region -> DynRegion t
+dynRegion r = DynRegion
+  { _dynRegion_left = _region_left <$> r
+  , _dynRegion_top = _region_top <$> r
+  , _dynRegion_width = _region_width <$> r
+  , _dynRegion_height = _region_height <$> r
+  }
+
+dynamicRegion :: Reflex t => DynRegion t -> Dynamic t Region
+dynamicRegion d = Region
+  <$> _dynRegion_left d
+  <*> _dynRegion_top d
+  <*> _dynRegion_width d
+  <*> _dynRegion_height d
 
 -- | Translates and crops an 'Image' so that it is contained by
 -- the given 'Region'.
