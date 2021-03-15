@@ -28,12 +28,6 @@ module Reflex.Vty.Widget
   , HasDisplaySize(..)
   , HasFocus(..)
   , HasVtyInput(..)
-  , DynRegion(..)
-  -- TODO get rid of DynRegion?
-  , joinDynRegion
-  , dynRegion
-  , dynamicRegion
-  , currentRegion
   , Region(..)
   , regionSize
   , regionBlankImage
@@ -247,14 +241,6 @@ data Region = Region
   }
   deriving (Show, Read, Eq, Ord)
 
--- | A dynamic chunk of the display area
-data DynRegion t = DynRegion
-  { _dynRegion_left :: Dynamic t Int
-  , _dynRegion_top :: Dynamic t Int
-  , _dynRegion_width :: Dynamic t Int
-  , _dynRegion_height :: Dynamic t Int
-  }
-
 -- | The width and height of a 'Region'
 regionSize :: Region -> (Int, Int)
 regionSize (Region _ _ w h) = (w, h)
@@ -263,32 +249,6 @@ regionSize (Region _ _ w h) = (w, h)
 regionBlankImage :: Region -> Image
 regionBlankImage r@(Region _ _ width height) =
   withinImage r $ V.charFill V.defAttr ' ' width height
-
--- | A behavior of the current display area represented by a 'DynRegion'
-currentRegion :: Reflex t => DynRegion t -> Behavior t Region
-currentRegion (DynRegion l t w h) = Region <$> current l <*> current t <*> current w <*> current h
-
-joinDynRegion :: Reflex t => Dynamic t (DynRegion t) -> DynRegion t
-joinDynRegion d = DynRegion
-  (_dynRegion_left =<< d)
-  (_dynRegion_top =<< d)
-  (_dynRegion_width =<< d)
-  (_dynRegion_height =<< d)
-
-dynRegion :: Reflex t => Dynamic t Region -> DynRegion t
-dynRegion r = DynRegion
-  { _dynRegion_left = _region_left <$> r
-  , _dynRegion_top = _region_top <$> r
-  , _dynRegion_width = _region_width <$> r
-  , _dynRegion_height = _region_height <$> r
-  }
-
-dynamicRegion :: Reflex t => DynRegion t -> Dynamic t Region
-dynamicRegion d = Region
-  <$> _dynRegion_left d
-  <*> _dynRegion_top d
-  <*> _dynRegion_width d
-  <*> _dynRegion_height d
 
 -- | Translates and crops an 'Image' so that it is contained by
 -- the given 'Region'.
@@ -309,13 +269,13 @@ withinImage (Region left top width height)
 --   that (0,0) is the top-left corner of the region
 pane
   :: (Reflex t, Monad m, MonadNodeId m)
-  => DynRegion t
+  => Dynamic t Region
   -> Dynamic t Bool -- ^ Whether the widget should be focused when the parent is.
   -> VtyWidget t m a
   -> VtyWidget t m a
 pane dr foc child = VtyWidget $ do
   ctx <- lift ask
-  let reg = currentRegion dr
+  let reg = current dr
   let ctx' = VtyWidgetCtx
         { _vtyWidgetCtx_input = leftmost -- TODO: think about this leftmost more.
             [ fmapMaybe id $
@@ -324,8 +284,8 @@ pane dr foc child = VtyWidget $ do
                   (_vtyWidgetCtx_input ctx)
             ]
         , _vtyWidgetCtx_focus = liftA2 (&&) (_vtyWidgetCtx_focus ctx) foc
-        , _vtyWidgetCtx_width = _dynRegion_width dr
-        , _vtyWidgetCtx_height = _dynRegion_height dr
+        , _vtyWidgetCtx_width = _region_width <$> dr
+        , _vtyWidgetCtx_height = _region_height <$> dr
         }
   (result, images) <- lift . lift $ runVtyWidget ctx' child
   let images' = liftA2 (\r is -> map (withinImage r) is) reg images
@@ -488,18 +448,8 @@ splitV :: (Reflex t, Monad m, MonadNodeId m)
 splitV sizeFunD focD wA wB = do
   dw <- displayWidth
   dh <- displayHeight
-  let regA = DynRegion
-        { _dynRegion_left = pure 0
-        , _dynRegion_top = pure 0
-        , _dynRegion_width = dw
-        , _dynRegion_height = sizeFunD <*> dh
-        }
-      regB = DynRegion
-        { _dynRegion_left = pure 0
-        , _dynRegion_top = _dynRegion_height regA
-        , _dynRegion_width = dw
-        , _dynRegion_height = liftA2 (-) dh (_dynRegion_height regA)
-        }
+  let regA = Region 0 0 <$> dw <*> (sizeFunD <*> dh)
+      regB = Region 0 <$> (_region_height <$> regA) <*> dw <*> liftA2 (-) dh (_region_height <$> regA)
   ra <- pane regA (fst <$> focD) wA
   rb <- pane regB (snd <$> focD) wB
   return (ra,rb)
@@ -519,18 +469,8 @@ splitH :: (Reflex t, Monad m, MonadNodeId m)
 splitH sizeFunD focD wA wB = do
   dw <- displayWidth
   dh <- displayHeight
-  let regA = DynRegion
-        { _dynRegion_left   = pure 0
-        , _dynRegion_top    = pure 0
-        , _dynRegion_width  = sizeFunD <*> dw
-        , _dynRegion_height = dh
-        }
-      regB = DynRegion
-        { _dynRegion_left   = _dynRegion_width regA
-        , _dynRegion_top    = pure 0
-        , _dynRegion_width  = liftA2 (-) dw (_dynRegion_width regA)
-        , _dynRegion_height = dh
-        }
+  let regA = Region 0 0 <$> (sizeFunD <*> dw) <*> dh
+      regB = Region <$> (_region_width <$> regA) <*> 0 <*> liftA2 (-) dw (_region_width <$> regA) <*> dh
   liftA2 (,) (pane regA (fmap fst focD) wA) (pane regB (fmap snd focD) wB)
 
 -- | A split of the available space into two parts with a draggable separator.
@@ -554,9 +494,9 @@ splitVDrag wS wA wB = do
       let dragSplitter = fforMaybe (attach (current splitterCheckpoint) dragE) $
             \(splitterY, Drag (_, fromY) (_, toY) _ _ end) ->
               if splitterY == fromY then Just (toY, end) else Nothing
-          regA = DynRegion 0 0 dw splitterPos
-          regS = DynRegion 0 splitterPos dw 1
-          regB = DynRegion 0 (splitterPos + 1) dw (dh - splitterPos - 1)
+          regA = Region 0 0 <$> dw <*> splitterPos
+          regS = Region 0 <$> splitterPos <*> dw <*> 1
+          regB = Region 0 <$> (splitterPos + 1) <*> dw <*> (dh - splitterPos - 1)
           resizeSplitter = ffor (attach (current splitterFrac) (updated dh)) $
             \(frac, h) -> round (frac * fromIntegral h)
       focA <- holdDyn True $ leftmost
@@ -631,10 +571,10 @@ boxTitle :: (Monad m, Reflex t, MonadNodeId m)
 boxTitle boxStyle title child = do
   dh <- displayHeight
   dw <- displayWidth
-  let boxReg = DynRegion (pure 0) (pure 0) dw dh
-      innerReg = DynRegion (pure 1) (pure 1) (subtract 2 <$> dw) (subtract 2 <$> dh)
-  tellImages (boxImages <$> boxStyle <*> currentRegion boxReg)
-  tellImages (fmap (\r -> [regionBlankImage r]) (currentRegion innerReg))
+  let boxReg = Region 0 0 <$> dw <*> dh
+      innerReg = Region 1 1 <$> (subtract 2 <$> dw) <*> (subtract 2 <$> dh)
+  tellImages (boxImages <$> boxStyle <*> current boxReg)
+  tellImages (fmap (\r -> [regionBlankImage r]) (current innerReg))
   pane innerReg (pure True) child
   where
     boxImages :: BoxStyle -> Region -> [Image]
