@@ -43,6 +43,8 @@ import qualified Graphics.Vty as V
 import Data.Map.Ordered (OMap)
 import qualified Data.Map.Ordered as OMap
 import qualified Graphics.Vty.Attributes as V
+import Data.Set.Ordered (OSet)
+import qualified Data.Set.Ordered as OSet
 
 import Reflex
 import Reflex.Host.Class (MonadReflexCreateTrigger)
@@ -50,8 +52,25 @@ import Reflex.Vty.Widget
 
 -- * Focus
 
+newtype FocusSet = FocusSet { unFocusSet :: OSet FocusId }
+
+instance Semigroup FocusSet where
+  FocusSet a <> FocusSet b = FocusSet $ a OSet.|<> b
+
+instance Monoid FocusSet where
+  mempty = FocusSet OSet.empty
+
+singletonFS :: FocusId -> FocusSet
+singletonFS = FocusSet . OSet.singleton
+
+shiftFS :: FocusSet -> Maybe FocusId -> Int -> Maybe FocusId
+shiftFS (FocusSet s) fid n = case OSet.findIndex <$> fid <*> pure s of
+  Nothing -> OSet.elemAt s 0
+  Just Nothing -> OSet.elemAt s 0
+  Just (Just ix) -> OSet.elemAt s $ mod (ix + n) (OSet.size s)
+
 newtype Focus t m a = Focus
-  { unFocus :: DynamicWriterT t (Seq FocusId) (ReaderT (Demux t (Maybe FocusId)) m) a
+  { unFocus :: DynamicWriterT t FocusSet (ReaderT (Demux t (Maybe FocusId)) m) a
   }
   deriving
     ( Functor
@@ -78,14 +97,14 @@ newtype FocusId = FocusId NodeId
 focusId :: (MonadNodeId m, Reflex t) => Focus t m FocusId
 focusId = do
   fid <- FocusId <$> lift getNextNodeId
-  Focus $ tellDyn $ pure $ Seq.singleton fid
+  Focus $ tellDyn $ pure $ singletonFS fid
   pure fid
 
 runFocus
   :: (MonadFix m, MonadHold t m, Reflex t)
   => Event t (Maybe FocusId)
   -> Focus t m a
-  -> m (a, Dynamic t (Seq FocusId))
+  -> m (a, Dynamic t FocusSet)
 runFocus e (Focus x) = do
   rec (a, focusIds) <- flip runReaderT (demux sel) $ runDynamicWriterT x
       sel <- holdDyn Nothing e
@@ -326,7 +345,7 @@ test = mainWidget $ do
         f <- focus
         richText (RichTextConfig $ current $ (\x -> if x then V.withStyle V.defAttr V.bold else V.defAttr) <$> f) t
   tab <- tabNavigation
-  rec (_, focusSeq) <- runFocus (updated sel) $ runLayout (pure Orientation_Column) r $ do -- TODO start focused
+  rec (_, focusSet) <- runFocus (updated sel) $ runLayout (pure Orientation_Column) r $ do -- TODO start focused
         col (Constraint_Min 0) $ do
           tile $ text' "asdf"
           tile $ text' "asdf"
@@ -337,8 +356,7 @@ test = mainWidget $ do
             tile $ text' "xyz"
           tile $ text' "asdf"
           tile $ text' "asdf"
-      ix <- foldDyn (+) 0 tab
-      let sel = Seq.lookup <$> (mod <$> ix <*> (Seq.length <$> focusSeq)) <*> focusSeq -- TODO this sucks: when elements are added your focus will shift (OSet)
+      sel <- holdDyn Nothing $ attachWith (\(fs, s) t -> shiftFS fs s t) (current $ (,) <$> focusSet <*> sel) tab
   return $ fforMaybe inp $ \case
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
