@@ -2,11 +2,6 @@
 Module: Reflex.Vty.Widget.Input.Text
 Description: Widgets for accepting text input from users and manipulating text within those inputs
 -}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecursiveDo #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 module Reflex.Vty.Widget.Input.Text
   ( module Reflex.Vty.Widget.Input.Text
   , def

@@ -2,12 +2,7 @@
 Module: Control.Monad.NodeId
 Description: Monad providing a supply of unique identifiers
 -}
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# Language UndecidableInstances #-}
 module Control.Monad.NodeId
   ( NodeId
   , MonadNodeId (..)

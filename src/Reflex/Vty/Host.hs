@@ -2,12 +2,6 @@
 Module: Reflex.Vty.Host
 Description: Scaffolding for running a reflex-vty application
 -}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE RankNTypes #-}
-
 module Reflex.Vty.Host
   ( VtyApp
   , VtyResult(..)

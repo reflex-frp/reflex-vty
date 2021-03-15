@@ -51,6 +51,36 @@ library
   hs-source-dirs: src
   default-language: Haskell2010
   ghc-options: -Wall
+  default-extensions:
+    BangPatterns
+    ConstraintKinds
+    CPP
+    DataKinds
+    DefaultSignatures
+    DeriveFunctor
+    DeriveGeneric
+    FlexibleContexts
+    FlexibleInstances
+    FunctionalDependencies
+    GADTs
+    GeneralizedNewtypeDeriving
+    KindSignatures
+    LambdaCase
+    MultiParamTypeClasses
+    MultiWayIf
+    OverloadedStrings
+    PatternGuards
+    PolyKinds
+    QuasiQuotes
+    RankNTypes
+    RecursiveDo
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TupleSections
+    TypeApplications
+    TypeFamilies
+
 
 executable example
   hs-source-dirs: src-bin

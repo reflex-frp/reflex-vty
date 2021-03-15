@@ -2,14 +2,7 @@
 Module: Reflex.Vty.Widget.Layout
 Description: Monad transformer and tools for arranging widgets and building screen layouts
 -}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE RecursiveDo #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# Language UndecidableInstances #-}
 
 module Reflex.Vty.Widget.Layout where
 
