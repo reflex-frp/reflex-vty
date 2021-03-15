@@ -48,9 +48,9 @@ data TextInput t = TextInput
 
 -- | A widget that allows text input
 textInput
-  :: (Reflex t, MonadHold t m, MonadFix m)
+  :: (Reflex t, MonadHold t m, MonadFix m, HasVtyInput t m, HasFocus t m, HasDisplaySize t m, ImageWriter t m)
   => TextInputConfig t
-  -> VtyWidget t m (TextInput t)
+  -> m (TextInput t)
 textInput cfg = do
   i <- input
   f <- focus
@@ -103,19 +103,18 @@ multilineTextInput cfg = do
 -- | Wraps a 'textInput' or 'multilineTextInput' in a tile. Uses
 -- the computed line count to greedily size the tile when vertically
 -- oriented, and uses the fallback width when horizontally oriented.
--- TODO
--- textInputTile
---   :: (Reflex t, MonadHold t m, MonadFix m, MonadNodeId m)
---   => VtyWidget t m (TextInput t)
---   -> Dynamic t Int
---   -> Layout t m (TextInput t)
--- textInputTile txt width = do
---   o <- askOrientation
---   rec t <- fixed sz txt
---       let sz = join $ ffor o $ \case
---             Orientation_Column -> _textInput_lines t
---             Orientation_Row -> width
---   return t
+textInputTile
+  :: (Monad m, MonadNodeId m, Reflex t, MonadFix m)
+  => VtyWidget t m (TextInput t)
+  -> Dynamic t Int
+  -> Layout t (Focus t (VtyWidget t m)) (TextInput t)
+textInputTile txt width = do
+  o <- askOrientation
+  rec (_, t) <- tileC (Constraint_Fixed <$> sz) txt
+      let sz = join $ ffor o $ \case
+            Orientation_Column -> _textInput_lines t
+            Orientation_Row -> width
+  return t
 
 -- | Default attributes for the text cursor
 cursorAttributes :: V.Attr

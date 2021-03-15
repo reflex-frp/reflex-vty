@@ -68,7 +68,6 @@ module Reflex.Vty.Widget
   ) where
 
 import Control.Applicative (liftA2)
-import Control.Monad (join)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader (ReaderT, ask, asks, runReaderT)
@@ -213,6 +212,8 @@ instance HasDisplaySize t m => HasDisplaySize t (NodeIdT m)
 -- | A class for things that can receive vty events as input
 class HasVtyInput t m | m -> t where
   input :: m (Event t VtyEvent)
+  default input :: (f m' ~ m, Monad m', MonadTrans f, HasVtyInput t m') => m (Event t VtyEvent)
+  input = lift input
 
 instance (Reflex t, Monad m) => HasVtyInput t (VtyWidget t m) where
   input = VtyWidget . lift $ asks _vtyWidgetCtx_input
@@ -267,6 +268,7 @@ withinImage (Region left top width height)
 -- * mouse inputs outside the region are ignored
 -- * mouse inputs inside the region have their coordinates translated such
 --   that (0,0) is the top-left corner of the region
+-- TODO make this polymorphic
 pane
   :: (Reflex t, Monad m, MonadNodeId m)
   => Dynamic t Region
@@ -287,7 +289,7 @@ pane dr foc child = VtyWidget $ do
         , _vtyWidgetCtx_width = _region_width <$> dr
         , _vtyWidgetCtx_height = _region_height <$> dr
         }
-  (result, images) <- lift . lift $ runVtyWidget ctx' child
+  (result, images) <- lift . lift $ runVtyWidget ctx' child -- TODO can we use a local-based implementation?
   let images' = liftA2 (\r is -> map (withinImage r) is) reg images
   tellImages images'
   return result
@@ -319,9 +321,9 @@ data Drag = Drag
 
 -- | Converts raw vty mouse drag events into an event stream of 'Drag's
 drag
-  :: (Reflex t, MonadFix m, MonadHold t m)
+  :: (Reflex t, MonadFix m, MonadHold t m, HasVtyInput t m)
   => V.Button
-  -> VtyWidget t m (Event t Drag)
+  -> m (Event t Drag)
 drag btn = do
   inp <- input
   let f :: Maybe Drag -> V.Event -> Maybe Drag
@@ -350,9 +352,9 @@ drag btn = do
 
 -- | Mouse down events for a particular mouse button
 mouseDown
-  :: (Reflex t, Monad m)
+  :: (Reflex t, Monad m, HasVtyInput t m)
   => V.Button
-  -> VtyWidget t m (Event t MouseDown)
+  -> m (Event t MouseDown)
 mouseDown btn = do
   i <- input
   return $ fforMaybe i $ \case
@@ -363,8 +365,8 @@ mouseDown btn = do
 
 -- | Mouse up events for a particular mouse button
 mouseUp
-  :: (Reflex t, Monad m)
-  => VtyWidget t m (Event t MouseUp)
+  :: (Reflex t, Monad m, HasVtyInput t m)
+  => m (Event t MouseUp)
 mouseUp = do
   i <- input
   return $ fforMaybe i $ \case
@@ -392,8 +394,8 @@ data ScrollDirection = ScrollDirection_Up | ScrollDirection_Down
 
 -- | Produce an event that fires when the mouse wheel is scrolled
 mouseScroll
-  :: (Reflex t, Monad m)
-  => VtyWidget t m (Event t ScrollDirection)
+  :: (Reflex t, Monad m, HasVtyInput t m)
+  => m (Event t ScrollDirection)
 mouseScroll = do
   up <- mouseDown V.BScrollUp
   down <- mouseDown V.BScrollDown
@@ -406,25 +408,25 @@ mouseScroll = do
 type KeyCombo = (V.Key, [V.Modifier])
 
 -- | Emits an event that fires on a particular key press (without modifiers)
-key :: (Monad m, Reflex t) => V.Key -> VtyWidget t m (Event t KeyCombo)
+key :: (Monad m, Reflex t, HasVtyInput t m) => V.Key -> m (Event t KeyCombo)
 key = keyCombos . Set.singleton . (,[])
 
 -- | Emits an event that fires on particular key presses (without modifiers)
-keys :: (Monad m, Reflex t) => [V.Key] -> VtyWidget t m (Event t KeyCombo)
+keys :: (Monad m, Reflex t, HasVtyInput t m) => [V.Key] -> m (Event t KeyCombo)
 keys = keyCombos . Set.fromList . fmap (,[])
 
 -- | Emit an event that fires whenever the provided key combination occurs
 keyCombo
-  :: (Reflex t, Monad m)
+  :: (Reflex t, Monad m, HasVtyInput t m)
   => KeyCombo
-  -> VtyWidget t m (Event t KeyCombo)
+  -> m (Event t KeyCombo)
 keyCombo = keyCombos . Set.singleton
 
 -- | Emit an event that fires whenever any of the provided key combinations occur
 keyCombos
-  :: (Reflex t, Monad m)
+  :: (Reflex t, Monad m, HasVtyInput t m)
   => Set KeyCombo
-  -> VtyWidget t m (Event t KeyCombo)
+  -> m (Event t KeyCombo)
 keyCombos ks = do
   i <- input
   return $ fforMaybe i $ \case
