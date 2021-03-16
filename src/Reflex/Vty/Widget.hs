@@ -15,6 +15,7 @@ module Reflex.Vty.Widget
   , HasDisplaySize(..)
   , HasFocus(..)
   , HasVtyInput(..)
+  , HasVtyWidgetCtx(..)
   , Region(..)
   , regionSize
   , regionBlankImage
@@ -57,7 +58,8 @@ module Reflex.Vty.Widget
 import Control.Applicative (liftA2)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Reader (ReaderT, ask, asks, runReaderT)
+import Control.Monad.NodeId
+import Control.Monad.Reader (ReaderT, ask, asks, local, runReaderT)
 import Control.Monad.Trans (MonadTrans, lift)
 import Data.Default (Default(..))
 import Data.Set (Set)
@@ -70,10 +72,7 @@ import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Class ()
 import Reflex.Host.Class (MonadReflexCreateTrigger)
-
 import Reflex.Vty.Host
-
-import Control.Monad.NodeId
 
 -- | The context within which a 'VtyWidget' runs
 data VtyWidgetCtx t = VtyWidgetCtx
@@ -130,6 +129,19 @@ instance MonadTrans (VtyWidget t) where
 instance MonadNodeId m => MonadNodeId (VtyWidget t m) where
   getNextNodeId = VtyWidget $ do
     lift $ lift getNextNodeId
+
+class HasVtyWidgetCtx t m | m -> t where
+  askCtx :: m (VtyWidgetCtx t)
+  default askCtx :: (f m' ~ m, Monad m', MonadTrans f, HasVtyWidgetCtx t m') => m (VtyWidgetCtx t)
+  askCtx = lift askCtx
+  localCtx :: (VtyWidgetCtx t -> VtyWidgetCtx t) -> (Behavior t [Image] -> Behavior t [Image]) -> m a -> m a
+
+instance (Monad m, Reflex t) => HasVtyWidgetCtx t (VtyWidget t m) where
+  askCtx = VtyWidget $ lift ask
+  localCtx f g (VtyWidget x) = VtyWidget $ do
+    (a, images) :: (a, Behavior t [Image]) <- lift $ local f $ runBehaviorWriterT x
+    tellImages $ g images
+    pure a
 
 -- | Runs a 'VtyWidget' with a given context
 runVtyWidget
@@ -208,6 +220,8 @@ instance (Reflex t, Monad m) => HasVtyInput t (VtyWidget t m) where
 -- | A class for things that can dynamically gain and lose focus
 class HasFocus t m | m -> t where
   focus :: m (Dynamic t Bool)
+  default focus :: (f m' ~ m, Monad m', MonadTrans f, HasFocus t m') => m (Dynamic t Bool)
+  focus = lift focus
 
 instance (Reflex t, Monad m) => HasFocus t (VtyWidget t m) where
   focus = VtyWidget . lift $ asks _vtyWidgetCtx_focus
@@ -216,6 +230,8 @@ instance (Reflex t, Monad m) => HasFocus t (VtyWidget t m) where
 class (Reflex t, Monad m) => ImageWriter t m | m -> t where
   -- | Send images upstream for rendering
   tellImages :: Behavior t [Image] -> m ()
+  default tellImages :: (f m' ~ m, Monad m', MonadTrans f, ImageWriter t m') => Behavior t [Image] -> m ()
+  tellImages = lift . tellImages
 
 instance (Monad m, Reflex t) => ImageWriter t (BehaviorWriterT t [Image] m) where
   tellImages = tellBehavior
@@ -255,18 +271,16 @@ withinImage (Region left top width height)
 -- * mouse inputs outside the region are ignored
 -- * mouse inputs inside the region have their coordinates translated such
 --   that (0,0) is the top-left corner of the region
--- TODO make this polymorphic
 pane
-  :: (Reflex t, Monad m, MonadNodeId m)
+  :: (Reflex t, Monad m, MonadNodeId m, HasVtyWidgetCtx t m)
   => Dynamic t Region
   -> Dynamic t Bool -- ^ Whether the widget should be focused when the parent is.
-  -> VtyWidget t m a
-  -> VtyWidget t m a
-pane dr foc child = VtyWidget $ do
-  ctx <- lift ask
+  -> m a
+  -> m a
+pane dr foc child = do
   let reg = current dr
-  let ctx' = VtyWidgetCtx
-        { _vtyWidgetCtx_input = leftmost -- TODO: think about this leftmost more.
+  let subContext ctx = VtyWidgetCtx
+        { _vtyWidgetCtx_input = leftmost
             [ fmapMaybe id $
                 attachWith (\(r,f) e -> filterInput r f e)
                   (liftA2 (,) reg (current foc))
@@ -276,10 +290,8 @@ pane dr foc child = VtyWidget $ do
         , _vtyWidgetCtx_width = _region_width <$> dr
         , _vtyWidgetCtx_height = _region_height <$> dr
         }
-  (result, images) <- lift . lift $ runVtyWidget ctx' child -- TODO can we use a local-based implementation?
-  let images' = liftA2 (\r is -> map (withinImage r) is) reg images
-  tellImages images'
-  return result
+  let imagesWithinRegion images = liftA2 (\is r -> map (withinImage r) is) images reg
+  localCtx subContext imagesWithinRegion child
   where
     filterInput :: Region -> Bool -> VtyEvent -> Maybe VtyEvent
     filterInput (Region l t w h) focused e = case e of
@@ -424,16 +436,16 @@ keyCombos ks = do
 
 -- | A plain split of the available space into vertically stacked panes.
 -- No visual separator is built in here.
-splitV :: (Reflex t, Monad m, MonadNodeId m)
+splitV :: (Reflex t, Monad m, MonadNodeId m, HasVtyWidgetCtx t m, HasDisplaySize t m)
        => Dynamic t (Int -> Int)
        -- ^ Function used to determine size of first pane based on available size
        -> Dynamic t (Bool, Bool)
        -- ^ How to focus the two sub-panes, given that we are focused.
-       -> VtyWidget t m a
+       -> m a
        -- ^ Widget for first pane
-       -> VtyWidget t m b
+       -> m b
        -- ^ Widget for second pane
-       -> VtyWidget t m (a,b)
+       -> m (a,b)
 splitV sizeFunD focD wA wB = do
   dw <- displayWidth
   dh <- displayHeight
@@ -445,16 +457,16 @@ splitV sizeFunD focD wA wB = do
 
 -- | A plain split of the available space into horizontally stacked panes.
 -- No visual separator is built in here.
-splitH :: (Reflex t, Monad m, MonadNodeId m)
+splitH :: (Reflex t, Monad m, MonadNodeId m, HasDisplaySize t m, HasVtyWidgetCtx t m)
        => Dynamic t (Int -> Int)
        -- ^ Function used to determine size of first pane based on available size
        -> Dynamic t (Bool, Bool)
        -- ^ How to focus the two sub-panes, given that we are focused.
-       -> VtyWidget t m a
+       -> m a
        -- ^ Widget for first pane
-       -> VtyWidget t m b
+       -> m b
        -- ^ Widget for second pane
-       -> VtyWidget t m (a,b)
+       -> m (a,b)
 splitH sizeFunD focD wA wB = do
   dw <- displayWidth
   dh <- displayHeight
@@ -465,11 +477,11 @@ splitH sizeFunD focD wA wB = do
 -- | A split of the available space into two parts with a draggable separator.
 -- Starts with half the space allocated to each, and the first pane has focus.
 -- Clicking in a pane switches focus.
-splitVDrag :: (Reflex t, MonadFix m, MonadHold t m, MonadNodeId m)
-  => VtyWidget t m ()
-  -> VtyWidget t m a
-  -> VtyWidget t m b
-  -> VtyWidget t m (a,b)
+splitVDrag :: (Reflex t, MonadFix m, MonadHold t m, MonadNodeId m, HasDisplaySize t m, HasVtyInput t m, HasVtyWidgetCtx t m)
+  => m ()
+  -> m a
+  -> m b
+  -> m (a,b)
 splitVDrag wS wA wB = do
   dh <- displayHeight
   dw <- displayWidth
@@ -503,7 +515,7 @@ splitVDrag wS wA wB = do
       return (m, x')
 
 -- | Fill the background with a particular character.
-fill :: (Reflex t, Monad m) => Char -> VtyWidget t m ()
+fill :: (HasDisplaySize t m, ImageWriter t m) => Char -> m ()
 fill c = do
   dw <- displayWidth
   dh <- displayHeight
@@ -511,7 +523,7 @@ fill c = do
   tellImages fillImg
 
 -- | Fill the background with the bottom
-hRule :: (Reflex t, Monad m) => BoxStyle -> VtyWidget t m ()
+hRule :: (HasDisplaySize t m, ImageWriter t m) => BoxStyle -> m ()
 hRule boxStyle = fill (_boxStyle_s boxStyle)
 
 -- | Defines a set of symbols to use to draw the outlines of boxes
@@ -552,11 +564,11 @@ roundedBoxStyle :: BoxStyle
 roundedBoxStyle = BoxStyle '╭' '─' '╮' '│' '╯' '─' '╰' '│'
 
 -- | Draws a titled box in the provided style and a child widget inside of that box
-boxTitle :: (Monad m, Reflex t, MonadNodeId m)
+boxTitle :: (Monad m, Reflex t, MonadNodeId m, HasDisplaySize t m, ImageWriter t m, HasVtyWidgetCtx t m)
     => Behavior t BoxStyle
     -> Text
-    -> VtyWidget t m a
-    -> VtyWidget t m a
+    -> m a
+    -> m a
 boxTitle boxStyle title child = do
   dh <- displayHeight
   dw <- displayWidth
@@ -604,18 +616,18 @@ boxTitle boxStyle title child = do
         right = mkHalf delta
 
 -- | A box without a title
-box :: (Monad m, Reflex t, MonadNodeId m)
+box :: (Monad m, Reflex t, MonadNodeId m, HasDisplaySize t m, ImageWriter t m, HasVtyWidgetCtx t m)
     => Behavior t BoxStyle
-    -> VtyWidget t m a
-    -> VtyWidget t m a
+    -> m a
+    -> m a
 box boxStyle = boxTitle boxStyle mempty
 
 -- | A box whose style is static
 boxStatic
-  :: (Reflex t, Monad m, MonadNodeId m)
+  :: (Monad m, Reflex t, MonadNodeId m, HasDisplaySize t m, ImageWriter t m, HasVtyWidgetCtx t m)
   => BoxStyle
-  -> VtyWidget t m a
-  -> VtyWidget t m a
+  -> m a
+  -> m a
 boxStatic = box . pure
 
 -- | Configuration options for displaying "rich" text
@@ -628,10 +640,10 @@ instance Reflex t => Default (RichTextConfig t) where
 
 -- | A widget that displays text with custom time-varying attributes
 richText
-  :: (Reflex t, Monad m)
+  :: (Reflex t, Monad m, HasDisplaySize t m, ImageWriter t m)
   => RichTextConfig t
   -> Behavior t Text
-  -> VtyWidget t m ()
+  -> m ()
 richText cfg t = do
   dw <- displayWidth
   let img = (\w a s -> [wrapText w a s])
@@ -646,19 +658,19 @@ richText cfg t = do
 
 -- | Renders text, wrapped to the container width
 text
-  :: (Reflex t, Monad m)
+  :: (Reflex t, Monad m, HasDisplaySize t m, ImageWriter t m)
   => Behavior t Text
-  -> VtyWidget t m ()
+  -> m ()
 text = richText def
 
 -- | Scrollable text widget. The output pair exposes the current scroll position and total number of lines (including those
 -- that are hidden)
 scrollableText
-  :: forall t m. (Reflex t, MonadHold t m, MonadFix m)
+  :: forall t m. (Reflex t, MonadHold t m, MonadFix m, HasDisplaySize t m, HasVtyInput t m, ImageWriter t m)
   => Event t Int
   -- ^ Number of lines to scroll by
   -> Behavior t Text
-  -> VtyWidget t m (Behavior t (Int, Int))
+  -> m (Behavior t (Int, Int))
   -- ^ (Current scroll position, total number of lines)
 scrollableText scrollBy t = do
   dw <- displayWidth
@@ -686,11 +698,11 @@ scrollableText scrollBy t = do
 -- | Renders any behavior whose value can be converted to
 -- 'String' as text
 display
-  :: (Reflex t, Monad m, Show a)
+  :: (Reflex t, Monad m, Show a, HasDisplaySize t m, ImageWriter t m)
   => Behavior t a
-  -> VtyWidget t m ()
+  -> m ()
 display a = text $ T.pack . show <$> a
 
 -- | A widget that draws nothing
-blank :: Monad m => VtyWidget t m ()
+blank :: Monad m => m ()
 blank = return ()

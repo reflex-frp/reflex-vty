@@ -81,9 +81,9 @@ textInput cfg = do
 
 -- | A widget that allows multiline text input
 multilineTextInput
-  :: (Reflex t, MonadHold t m, MonadFix m)
+  :: (Reflex t, MonadHold t m, MonadFix m, HasVtyInput t m, HasFocus t m, HasDisplaySize t m, ImageWriter t m)
   => TextInputConfig t
-  -> VtyWidget t m (TextInput t)
+  -> m (TextInput t)
 multilineTextInput cfg = do
   i <- input
   textInput $ cfg
@@ -99,13 +99,13 @@ multilineTextInput cfg = do
 -- the computed line count to greedily size the tile when vertically
 -- oriented, and uses the fallback width when horizontally oriented.
 textInputTile
-  :: (Monad m, MonadNodeId m, Reflex t, MonadFix m)
-  => VtyWidget t m (TextInput t)
+  :: (Monad m, MonadNodeId m, Reflex t, MonadFix m, MonadLayout t m, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m)
+  => m (TextInput t)
   -> Dynamic t Int
-  -> Layout t (Focus t (VtyWidget t m)) (TextInput t)
+  -> m (TextInput t)
 textInputTile txt width = do
   o <- askOrientation
-  rec (_, t) <- tileC (Constraint_Fixed <$> sz) txt
+  rec (_, t) <- tile (Constraint_Fixed <$> sz) txt
       let sz = join $ ffor o $ \case
             Orientation_Column -> _textInput_lines t
             Orientation_Row -> width

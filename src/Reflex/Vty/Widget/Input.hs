@@ -30,10 +30,10 @@ instance Reflex t => Default (ButtonConfig t) where
 
 -- | A button widget that contains a sub-widget
 button
-  :: (Reflex t, Monad m, MonadNodeId m)
+  :: (Reflex t, Monad m, MonadNodeId m, HasFocus t m, HasDisplaySize t m, ImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
   => ButtonConfig t
-  -> VtyWidget t m ()
-  -> VtyWidget t m (Event t ())
+  -> m ()
+  -> m (Event t ())
 button cfg child = do
   f <- focus
   let style = do
@@ -48,25 +48,25 @@ button cfg child = do
 
 -- | A button widget that displays text that can change
 textButton
-  :: (Reflex t, Monad m, MonadNodeId m)
+  :: (Reflex t, Monad m, MonadNodeId m, HasDisplaySize t m, HasFocus t m, ImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
   => ButtonConfig t
   -> Behavior t Text
-  -> VtyWidget t m (Event t ())
+  -> m (Event t ())
 textButton cfg = button cfg . text -- TODO Centering etc.
 
 -- | A button widget that displays a static bit of text
 textButtonStatic
-  :: (Reflex t, Monad m, MonadNodeId m)
+  :: (Reflex t, Monad m, MonadNodeId m, HasDisplaySize t m, HasFocus t m, ImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
   => ButtonConfig t
   -> Text
-  -> VtyWidget t m (Event t ())
+  -> m (Event t ())
 textButtonStatic cfg = textButton cfg . pure
 
 -- | A clickable link widget
 link
-  :: (Reflex t, Monad m)
+  :: (Reflex t, Monad m, HasDisplaySize t m, ImageWriter t m, HasVtyInput t m)
   => Behavior t Text
-  -> VtyWidget t m (Event t MouseUp)
+  -> m (Event t MouseUp)
 link t = do
   let cfg = RichTextConfig
         { _richTextConfig_attributes = pure $ V.withStyle V.defAttr V.underline
@@ -76,9 +76,9 @@ link t = do
 
 -- | A clickable link widget with a static label
 linkStatic
-  :: (Reflex t, Monad m)
+  :: (Reflex t, Monad m, ImageWriter t m, HasDisplaySize t m, HasVtyInput t m)
   => Text
-  -> VtyWidget t m (Event t MouseUp)
+  -> m (Event t MouseUp)
 linkStatic = link . pure
 
 -- | Characters used to render checked and unchecked textboxes
@@ -118,10 +118,10 @@ instance (Reflex t) => Default (CheckboxConfig t) where
 
 -- | A checkbox widget
 checkbox
-  :: (MonadHold t m, MonadFix m, Reflex t)
+  :: (MonadHold t m, MonadFix m, Reflex t, HasVtyInput t m, HasDisplaySize t m, ImageWriter t m)
   => CheckboxConfig t
   -> Bool
-  -> VtyWidget t m (Dynamic t Bool)
+  -> m (Dynamic t Bool)
 checkbox cfg v0 = do
   md <- mouseDown V.BLeft
   mu <- mouseUp
@@ -130,9 +130,9 @@ checkbox cfg v0 = do
     [ V.withStyle mempty V.bold <$ md
     , mempty <$ mu
     ]
-  let attrs = (<>) <$> (_checkboxConfig_attributes cfg) <*> depressed
+  let attrs = (<>) <$> _checkboxConfig_attributes cfg <*> depressed
   richText (RichTextConfig attrs) $ join . current $ ffor v $ \checked ->
     if checked
-      then fmap _checkboxStyle_checked $ _checkboxConfig_checkboxStyle cfg
-      else fmap _checkboxStyle_unchecked $ _checkboxConfig_checkboxStyle cfg
+      then _checkboxStyle_checked <$> _checkboxConfig_checkboxStyle cfg
+      else _checkboxStyle_unchecked <$> _checkboxConfig_checkboxStyle cfg
   return v
