@@ -280,12 +280,10 @@ pane
 pane dr foc child = do
   let reg = current dr
   let subContext ctx = VtyWidgetCtx
-        { _vtyWidgetCtx_input = leftmost
-            [ fmapMaybe id $
-                attachWith (\(r,f) e -> filterInput r f e)
-                  (liftA2 (,) reg (current foc))
-                  (_vtyWidgetCtx_input ctx)
-            ]
+        { _vtyWidgetCtx_input = fmapMaybe id $
+            attachWith (\(r,f) e -> filterInput r f e)
+              (liftA2 (,) reg (current foc))
+              (_vtyWidgetCtx_input ctx)
         , _vtyWidgetCtx_focus = liftA2 (&&) (_vtyWidgetCtx_focus ctx) foc
         , _vtyWidgetCtx_width = _region_width <$> dr
         , _vtyWidgetCtx_height = _region_height <$> dr
