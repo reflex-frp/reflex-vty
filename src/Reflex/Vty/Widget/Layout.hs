@@ -81,6 +81,12 @@ newtype Focus t m a = Focus
 instance MonadTrans (Focus t) where
   lift = Focus . lift . lift . lift
 
+instance (Adjustable t m, MonadHold t m, MonadFix m) => Adjustable t (Focus t m) where
+  runWithReplace (Focus a) e = Focus $ runWithReplace a $ fmap unFocus e
+  traverseIntMapWithKeyWithAdjust f m e = Focus $ traverseIntMapWithKeyWithAdjust (\k v -> unFocus $ f k v) m e
+  traverseDMapWithKeyWithAdjust f m e = Focus $ traverseDMapWithKeyWithAdjust (\k v -> unFocus $ f k v) m e
+  traverseDMapWithKeyWithAdjustWithMove f m e = Focus $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unFocus $ f k v) m e
+
 instance (HasVtyInput t m, Monad m) => HasVtyInput t (Focus t m)
 
 instance (HasVtyWidgetCtx t m, Reflex t, MonadFix m) => HasVtyWidgetCtx t (Focus t m) where
@@ -246,6 +252,13 @@ newtype Layout t m a = Layout
 
 instance MonadTrans (Layout t) where
   lift = Layout . lift . lift
+
+instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (Layout t m) where
+  runWithReplace (Layout a) e = Layout $ runWithReplace a $ fmap unLayout e
+  traverseIntMapWithKeyWithAdjust f m e = Layout $ traverseIntMapWithKeyWithAdjust (\k v -> unLayout $ f k v) m e
+  traverseDMapWithKeyWithAdjust f m e = Layout $ traverseDMapWithKeyWithAdjust (\k v -> unLayout $ f k v) m e
+  traverseDMapWithKeyWithAdjustWithMove f m e = Layout $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unLayout $ f k v) m e
+
 
 instance (HasVtyWidgetCtx t m, HasDisplaySize t m, Reflex t, MonadFix m) => HasVtyWidgetCtx t (Layout t m) where
   localCtx f g x = do

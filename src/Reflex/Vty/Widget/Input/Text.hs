@@ -105,7 +105,7 @@ textInputTile
   -> m (TextInput t)
 textInputTile txt width = do
   o <- askOrientation
-  rec (_, t) <- tile (Constraint_Fixed <$> sz) txt
+  rec t <- tile (Constraint_Fixed <$> sz) txt
       let sz = join $ ffor o $ \case
             Orientation_Column -> _textInput_lines t
             Orientation_Row -> width
