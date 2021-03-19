@@ -130,6 +130,7 @@ instance MonadNodeId m => MonadNodeId (VtyWidget t m) where
   getNextNodeId = VtyWidget $ do
     lift $ lift getNextNodeId
 
+-- | A reader-like class for the vty widget context. Allows actions to be run in a sub-context.
 class HasVtyWidgetCtx t m | m -> t where
   askCtx :: m (VtyWidgetCtx t)
   default askCtx :: (f m' ~ m, Monad m', MonadTrans f, HasVtyWidgetCtx t m') => m (VtyWidgetCtx t)

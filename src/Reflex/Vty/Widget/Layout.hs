@@ -23,6 +23,19 @@ import Reflex.Host.Class (MonadReflexCreateTrigger)
 import Reflex.Vty.Widget
 
 -- * Focus
+--
+-- $focus
+--
+-- The focus monad tracks which element is currently focused and processes
+-- requests to change focus. Focusable elements are assigned a 'FocusId' and
+-- can manually request focus or receive focus due to some other action (e.g.,
+-- a tab press in a sibling element, a click event).
+--
+-- Focusable elements will usually be created via 'tile', but can also be
+-- constructed via 'makeFocus' in 'MonadFocus'. The latter option allows for
+-- more find-grained control of focus behavior.
+
+-- ** Storing focus state
 
 -- | Identifies an element that is focusable. Can be created using 'makeFocus'.
 newtype FocusId = FocusId NodeId
@@ -42,6 +55,13 @@ instance Monoid FocusSet where
 singletonFS :: FocusId -> FocusSet
 singletonFS = FocusSet . OSet.singleton
 
+-- ** Changing focus state
+
+-- | Operations that change the currently focused element.
+data Refocus = Refocus_Shift Int -- ^ Shift the focus by a certain number of positions (see 'shiftFS')
+             | Refocus_Id FocusId -- ^ Focus a particular element
+             | Refocus_Clear -- ^ Remove focus from all elements
+
 -- | Given a 'FocusSet', a currently focused element, and a number of positions
 -- to move by, determine the newly focused element.
 shiftFS :: FocusSet -> Maybe FocusId -> Int -> Maybe FocusId
@@ -50,10 +70,20 @@ shiftFS (FocusSet s) fid n = case OSet.findIndex <$> fid <*> pure s of
   Just Nothing -> OSet.elemAt s 0
   Just (Just ix) -> OSet.elemAt s $ mod (ix + n) (OSet.size s)
 
--- | Operations that change the currently focused element.
-data Refocus = Refocus_Shift Int -- ^ Shift the focus by a certain number of positions (see 'shiftFS')
-             | Refocus_Id FocusId -- ^ Focus a particular element
-             | Refocus_Clear -- ^ Remove focus from all elements
+-- ** The focus management monad
+
+-- | A class for things that can produce focusable elements.
+class (Monad m, Reflex t) => MonadFocus t m | m -> t where
+  -- | Create a focusable element.
+  makeFocus :: m FocusId
+  -- | Emit an 'Event' of requests to change the focus.
+  requestFocus :: Event t Refocus -> m ()
+  -- | Produce a 'Dynamic' that indicates whether the given 'FocusId' is focused.
+  isFocused :: FocusId -> m (Dynamic t Bool)
+  -- | Run an action, additionally returning the focusable elements it produced.
+  subFoci :: m a -> m (a, Dynamic t FocusSet)
+  -- | Get a 'Dynamic' of the currently focused element identifier.
+  focusedId :: m (Dynamic t (Maybe FocusId))
 
 -- | A monad transformer that keeps track of the set of focusable elements and
 -- which, if any, are currently focused, and allows focus requests.
@@ -78,6 +108,7 @@ newtype Focus t m a = Focus
     , MonadNodeId
     )
 
+
 instance MonadTrans (Focus t) where
   lift = Focus . lift . lift . lift
 
@@ -100,19 +131,6 @@ instance (HasVtyWidgetCtx t m, Reflex t, MonadFix m) => HasVtyWidgetCtx t (Focus
 instance ImageWriter t m => ImageWriter t (Focus t m)
 
 instance (HasFocus t m, Monad m) => HasFocus t (Focus t m)
-
--- | A class for things that can produce focusable elements.
-class (Monad m, Reflex t) => MonadFocus t m | m -> t where
-  -- | Create a focusable element.
-  makeFocus :: m FocusId
-  -- | Emit an 'Event' of requests to change the focus.
-  requestFocus :: Event t Refocus -> m ()
-  -- | Produce a 'Dynamic' that indicates whether the given 'FocusId' is focused.
-  isFocused :: FocusId -> m (Dynamic t Bool)
-  -- | Run an action, additionally returning the focusable elements it produced.
-  subFoci :: m a -> m (a, Dynamic t FocusSet)
-  -- | Get a 'Dynamic' of the currently focused element identifier.
-  focusedId :: m (Dynamic t (Maybe FocusId))
 
 instance (Reflex t, MonadFix m, MonadNodeId m) => MonadFocus t (Focus t m) where
   makeFocus = do
@@ -145,51 +163,81 @@ runFocus (Focus x) = do
       Refocus_Id fid -> Just fid
       Refocus_Shift n -> shiftFS fs mf n
 
--- | A widget that is focusable and occupies a layout region based on the
--- provided constraint. Returns the 'FocusId' allowing for manual focus
--- management.
-tile'
-  :: (MonadNodeId m, MonadFix m, Reflex t, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, MonadLayout t m)
-  => Dynamic t Constraint
-  -> m a
-  -> m (FocusId, a)
-tile' c w = do
-  fid <- makeFocus
-  r <- region c
-  fid' <- focusedId
-  parentFocused <- isFocused fid
-  rec (click, result, subs) <- pane r focused $ do
-        m <- mouseDown V.BLeft
-        (x, sf) <- subFoci w
-        pure (m, x, sf)
-      let childFocused = liftA2 (\f s -> case f of
-            Nothing -> False
-            Just f' -> OSet.member f' $ unFocusSet s) fid' subs
-      let focused = (||) <$> parentFocused <*> childFocused
-  requestFocus $ Refocus_Id fid <$ click
-  pure (fid, result)
+-- ** Focus controls
 
--- | A widget that is focusable and occupies a layout region based on the
--- provided constraint.
-tile
-  :: (MonadNodeId m, MonadFix m, Reflex t, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, MonadLayout t m)
-  => Dynamic t Constraint
-  -> m a
-  -> m a
-tile c = fmap snd . tile' c
-
--- | A widget that is not focusable and occupies a layout region based on the
--- provided constraint.
-unfocusable
-  :: (Reflex t, MonadNodeId m, HasVtyWidgetCtx t m, MonadLayout t m)
-  => Dynamic t Constraint
-  -> m a
-  -> m a
-unfocusable c w = do
-  r <- region c
-  pane r (pure False) w
+-- | Request focus be shifted backward and forward based on tab presses. <Tab>
+-- shifts focus forward and <Shift+Tab> shifts focus backward.
+tabNavigation :: (Reflex t, MonadNodeId m, HasVtyInput t m, MonadFocus t m) => m ()
+tabNavigation = do
+  fwd <- fmap (const 1) <$> key (V.KChar '\t')
+  back <- fmap (const (-1)) <$> key V.KBackTab
+  requestFocus $ Refocus_Shift <$> leftmost [fwd, back]
 
 -- * Layout
+--
+-- $layout
+-- The layout monad keeps track of a tree of elements, each having its own
+-- layout constraints and orientation. Given the available rendering space, it
+-- computes a layout solution and provides child elements with their particular
+-- layout solution (the width and height of their rendering space).
+--
+-- Complex layouts are built up though some combination of:
+--
+-- - 'axis', which lays out its children in a particular orientation, and
+-- - 'region', which "claims" some part of the screen according to its constraints
+--
+
+-- ** Layout restrictions
+
+-- *** Constraints
+
+-- | Datatype representing constraints on a widget's size along the main axis (see 'Orientation')
+data Constraint = Constraint_Fixed Int
+                | Constraint_Min Int
+  deriving (Show, Read, Eq, Ord)
+
+-- | Shorthand for constructing a fixed constraint
+fixed
+  :: Reflex t
+  => Dynamic t Int
+  -> Dynamic t Constraint
+fixed = fmap Constraint_Fixed
+
+-- | Shorthand for constructing a minimum size constraint
+stretch
+  :: Reflex t
+  => Dynamic t Int
+  -> Dynamic t Constraint
+stretch = fmap Constraint_Min
+
+-- | Shorthand for constructing a constraint of no minimum size
+flex
+  :: Reflex t
+  => Dynamic t Constraint
+flex = pure $ Constraint_Min 0
+
+-- *** Orientation
+
+-- | The main-axis orientation of a 'Layout' widget
+data Orientation = Orientation_Column
+                 | Orientation_Row
+  deriving (Show, Read, Eq, Ord)
+
+-- | Create a row-oriented 'axis'
+row
+  :: (Reflex t, MonadNodeId m, MonadFix m, MonadLayout t m)
+  => m a
+  -> m a
+row = axis (pure Orientation_Row) flex
+
+-- | Create a column-oriented 'axis'
+col
+  :: (Reflex t, MonadNodeId m, MonadFix m, MonadLayout t m)
+  => m a
+  -> m a
+col = axis (pure Orientation_Column) flex
+
+-- ** Layout management data
 
 -- | A collection of information related to the layout of the screen. The root
 -- node is a "parent" widget, and the contents of the 'LayoutForest' are its
@@ -227,165 +275,6 @@ rootLT (LayoutTree a _) = a
 -- | Extract the child nodes of a 'LayoutTree'
 childrenLT :: LayoutTree a -> LayoutForest a
 childrenLT (LayoutTree _ a) = a
-
--- | A monad transformer that collects layout constraints and provides a layout
--- solution that satisfies those constraints.
-newtype Layout t m a = Layout
-  { unLayout :: DynamicWriterT t (LayoutForest (Constraint, Orientation))
-      (ReaderT (Dynamic t (LayoutTree (Region, Orientation))) m) a
-  }
-  deriving
-    ( Functor
-    , Applicative
-    , Monad
-    , MonadHold t
-    , MonadSample t
-    , MonadFix
-    , TriggerEvent t
-    , PerformEvent t
-    , NotReady t
-    , MonadReflexCreateTrigger t
-    , HasDisplaySize t
-    , PostBuild t
-    , MonadNodeId
-    )
-
-instance MonadTrans (Layout t) where
-  lift = Layout . lift . lift
-
-instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (Layout t m) where
-  runWithReplace (Layout a) e = Layout $ runWithReplace a $ fmap unLayout e
-  traverseIntMapWithKeyWithAdjust f m e = Layout $ traverseIntMapWithKeyWithAdjust (\k v -> unLayout $ f k v) m e
-  traverseDMapWithKeyWithAdjust f m e = Layout $ traverseDMapWithKeyWithAdjust (\k v -> unLayout $ f k v) m e
-  traverseDMapWithKeyWithAdjustWithMove f m e = Layout $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unLayout $ f k v) m e
-
-
-instance (HasVtyWidgetCtx t m, HasDisplaySize t m, Reflex t, MonadFix m) => HasVtyWidgetCtx t (Layout t m) where
-  localCtx f g x = do
-    solution <- Layout ask
-    let orientation = snd . rootLT <$> solution
-    lift $ localCtx f g $ do
-      dw <- displayWidth
-      dh <- displayHeight
-      let reg = Region 0 0 <$> dw <*> dh
-      runLayout orientation reg x
-
-instance (HasVtyInput t m, Monad m) => HasVtyInput t (Layout t m)
-
-instance ImageWriter t m => ImageWriter t (Layout t m)
-
-instance (HasFocus t m, Monad m) => HasFocus t (Layout t m)
-
--- | A class of operations for creating screen layouts.
-class Monad m => MonadLayout t m | m -> t where
-  -- | Creates a parent element in the current layout with the given size
-  -- constraint, which lays out its children according to the provided
-  -- orientation.
-  axis :: Dynamic t Orientation -> Dynamic t Constraint -> m a -> m a
-  -- | Creates a child element in the current layout with the given size
-  -- constraint, returning the 'Region' that the child element is allocated.
-  region :: Dynamic t Constraint -> m (Dynamic t Region)
-  -- | Returns the orientation of the containing 'axis'.
-  askOrientation :: m (Dynamic t Orientation)
-
-instance (Monad m, MonadNodeId m, Reflex t, MonadFix m) => MonadLayout t (Layout t m) where
-  axis o c (Layout x) = Layout $ do
-    nodeId <- getNextNodeId
-    (result, forest) <- lift $ local (\t -> (\(Just a) -> a) . lookupLF nodeId . childrenLT <$> t) $ runDynamicWriterT x
-    tellDyn $ singletonLF nodeId <$> (LayoutTree <$> ((,) <$> c <*> o) <*> forest)
-    pure result
-  region c = do
-    nodeId <- lift getNextNodeId
-    Layout $ tellDyn $ ffor c $ \c' -> singletonLF nodeId $ LayoutTree (c', Orientation_Row) mempty
-    solutions <- Layout ask
-    pure $ maybe (error "region: could not find layout solution") (fst . rootLT) . lookupLF nodeId . childrenLT <$> solutions
-  askOrientation = Layout $ asks $ fmap (snd . rootLT)
-
-instance (MonadFix m, MonadFocus t m) => MonadFocus t (Layout t m) where
-  makeFocus = lift makeFocus
-  requestFocus = lift . requestFocus
-  isFocused = lift . isFocused
-  focusedId = lift focusedId
-  subFoci (Layout x) = Layout $ do
-    y <- ask
-    ((a, w), sf) <- lift $ lift $ subFoci $ flip runReaderT y $ runDynamicWriterT x
-    tellDyn w
-    pure (a, sf)
-
--- | Datatype representing constraints on a widget's size along the main axis (see 'Orientation')
-data Constraint = Constraint_Fixed Int
-                | Constraint_Min Int
-  deriving (Show, Read, Eq, Ord)
-
--- | The main-axis orientation of a 'Layout' widget
-data Orientation = Orientation_Column
-                 | Orientation_Row
-  deriving (Show, Read, Eq, Ord)
-
--- | Create a row-oriented 'axis'
-row
-  :: (Reflex t, MonadNodeId m, MonadFix m, MonadLayout t m)
-  => m a
-  -> m a
-row = axis (pure Orientation_Row) (pure $ Constraint_Min 0)
-
--- | Create a column-oriented 'axis'
-col
-  :: (Reflex t, MonadNodeId m, MonadFix m, MonadLayout t m)
-  => m a
-  -> m a
-col = axis (pure Orientation_Column) (pure $ Constraint_Min 0)
-
--- | A tile constrained to the given size. Returns the 'FocusId' of the tile,
--- allowing for manual focus management.
-fixed'
-  :: (Reflex t, MonadNodeId m, MonadFix m, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, MonadLayout t m)
-  => Dynamic t Int
-  -> m a
-  -> m (FocusId, a)
-fixed' n = tile' (Constraint_Fixed <$> n)
-
--- | A tile constrained to the given size.
-fixed
-  :: (Reflex t, MonadNodeId m, MonadFix m, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, MonadLayout t m)
-  => Dynamic t Int
-  -> m a
-  -> m a
-fixed n = fmap snd . fixed' n
-
--- | A tile that can grow, but will always occupy at least the given minimum
--- size. Returns the 'FocusId' of the tile, allowing for manual focus
--- management.
-stretch'
-  :: (Reflex t, MonadNodeId m, MonadFix m, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, MonadLayout t m)
-  => Dynamic t Int
-  -> m a
-  -> m (FocusId, a)
-stretch' minSz = tile' (Constraint_Min <$> minSz)
-
--- | A tile that can grow, but will always occupy at least the given minimum
--- size.
-stretch
-  :: (Reflex t, MonadNodeId m, MonadFix m, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, MonadLayout t m)
-  => Dynamic t Int
-  -> m a
-  -> m a
-stretch minSz = fmap snd . stretch' minSz
-
--- | A tile that can grow or shrink without constraint. Returns the 'FocusId'
--- of the tile, allowing for manual focus management.
-flex'
-  :: (Reflex t, MonadNodeId m, MonadFix m, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, MonadLayout t m)
-  => m a
-  -> m (FocusId, a)
-flex' = tile' (pure $ Constraint_Min 0)
-
--- | A tile that can grow or shrink without constraint.
-flex
-  :: (Reflex t,MonadNodeId m, MonadFix m, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, MonadLayout t m)
-  => m a
-  -> m a
-flex = fmap snd . flex'
 
 -- | Produce a layout solution given a starting orientation, the overall screen
 -- size, and a set of constraints.
@@ -440,6 +329,93 @@ chunk o r (offset, sz) = case o of
     , _region_width = sz
     }
 
+
+
+-- ** The layout monad
+
+-- | A class of operations for creating screen layouts.
+class Monad m => MonadLayout t m | m -> t where
+  -- | Creates a parent element in the current layout with the given size
+  -- constraint, which lays out its children according to the provided
+  -- orientation.
+  axis :: Dynamic t Orientation -> Dynamic t Constraint -> m a -> m a
+  -- | Creates a child element in the current layout with the given size
+  -- constraint, returning the 'Region' that the child element is allocated.
+  region :: Dynamic t Constraint -> m (Dynamic t Region)
+  -- | Returns the orientation of the containing 'axis'.
+  askOrientation :: m (Dynamic t Orientation)
+
+-- | A monad transformer that collects layout constraints and provides a layout
+-- solution that satisfies those constraints.
+newtype Layout t m a = Layout
+  { unLayout :: DynamicWriterT t (LayoutForest (Constraint, Orientation))
+      (ReaderT (Dynamic t (LayoutTree (Region, Orientation))) m) a
+  }
+  deriving
+    ( Functor
+    , Applicative
+    , Monad
+    , MonadHold t
+    , MonadSample t
+    , MonadFix
+    , TriggerEvent t
+    , PerformEvent t
+    , NotReady t
+    , MonadReflexCreateTrigger t
+    , HasDisplaySize t
+    , PostBuild t
+    , MonadNodeId
+    )
+
+instance MonadTrans (Layout t) where
+  lift = Layout . lift . lift
+
+instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (Layout t m) where
+  runWithReplace (Layout a) e = Layout $ runWithReplace a $ fmap unLayout e
+  traverseIntMapWithKeyWithAdjust f m e = Layout $ traverseIntMapWithKeyWithAdjust (\k v -> unLayout $ f k v) m e
+  traverseDMapWithKeyWithAdjust f m e = Layout $ traverseDMapWithKeyWithAdjust (\k v -> unLayout $ f k v) m e
+  traverseDMapWithKeyWithAdjustWithMove f m e = Layout $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unLayout $ f k v) m e
+
+instance (HasVtyWidgetCtx t m, HasDisplaySize t m, Reflex t, MonadFix m) => HasVtyWidgetCtx t (Layout t m) where
+  localCtx f g x = do
+    solution <- Layout ask
+    let orientation = snd . rootLT <$> solution
+    lift $ localCtx f g $ do
+      dw <- displayWidth
+      dh <- displayHeight
+      let reg = Region 0 0 <$> dw <*> dh
+      runLayout orientation reg x
+
+instance (HasVtyInput t m, Monad m) => HasVtyInput t (Layout t m)
+
+instance ImageWriter t m => ImageWriter t (Layout t m)
+
+instance (HasFocus t m, Monad m) => HasFocus t (Layout t m)
+
+instance (Monad m, MonadNodeId m, Reflex t, MonadFix m) => MonadLayout t (Layout t m) where
+  axis o c (Layout x) = Layout $ do
+    nodeId <- getNextNodeId
+    (result, forest) <- lift $ local (\t -> (\(Just a) -> a) . lookupLF nodeId . childrenLT <$> t) $ runDynamicWriterT x
+    tellDyn $ singletonLF nodeId <$> (LayoutTree <$> ((,) <$> c <*> o) <*> forest)
+    pure result
+  region c = do
+    nodeId <- lift getNextNodeId
+    Layout $ tellDyn $ ffor c $ \c' -> singletonLF nodeId $ LayoutTree (c', Orientation_Row) mempty
+    solutions <- Layout ask
+    pure $ maybe (error "region: could not find layout solution") (fst . rootLT) . lookupLF nodeId . childrenLT <$> solutions
+  askOrientation = Layout $ asks $ fmap (snd . rootLT)
+
+instance (MonadFix m, MonadFocus t m) => MonadFocus t (Layout t m) where
+  makeFocus = lift makeFocus
+  requestFocus = lift . requestFocus
+  isFocused = lift . isFocused
+  focusedId = lift focusedId
+  subFoci (Layout x) = Layout $ do
+    y <- ask
+    ((a, w), sf) <- lift $ lift $ subFoci $ flip runReaderT y $ runDynamicWriterT x
+    tellDyn w
+    pure (a, sf)
+
 -- | Runs a 'Layout' action, using the given orientation and region to
 -- calculate layout solutions.
 runLayout
@@ -453,54 +429,28 @@ runLayout o r (Layout x) = do
       let solutions = solve <$> o <*> r <*> w
   return result
 
--- | Request focus be shifted backward and forward based on tab presses. <Tab>
--- shifts focus forward and <Shift+Tab> shifts focus backward.
-tabNavigation :: (Reflex t, MonadNodeId m, HasVtyInput t m, MonadFocus t m) => m ()
-tabNavigation = do
-  fwd <- fmap (const 1) <$> key (V.KChar '\t')
-  back <- fmap (const (-1)) <$> key V.KBackTab
-  requestFocus $ Refocus_Shift <$> leftmost [fwd, back]
+-- | Initialize and run the layout monad, using all of the available screen space.
+initLayout :: (HasDisplaySize t m, MonadFix m) => Layout t m a -> m a
+initLayout f = do
+  dw <- displayWidth
+  dh <- displayHeight
+  let r = Region 0 0 <$> dw <*> dh
+  runLayout (pure Orientation_Column) r f
 
-test :: IO ()
-test = mainWidget $ do
-  inp <- input
-  let box' w = do
-        f <- focus
-        box (ffor (current f) $ \x -> if x then doubleBoxStyle else singleBoxStyle) $ w
-      text' t = do
-        f <- focus
-        box' $ richText (RichTextConfig $ current $ (\x -> if x then V.withStyle V.defAttr V.underline else V.defAttr) <$> f) t
-  initManager_ $ do
-    tabNavigation
-    col $ do
-      fixed 5 $ box' $ row $ do
-        flex $ do
-          text' "asdf"
-        flex $ text' "xyz"
-      fixed 5 $ do
-        text' "   1"
-      row $ do
-        flex $ do
-          text' "2"
-        flex $ text' "3"
-        flex $ text' "xyz"
-        flex $ text' "xyz"
-      flex $ text' "asdf"
-      flex $ text' "asdf"
-  return $ fforMaybe inp $ \case
-    V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
-    _ -> Nothing
+-- * The tile "window manager"
+--
+-- $tiling
+-- Generally MonadLayout and MonadFocus are used together to build a user
+-- interface. These functions check the available screen size and initialize
+-- the layout monad with that information, and also initialize the focus monad.
 
 -- | Initialize a 'Layout' and 'Focus'  management context, returning the produced 'FocusSet'.
 initManager
   :: (HasDisplaySize t m, Reflex t, MonadHold t m, MonadFix m)
   => Layout t (Focus t m) a
   -> m (a, Dynamic t FocusSet)
-initManager f = do
-  dw <- displayWidth
-  dh <- displayHeight
-  let r = Region 0 0 <$> dw <*> dh
-  runFocus $ runLayout (pure Orientation_Column) r f
+initManager =
+  runFocus . initLayout
 
 -- | Initialize a 'Layout' and 'Focus'  management context.
 initManager_
@@ -508,3 +458,53 @@ initManager_
   => Layout t (Focus t m) a
   -> m a
 initManager_ = fmap fst . initManager
+
+-- ** Layout tiles
+
+-- *** Focusable
+
+-- | A widget that is focusable and occupies a layout region based on the
+-- provided constraint. Returns the 'FocusId' allowing for manual focus
+-- management.
+tile'
+  :: (MonadNodeId m, MonadFix m, Reflex t, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, MonadLayout t m)
+  => Dynamic t Constraint
+  -> m a
+  -> m (FocusId, a)
+tile' c w = do
+  fid <- makeFocus
+  r <- region c
+  fid' <- focusedId
+  parentFocused <- isFocused fid
+  rec (click, result, subs) <- pane r focused $ do
+        m <- mouseDown V.BLeft
+        (x, sf) <- subFoci w
+        pure (m, x, sf)
+      let childFocused = liftA2 (\f s -> case f of
+            Nothing -> False
+            Just f' -> OSet.member f' $ unFocusSet s) fid' subs
+      let focused = (||) <$> parentFocused <*> childFocused
+  requestFocus $ Refocus_Id fid <$ click
+  pure (fid, result)
+
+-- | A widget that is focusable and occupies a layout region based on the
+-- provided constraint.
+tile
+  :: (MonadNodeId m, MonadFix m, Reflex t, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, MonadLayout t m)
+  => Dynamic t Constraint
+  -> m a
+  -> m a
+tile c = fmap snd . tile' c
+
+-- *** Unfocusable
+
+-- | A widget that is not focusable and occupies a layout region based on the
+-- provided constraint.
+grout
+  :: (Reflex t, MonadNodeId m, HasVtyWidgetCtx t m, MonadLayout t m)
+  => Dynamic t Constraint
+  -> m a
+  -> m a
+grout c w = do
+  r <- region c
+  pane r (pure False) w
