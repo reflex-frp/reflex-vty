@@ -7,6 +7,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# OPTIONS_GHC -threaded #-}
 
 import Control.Applicative
@@ -15,16 +16,27 @@ import Control.Monad.Fix
 import Control.Monad.NodeId
 import Data.Functor.Misc
 import Data.Map (Map)
-import Data.Maybe
 import qualified Data.Map as Map
+import Data.Maybe
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Zipper as TZ
 import qualified Graphics.Vty as V
 import Reflex
-import Reflex.Network
 import Reflex.Class.Switchable
+import Reflex.Network
 import Reflex.Vty
+
+type VtyExample t m =
+  ( MonadFix m
+  , Reflex t
+  , HasVtyInput t m
+  , HasVtyWidgetCtx t m
+  , ImageWriter t m
+  , MonadNodeId m
+  , HasDisplaySize t m
+  , HasFocus t m
+  )
 
 data Example = Example_TextEditor
              | Example_Todo
@@ -34,34 +46,40 @@ data Example = Example_TextEditor
 main :: IO ()
 main = mainWidget $ do
   inp <- input
-  let buttons = col $ do
-        fixed 4 $ col $ do
-          fixed 1 $ text "Select an example."
-          fixed 1 $ text "Esc will bring you back here."
-          fixed 1 $ text "Ctrl+c to quit."
-        a <- fixed 5 $ textButtonStatic def "Todo List"
-        b <- fixed 5 $ textButtonStatic def "Text Editor"
-        c <- fixed 5 $ textButtonStatic def "Scrollable text display"
-        return $ leftmost
-          [ Left Example_Todo <$ a
-          , Left Example_TextEditor <$ b
-          , Left Example_ScrollableTextDisplay <$ c
-          ]
-      escapable w = do
-        void w
-        i <- input
-        return $ fforMaybe i $ \case
-          V.EvKey V.KEsc [] -> Just $ Right ()
-          _ -> Nothing
-  rec out <- networkHold buttons $ ffor (switch (current out)) $ \case
-        Left Example_TextEditor -> escapable testBoxes
-        Left Example_Todo -> escapable taskList
-        Left Example_ScrollableTextDisplay -> escapable scrolling
-        Right () -> buttons
+  initManager_ $ do
+    tabNavigation
+    let gf = grout . fixed
+        tf = tile . fixed
+        buttons = col $ do
+          gf 4 $ col $ do
+            gf 1 $ text "Select an example."
+            gf 1 $ text "Esc will bring you back here."
+            gf 1 $ text "Ctrl+c to quit."
+          a <- tf 5 $ textButtonStatic def "Todo List"
+          b <- tf 5 $ textButtonStatic def "Text Editor"
+          c <- tf 5 $ textButtonStatic def "Scrollable text display"
+          return $ leftmost
+            [ Left Example_Todo <$ a
+            , Left Example_TextEditor <$ b
+            , Left Example_ScrollableTextDisplay <$ c
+            ]
+    let escapable w = do
+          void w
+          i <- input
+          return $ fforMaybe i $ \case
+            V.EvKey V.KEsc [] -> Just $ Right ()
+            _ -> Nothing
+    rec out <- networkHold buttons $ ffor (switch (current out)) $ \case
+          Left Example_Todo -> escapable blank -- taskList
+          Left Example_TextEditor -> escapable testBoxes
+          Left Example_ScrollableTextDisplay -> escapable blank -- scrolling
+          Right () -> buttons
+    return ()
   return $ fforMaybe inp $ \case
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
  
+ {-
 taskList
   :: (Reflex t, MonadHold t m, MonadFix m, Adjustable t m, NotReady t m, PostBuild t m, MonadNodeId m)
   => VtyWidget t m ()
@@ -82,15 +100,17 @@ taskList = do
       (m, (e, _)) <- splitV (pure (subtract 6)) (pure (True, True)) todos' $
         splitV (pure (subtract 3)) (pure (True, True)) btn (display $ Map.size <$> current m)
   return ()
+-}
+
 
 testBoxes
-  :: (Reflex t, MonadHold t m, MonadFix m, MonadNodeId m)
-  => VtyWidget t m ()
+  :: (MonadHold t m, MonadNodeId m, VtyExample t m)
+  => m ()
 testBoxes = do
   dw <- displayWidth
   dh <- displayHeight
-  let region1 = DynRegion (div' dw 6) (div' dh 6) (div' dw 2) (div' dh 2)
-      region2 = DynRegion (div' dw 4) (div' dh 4) (2 * div' dw 3) (2 * div' dh 3)
+  let region1 = Region <$> (div' dw 6) <*> (div' dh 6) <*> (div' dw 2) <*> (div' dh 2)
+      region2 = Region <$> (div' dw 4) <*> (div' dh 4) <*> (2 * div' dw 3) <*> (2 * div' dh 3)
   pane region1 (constDyn False) . boxStatic singleBoxStyle $ debugInput
   _ <- pane region2 (constDyn True) . boxStatic singleBoxStyle $
     let cfg = def
@@ -106,25 +126,26 @@ testBoxes = do
     div' :: (Integral a, Applicative f) => f a -> f a -> f a
     div' = liftA2 div
 
-debugFocus :: (Reflex t, Monad m) => VtyWidget t m ()
+debugFocus :: (VtyExample t m) => m ()
 debugFocus = do
   f <- focus
   text $ T.pack . show <$> current f
 
-debugInput :: (Reflex t, MonadHold t m) => VtyWidget t m ()
+debugInput :: (VtyExample t m, MonadHold t m) => m ()
 debugInput = do
   lastEvent <- hold "No event yet" . fmap show =<< input
   text $ T.pack <$> lastEvent
 
-dragTest :: (Reflex t, MonadHold t m, MonadFix m) => VtyWidget t m ()
+dragTest :: (VtyExample t m, MonadHold t m) => m ()
 dragTest = do
   lastEvent <- hold "No event yet" . fmap show =<< drag V.BLeft
   text $ T.pack <$> lastEvent
 
-testStringBox :: (Reflex t, Monad m, MonadNodeId m) => VtyWidget t m ()
+testStringBox :: VtyExample t m => m ()
 testStringBox = boxStatic singleBoxStyle .
   text . pure . T.pack . take 500 $ cycle ('\n' : ['a'..'z'])
 
+{-
 data Todo = Todo
   { _todo_label :: Text
   , _todo_done :: Bool
@@ -219,3 +240,4 @@ todos todos0 newTodo = do
             (current todosMap)
             todoDelete
   return listOut
+-}
