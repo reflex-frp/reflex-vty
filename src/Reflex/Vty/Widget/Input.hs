@@ -2,8 +2,6 @@
 Module: Reflex.Vty.Widget.Input
 Description: User input widgets for reflex-vty
 -}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
 module Reflex.Vty.Widget.Input
   ( module Export
   , module Reflex.Vty.Widget.Input

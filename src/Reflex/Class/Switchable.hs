@@ -2,9 +2,7 @@
 Module: Reflex.Class.Switchable
 Description: A class for things that can be switched on the firing of an event
 -}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# Language UndecidableInstances #-}
 module Reflex.Class.Switchable where
 
 import Control.Monad
