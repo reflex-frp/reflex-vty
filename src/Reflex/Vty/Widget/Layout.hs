@@ -12,6 +12,7 @@ import Control.Monad.Reader
 import Data.List (mapAccumL)
 import Data.Map.Ordered (OMap)
 import qualified Data.Map.Ordered as OMap
+import Data.Maybe (fromMaybe)
 import Data.Ratio ((%))
 import Data.Semigroup (First(..))
 import Data.Set.Ordered (OSet)
@@ -395,14 +396,14 @@ instance (HasFocus t m, Monad m) => HasFocus t (Layout t m)
 instance (Monad m, MonadNodeId m, Reflex t, MonadFix m) => MonadLayout t (Layout t m) where
   axis o c (Layout x) = Layout $ do
     nodeId <- getNextNodeId
-    (result, forest) <- lift $ local (\t -> (\(Just a) -> a) . lookupLF nodeId . childrenLT <$> t) $ runDynamicWriterT x
+    (result, forest) <- lift $ local (\t -> fromMaybe (LayoutTree (Region 0 0 0 0, Orientation_Column) mempty) . lookupLF nodeId . childrenLT <$> t) $ runDynamicWriterT x
     tellDyn $ singletonLF nodeId <$> (LayoutTree <$> ((,) <$> c <*> o) <*> forest)
     pure result
   region c = do
     nodeId <- lift getNextNodeId
     Layout $ tellDyn $ ffor c $ \c' -> singletonLF nodeId $ LayoutTree (c', Orientation_Row) mempty
     solutions <- Layout ask
-    pure $ maybe (error "region: could not find layout solution") (fst . rootLT) . lookupLF nodeId . childrenLT <$> solutions
+    pure $ maybe (Region 0 0 0 0) (fst . rootLT) . lookupLF nodeId . childrenLT <$> solutions
   askOrientation = Layout $ asks $ fmap (snd . rootLT)
 
 instance (MonadFix m, MonadFocus t m) => MonadFocus t (Layout t m) where
