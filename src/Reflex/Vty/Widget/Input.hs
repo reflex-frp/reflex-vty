@@ -118,19 +118,26 @@ instance (Reflex t) => Default (CheckboxConfig t) where
 
 -- | A checkbox widget
 checkbox
-  :: (MonadHold t m, MonadFix m, Reflex t, HasVtyInput t m, HasDisplaySize t m, ImageWriter t m)
+  :: (MonadHold t m, MonadFix m, Reflex t, HasVtyInput t m, HasDisplaySize t m, ImageWriter t m, HasFocus t m)
   => CheckboxConfig t
   -> Bool
   -> m (Dynamic t Bool)
 checkbox cfg v0 = do
   md <- mouseDown V.BLeft
   mu <- mouseUp
-  v <- toggle v0 $ () <$ mu
+  space <- key (V.KChar ' ')
+  f <- focus
+  v <- toggle v0 $ leftmost
+    [ () <$ mu
+    , () <$ space
+    ]
+  let bold = V.withStyle mempty V.bold
   depressed <- hold mempty $ leftmost
-    [ V.withStyle mempty V.bold <$ md
+    [ bold <$ md
     , mempty <$ mu
     ]
-  let attrs = (<>) <$> _checkboxConfig_attributes cfg <*> depressed
+  let focused = ffor (current f) $ \x -> if x then bold else mempty
+  let attrs = mconcat <$> sequence [_checkboxConfig_attributes cfg, depressed, focused]
   richText (RichTextConfig attrs) $ join . current $ ffor v $ \checked ->
     if checked
       then _checkboxStyle_checked <$> _checkboxConfig_checkboxStyle cfg
