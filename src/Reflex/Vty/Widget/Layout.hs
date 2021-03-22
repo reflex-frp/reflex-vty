@@ -507,4 +507,4 @@ grout
   -> m a
 grout c w = do
   r <- region c
-  pane r (pure False) w
+  pane r (pure True) w
