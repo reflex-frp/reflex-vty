@@ -85,7 +85,7 @@ library
 executable example
   hs-source-dirs: src-bin
   main-is: example.hs
-  ghc-options: -threaded
+  ghc-options: -threaded -Wall
   build-depends:
     base,
     containers,
