@@ -108,12 +108,14 @@ checkboxStyleTick = CheckboxStyle
 data CheckboxConfig t = CheckboxConfig
   { _checkboxConfig_checkboxStyle :: Behavior t CheckboxStyle
   , _checkboxConfig_attributes :: Behavior t V.Attr
+  , _checkboxConfig_setValue :: Event t Bool
   }
 
 instance (Reflex t) => Default (CheckboxConfig t) where
   def = CheckboxConfig
     { _checkboxConfig_checkboxStyle = pure def
     , _checkboxConfig_attributes = pure V.defAttr
+    , _checkboxConfig_setValue = never
     }
 
 -- | A checkbox widget
@@ -127,9 +129,10 @@ checkbox cfg v0 = do
   mu <- mouseUp
   space <- key (V.KChar ' ')
   f <- focus
-  v <- toggle v0 $ leftmost
-    [ () <$ mu
-    , () <$ space
+  v <- foldDyn ($) v0 $ leftmost
+    [ not <$ mu
+    , not <$ space
+    , const <$> _checkboxConfig_setValue cfg
     ]
   let bold = V.withStyle mempty V.bold
   depressed <- hold mempty $ leftmost
