@@ -119,7 +119,14 @@ instance (Adjustable t m, MonadHold t m, MonadFix m) => Adjustable t (Focus t m)
   traverseDMapWithKeyWithAdjust f m e = Focus $ traverseDMapWithKeyWithAdjust (\k v -> unFocus $ f k v) m e
   traverseDMapWithKeyWithAdjustWithMove f m e = Focus $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unFocus $ f k v) m e
 
-instance (HasVtyInput t m, Monad m) => HasVtyInput t (Focus t m)
+instance (Reflex t, MonadFix m, HasVtyInput t m) => HasVtyInput t (Focus t m) where
+  localInput f (Focus w) = Focus $ do
+    d <- ask
+    ((a, fs), e) <- lift $ lift $ lift $
+      localInput f $ runEventWriterT $ flip runReaderT d $ runDynamicWriterT w
+    tellEvent e
+    tellDyn fs
+    return a
 
 instance (HasVtyWidgetCtx t m, Reflex t, MonadFix m) => HasVtyWidgetCtx t (Focus t m) where
   localCtx f g (Focus w) = Focus $ do
@@ -330,8 +337,6 @@ chunk o r (offset, sz) = case o of
     , _region_width = sz
     }
 
-
-
 -- ** The layout monad
 
 -- | A class of operations for creating screen layouts.
@@ -387,7 +392,15 @@ instance (HasVtyWidgetCtx t m, HasDisplaySize t m, Reflex t, MonadFix m) => HasV
       let reg = Region 0 0 <$> dw <*> dh
       runLayout orientation reg x
 
-instance (HasVtyInput t m, Monad m) => HasVtyInput t (Layout t m)
+instance (HasVtyInput t m, HasDisplaySize t m, MonadFix m, Reflex t) => HasVtyInput t (Layout t m) where
+  localInput f x = do
+    solution <- Layout ask
+    let orientation = snd . rootLT <$> solution
+    lift $ localInput f $ do
+      dw <- displayWidth
+      dh <- displayHeight
+      let reg = Region 0 0 <$> dw <*> dh
+      runLayout orientation reg x
 
 instance ImageWriter t m => ImageWriter t (Layout t m)
 
@@ -416,6 +429,20 @@ instance (MonadFix m, MonadFocus t m) => MonadFocus t (Layout t m) where
     ((a, w), sf) <- lift $ lift $ subFoci $ flip runReaderT y $ runDynamicWriterT x
     tellDyn w
     pure (a, sf)
+
+-- | Runs an action in the focus monad, providing it with information about
+-- whether any of the foci created within it are focused.
+anyChildFocused
+  :: (MonadFocus t m, MonadFix m)
+  => (Dynamic t Bool -> m a)
+  -> m a
+anyChildFocused f = do
+  fid <- focusedId
+  rec (a, fs) <- subFoci (f b)
+      let b = liftA2 (\foc s -> case foc of
+            Nothing -> False
+            Just f' -> OSet.member f' $ unFocusSet s) fid fs
+  pure a
 
 -- | Runs a 'Layout' action, using the given orientation and region to
 -- calculate layout solutions.
@@ -475,15 +502,11 @@ tile'
 tile' c w = do
   fid <- makeFocus
   r <- region c
-  fid' <- focusedId
   parentFocused <- isFocused fid
-  rec (click, result, subs) <- pane r focused $ do
+  rec (click, result, childFocused) <- pane r focused $ anyChildFocused $ \childFoc -> do
         m <- mouseDown V.BLeft
-        (x, sf) <- subFoci w
-        pure (m, x, sf)
-      let childFocused = liftA2 (\f s -> case f of
-            Nothing -> False
-            Just f' -> OSet.member f' $ unFocusSet s) fid' subs
+        x <- w
+        pure (m, x, childFoc)
       let focused = (||) <$> parentFocused <*> childFocused
   requestFocus $ Refocus_Id fid <$ click
   pure (fid, result)
@@ -502,7 +525,7 @@ tile c = fmap snd . tile' c
 -- | A widget that is not focusable and occupies a layout region based on the
 -- provided constraint.
 grout
-  :: (Reflex t, MonadNodeId m, HasVtyWidgetCtx t m, MonadLayout t m)
+  :: (Reflex t, MonadNodeId m, HasVtyWidgetCtx t m, MonadLayout t m, HasVtyInput t m)
   => Dynamic t Constraint
   -> m a
   -> m a

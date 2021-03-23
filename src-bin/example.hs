@@ -159,34 +159,30 @@ todo
   => Todo
   -> m (TodoOutput t)
 todo t0 = row $ do
-  let getToggleEvent = keyCombos $ Set.fromList
+  let toggleKeys = Set.fromList
         [ (V.KChar ' ', [V.MCtrl])
         , (V.KChar '@', [V.MCtrl])
         ]
-  rec let cfg = def
-            { _checkboxConfig_setValue = setVal
-            }
-      (toggleCB, value) <- tile (fixed 4) $ do
-        e <- getToggleEvent
-        v <- checkbox cfg $ _todo_done t0
-        pure (e, v)
-      let setVal = attachWith (\v _ -> not v) (current value) $ leftmost
-            [ toggleCB
-            , toggleTI
-            ]
-      (fid, (ti, toggleTI, d)) <- tile' flex $ do
-        i <- input
-        e <- getToggleEvent
-        v <- textInput $ def
-          { _textInputConfig_initialValue = TZ.fromText $ _todo_label t0 }
-        let deleteSelf = attachWithMaybe backspaceOnEmpty (current $ _textInput_value v) i
-        return (v, e, deleteSelf)
-  return $ TodoOutput
-    { _todoOutput_todo = Todo <$> _textInput_value ti <*> value
-    , _todoOutput_delete = d
-    , _todoOutput_height = _textInput_lines ti
-    , _todoOutput_focusId = fid
-    }
+  anyChildFocused $ \focused -> do
+    toggleE <- keyCombos toggleKeys
+    filterKeys (flip Set.notMember $ Set.insert (V.KChar '\t', []) toggleKeys) $ do
+      rec let cfg = def
+                { _checkboxConfig_setValue = setVal
+                }
+          value <- tile (fixed 4) $ checkbox cfg $ _todo_done t0
+          let setVal = attachWith (\v _ -> not v) (current value) $ gate (current focused) toggleE
+          (fid, (ti, d)) <- tile' flex $ do
+            i <- input
+            v <- textInput $ def
+              { _textInputConfig_initialValue = TZ.fromText $ _todo_label t0 }
+            let deleteSelf = attachWithMaybe backspaceOnEmpty (current $ _textInput_value v) i
+            return (v, deleteSelf)
+      return $ TodoOutput
+        { _todoOutput_todo = Todo <$> _textInput_value ti <*> value
+        , _todoOutput_delete = d
+        , _todoOutput_height = _textInput_lines ti
+        , _todoOutput_focusId = fid
+        }
   where
     backspaceOnEmpty v = \case
       V.EvKey V.KBS _ | T.null v -> Just ()

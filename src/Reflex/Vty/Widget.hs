@@ -47,6 +47,7 @@ module Reflex.Vty.Widget
   , doubleBoxStyle
   , fill
   , hRule
+  , filterKeys
   , KeyCombo
   , key
   , keys
@@ -82,12 +83,6 @@ data VtyWidgetCtx t = VtyWidgetCtx
     -- ^ The height of the region allocated to the widget.
   , _vtyWidgetCtx_focus :: Dynamic t Bool
     -- ^ Whether the widget should behave as if it has focus for keyboard input.
-  , _vtyWidgetCtx_input :: Event t VtyEvent
-    -- ^ User input events that the widget's parent chooses to share. These will generally
-    -- be filtered for relevance:
-    --  * Keyboard inputs are restricted to focused widgets
-    --  * Mouse inputs are restricted to the region in which the widget resides and are
-    --  translated into its internal coordinates.
   }
 
 -- | The output of a 'VtyWidget'
@@ -106,7 +101,9 @@ instance (Adjustable t m, MonadHold t m, Reflex t) => Adjustable t (VtyWidget t 
 
 -- | A widget that can read its context and produce image output
 newtype VtyWidget t m a = VtyWidget
-  { unVtyWidget :: BehaviorWriterT t [Image] (ReaderT (VtyWidgetCtx t) m) a
+  { unVtyWidget :: BehaviorWriterT t [Image]
+      (ReaderT (VtyWidgetCtx t)
+        (ReaderT (Event t VtyEvent) m)) a
   } deriving
     ( Functor
     , Applicative
@@ -124,7 +121,7 @@ newtype VtyWidget t m a = VtyWidget
 
 deriving instance PerformEvent t m => PerformEvent t (VtyWidget t m)
 instance MonadTrans (VtyWidget t) where
-  lift f = VtyWidget $ lift $ lift f
+  lift f = VtyWidget $ lift $ lift $ lift f
 
 instance MonadNodeId m => MonadNodeId (VtyWidget t m) where
   getNextNodeId = VtyWidget $ do
@@ -147,10 +144,11 @@ instance (Monad m, Reflex t) => HasVtyWidgetCtx t (VtyWidget t m) where
 -- | Runs a 'VtyWidget' with a given context
 runVtyWidget
   :: (Reflex t, MonadNodeId m)
-  => VtyWidgetCtx t
+  => Event t VtyEvent
+  -> VtyWidgetCtx t
   -> VtyWidget t m a
   -> m (a, Behavior t [Image])
-runVtyWidget ctx w = runReaderT (runBehaviorWriterT (unVtyWidget w)) ctx
+runVtyWidget e ctx w = runReaderT (runReaderT (runBehaviorWriterT (unVtyWidget w)) ctx) e
 
 -- | Sets up the top-level context for a 'VtyWidget' and runs it with that context
 mainWidgetWithHandle
@@ -168,10 +166,9 @@ mainWidgetWithHandle vty child =
     let ctx = VtyWidgetCtx
           { _vtyWidgetCtx_width = fmap fst size
           , _vtyWidgetCtx_height = fmap snd size
-          , _vtyWidgetCtx_input = inp'
           , _vtyWidgetCtx_focus = constDyn True
           }
-    (shutdown, images) <- runNodeIdT $ runVtyWidget ctx $ do
+    (shutdown, images) <- runNodeIdT $ runVtyWidget inp' ctx $ do
       tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
       child
     return $ VtyResult
@@ -206,7 +203,6 @@ instance HasDisplaySize t m => HasDisplaySize t (ReaderT x m)
 instance HasDisplaySize t m => HasDisplaySize t (BehaviorWriterT t x m)
 instance HasDisplaySize t m => HasDisplaySize t (DynamicWriterT t x m)
 instance HasDisplaySize t m => HasDisplaySize t (EventWriterT t x m)
-
 instance HasDisplaySize t m => HasDisplaySize t (NodeIdT m)
 
 -- | A class for things that can receive vty events as input
@@ -214,9 +210,23 @@ class HasVtyInput t m | m -> t where
   input :: m (Event t VtyEvent)
   default input :: (f m' ~ m, Monad m', MonadTrans f, HasVtyInput t m') => m (Event t VtyEvent)
   input = lift input
+  -- | User input events that the widget's parent chooses to share. These will generally
+  -- be filtered for relevance.
+  localInput :: (Event t VtyEvent -> Event t VtyEvent) -> m a -> m a
+
+-- | Filter the keyboard input that a child widget may receive
+filterKeys :: (Reflex t, HasVtyInput t m) => (KeyCombo -> Bool) -> m a -> m a
+filterKeys f x = localInput (ffilter (\case
+  V.EvKey k mods -> f (k, mods)
+  _ -> True)) x
 
 instance (Reflex t, Monad m) => HasVtyInput t (VtyWidget t m) where
-  input = VtyWidget . lift $ asks _vtyWidgetCtx_input
+  input = VtyWidget . lift $ lift $ ask
+  localInput f (VtyWidget m) = VtyWidget $ do
+    ctx <- ask
+    (a, images) <- lift $ lift $ local f $ runReaderT (runBehaviorWriterT m) ctx
+    tellImages images
+    pure a
 
 -- | A class for things that can dynamically gain and lose focus
 class HasFocus t m | m -> t where
@@ -273,7 +283,7 @@ withinImage (Region left top width height)
 -- * mouse inputs inside the region have their coordinates translated such
 --   that (0,0) is the top-left corner of the region
 pane
-  :: (Reflex t, Monad m, MonadNodeId m, HasVtyWidgetCtx t m)
+  :: (Reflex t, Monad m, MonadNodeId m, HasVtyWidgetCtx t m, HasVtyInput t m)
   => Dynamic t Region
   -> Dynamic t Bool -- ^ Whether the widget should be focused when the parent is.
   -> m a
@@ -281,16 +291,15 @@ pane
 pane dr foc child = do
   let reg = current dr
   let subContext ctx = VtyWidgetCtx
-        { _vtyWidgetCtx_input = fmapMaybe id $
-            attachWith (\(r,f) e -> filterInput r f e)
-              (liftA2 (,) reg (current foc))
-              (_vtyWidgetCtx_input ctx)
-        , _vtyWidgetCtx_focus = liftA2 (&&) (_vtyWidgetCtx_focus ctx) foc
+        { _vtyWidgetCtx_focus = liftA2 (&&) (_vtyWidgetCtx_focus ctx) foc
         , _vtyWidgetCtx_width = _region_width <$> dr
         , _vtyWidgetCtx_height = _region_height <$> dr
         }
+      inputFilter = fmapMaybe id .
+        attachWith (\(r,f) e -> filterInput r f e)
+          (liftA2 (,) reg (current foc))
   let imagesWithinRegion images = liftA2 (\is r -> map (withinImage r) is) images reg
-  localCtx subContext imagesWithinRegion child
+  localInput inputFilter $ localCtx subContext imagesWithinRegion child
   where
     filterInput :: Region -> Bool -> VtyEvent -> Maybe VtyEvent
     filterInput (Region l t w h) focused e = case e of
@@ -435,7 +444,7 @@ keyCombos ks = do
 
 -- | A plain split of the available space into vertically stacked panes.
 -- No visual separator is built in here.
-splitV :: (Reflex t, Monad m, MonadNodeId m, HasVtyWidgetCtx t m, HasDisplaySize t m)
+splitV :: (Reflex t, Monad m, MonadNodeId m, HasVtyWidgetCtx t m, HasDisplaySize t m, HasVtyInput t m)
        => Dynamic t (Int -> Int)
        -- ^ Function used to determine size of first pane based on available size
        -> Dynamic t (Bool, Bool)
@@ -456,7 +465,7 @@ splitV sizeFunD focD wA wB = do
 
 -- | A plain split of the available space into horizontally stacked panes.
 -- No visual separator is built in here.
-splitH :: (Reflex t, Monad m, MonadNodeId m, HasDisplaySize t m, HasVtyWidgetCtx t m)
+splitH :: (Reflex t, Monad m, MonadNodeId m, HasDisplaySize t m, HasVtyWidgetCtx t m, HasVtyInput t m)
        => Dynamic t (Int -> Int)
        -- ^ Function used to determine size of first pane based on available size
        -> Dynamic t (Bool, Bool)
@@ -563,7 +572,7 @@ roundedBoxStyle :: BoxStyle
 roundedBoxStyle = BoxStyle '╭' '─' '╮' '│' '╯' '─' '╰' '│'
 
 -- | Draws a titled box in the provided style and a child widget inside of that box
-boxTitle :: (Monad m, Reflex t, MonadNodeId m, HasDisplaySize t m, ImageWriter t m, HasVtyWidgetCtx t m)
+boxTitle :: (Monad m, Reflex t, MonadNodeId m, HasDisplaySize t m, ImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
     => Behavior t BoxStyle
     -> Text
     -> m a
@@ -615,7 +624,7 @@ boxTitle boxStyle title child = do
         right = mkHalf delta
 
 -- | A box without a title
-box :: (Monad m, Reflex t, MonadNodeId m, HasDisplaySize t m, ImageWriter t m, HasVtyWidgetCtx t m)
+box :: (Monad m, Reflex t, MonadNodeId m, HasDisplaySize t m, ImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
     => Behavior t BoxStyle
     -> m a
     -> m a
@@ -623,7 +632,7 @@ box boxStyle = boxTitle boxStyle mempty
 
 -- | A box whose style is static
 boxStatic
-  :: (Monad m, Reflex t, MonadNodeId m, HasDisplaySize t m, ImageWriter t m, HasVtyWidgetCtx t m)
+  :: (Monad m, Reflex t, MonadNodeId m, HasDisplaySize t m, ImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
   => BoxStyle
   -> m a
   -> m a
