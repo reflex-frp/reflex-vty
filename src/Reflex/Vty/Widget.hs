@@ -59,6 +59,7 @@ module Reflex.Vty.Widget
 import Control.Applicative (liftA2)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Morph
 import Control.Monad.NodeId
 import Control.Monad.Reader (ReaderT, ask, asks, local, runReaderT)
 import Control.Monad.Trans (MonadTrans, lift)
@@ -120,8 +121,12 @@ newtype VtyWidget t m a = VtyWidget
     )
 
 deriving instance PerformEvent t m => PerformEvent t (VtyWidget t m)
+
 instance MonadTrans (VtyWidget t) where
   lift f = VtyWidget $ lift $ lift $ lift f
+
+instance MFunctor (VtyWidget t) where
+  hoist f = VtyWidget . hoist (hoist (hoist f)) . unVtyWidget
 
 instance MonadNodeId m => MonadNodeId (VtyWidget t m) where
   getNextNodeId = VtyWidget $ do
@@ -219,11 +224,7 @@ filterKeys f x = localInput (ffilter (\case
 
 instance (Reflex t, Monad m) => HasVtyInput t (VtyWidget t m) where
   input = VtyWidget . lift $ lift $ ask
-  localInput f (VtyWidget m) = VtyWidget $ do
-    ctx <- ask
-    (a, images) <- lift $ lift $ local f $ runReaderT (runBehaviorWriterT m) ctx
-    tellImages images
-    pure a
+  localInput f (VtyWidget m) = VtyWidget $ hoist (hoist (local f)) m
 
 -- | A class for things that can dynamically gain and lose focus
 class HasFocus t m | m -> t where

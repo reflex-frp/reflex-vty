@@ -7,6 +7,7 @@ Description: Monad transformer and tools for arranging widgets and building scre
 module Reflex.Vty.Widget.Layout where
 
 import Control.Applicative (liftA2)
+import Control.Monad.Morph
 import Control.Monad.NodeId (MonadNodeId(..), NodeId)
 import Control.Monad.Reader
 import Data.List (mapAccumL)
@@ -113,6 +114,9 @@ newtype Focus t m a = Focus
 instance MonadTrans (Focus t) where
   lift = Focus . lift . lift . lift
 
+instance MFunctor (Focus t) where
+  hoist f = Focus . hoist (hoist (hoist f)) . unFocus
+
 instance (Adjustable t m, MonadHold t m, MonadFix m) => Adjustable t (Focus t m) where
   runWithReplace (Focus a) e = Focus $ runWithReplace a $ fmap unFocus e
   traverseIntMapWithKeyWithAdjust f m e = Focus $ traverseIntMapWithKeyWithAdjust (\k v -> unFocus $ f k v) m e
@@ -120,29 +124,13 @@ instance (Adjustable t m, MonadHold t m, MonadFix m) => Adjustable t (Focus t m)
   traverseDMapWithKeyWithAdjustWithMove f m e = Focus $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unFocus $ f k v) m e
 
 instance (Reflex t, MonadFix m, HasVtyInput t m) => HasVtyInput t (Focus t m) where
-  localInput f (Focus w) = Focus $ do
-    d <- ask
-    ((a, fs), e) <- lift $ lift $ lift $
-      localInput f $ runEventWriterT $ flip runReaderT d $ runDynamicWriterT w
-    tellEvent e
-    tellDyn fs
-    return a
+  localInput f = hoist (localInput f)
 
 instance (HasVtyWidgetCtx t m, Reflex t, MonadFix m) => HasVtyWidgetCtx t (Focus t m) where
-  localCtx f (Focus w) = Focus $ do
-    d <- ask
-    ((a, fs), e) <- lift $ lift $ lift $ localCtx f $ runEventWriterT $ flip runReaderT d $ runDynamicWriterT w
-    tellEvent e
-    tellDyn fs
-    return a
+  localCtx f = hoist (localCtx f)
 
 instance (ImageWriter t m, MonadFix m) => ImageWriter t (Focus t m) where
-  mapImages f (Focus w) = Focus $ do
-    d <- ask
-    ((a, fs), e) <- lift $ lift $ lift $ mapImages f $ runEventWriterT $ flip runReaderT d $ runDynamicWriterT w
-    tellEvent e
-    tellDyn fs
-    return a
+  mapImages f = hoist (mapImages f)
 
 instance (HasFocus t m, Monad m) => HasFocus t (Focus t m)
 
@@ -382,6 +370,9 @@ newtype Layout t m a = Layout
 instance MonadTrans (Layout t) where
   lift = Layout . lift . lift
 
+instance MFunctor (Layout t) where
+  hoist f = Layout . hoist (hoist f) . unLayout
+
 instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (Layout t m) where
   runWithReplace (Layout a) e = Layout $ runWithReplace a $ fmap unLayout e
   traverseIntMapWithKeyWithAdjust f m e = Layout $ traverseIntMapWithKeyWithAdjust (\k v -> unLayout $ f k v) m e
@@ -398,25 +389,27 @@ instance (HasVtyWidgetCtx t m, HasDisplaySize t m, Reflex t, MonadFix m) => HasV
       let reg = Region 0 0 <$> dw <*> dh
       runLayout orientation reg x
 
+-- | Apply a transformation to the context of a child 'Layout' action and run
+-- that action
+hoistRunLayout
+  :: (HasDisplaySize t m, MonadFix m, Monad n)
+  => (m a -> n b)
+  -> Layout t m a
+  -> Layout t n b
+hoistRunLayout f x = do
+  solution <- Layout ask
+  let orientation = snd . rootLT <$> solution
+  lift $ f $ do
+    dw <- displayWidth
+    dh <- displayHeight
+    let reg = Region 0 0 <$> dw <*> dh
+    runLayout orientation reg x
+
 instance (HasVtyInput t m, HasDisplaySize t m, MonadFix m, Reflex t) => HasVtyInput t (Layout t m) where
-  localInput f x = do
-    solution <- Layout ask
-    let orientation = snd . rootLT <$> solution
-    lift $ localInput f $ do
-      dw <- displayWidth
-      dh <- displayHeight
-      let reg = Region 0 0 <$> dw <*> dh
-      runLayout orientation reg x
+  localInput = hoistRunLayout . localInput
 
 instance (HasDisplaySize t m, ImageWriter t m, MonadFix m) => ImageWriter t (Layout t m) where
-  mapImages f x = do
-    solution <- Layout ask
-    let orientation = snd . rootLT <$> solution
-    lift $ mapImages f $ do
-      dw <- displayWidth
-      dh <- displayHeight
-      let reg = Region 0 0 <$> dw <*> dh
-      runLayout orientation reg x
+  mapImages f = hoistRunLayout (mapImages f)
 
 instance (HasFocus t m, Monad m) => HasFocus t (Layout t m)
 
