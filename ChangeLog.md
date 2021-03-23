@@ -51,6 +51,7 @@
 * _Breaking Change_: `HasVtyInput` now has a method `localInput` for filtering the input a child widget may receive
 * Add `anyChildFocused`, which provides information about whether subwidgets are focused
 * Add `filterKeys`, which is the same as `localInput` but only cares about keyboard events
+* _Breaking Change_: `ImageWriter` now has a method `mapImages` for transforming the images emitted by a child widget
 
 ## 0.1.4.1
 * Migrate to new dependent-sum / dependent-map (after the "some" package split)

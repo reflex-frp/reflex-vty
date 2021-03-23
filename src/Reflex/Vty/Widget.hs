@@ -132,14 +132,11 @@ class HasVtyWidgetCtx t m | m -> t where
   askCtx :: m (VtyWidgetCtx t)
   default askCtx :: (f m' ~ m, Monad m', MonadTrans f, HasVtyWidgetCtx t m') => m (VtyWidgetCtx t)
   askCtx = lift askCtx
-  localCtx :: (VtyWidgetCtx t -> VtyWidgetCtx t) -> (Behavior t [Image] -> Behavior t [Image]) -> m a -> m a
+  localCtx :: (VtyWidgetCtx t -> VtyWidgetCtx t) -> m a -> m a
 
 instance (Monad m, Reflex t) => HasVtyWidgetCtx t (VtyWidget t m) where
   askCtx = VtyWidget $ lift ask
-  localCtx f g (VtyWidget x) = VtyWidget $ do
-    (a, images) :: (a, Behavior t [Image]) <- lift $ local f $ runBehaviorWriterT x
-    tellImages $ g images
-    pure a
+  localCtx f (VtyWidget x) = VtyWidget $ local f x
 
 -- | Runs a 'VtyWidget' with a given context
 runVtyWidget
@@ -243,9 +240,15 @@ class (Reflex t, Monad m) => ImageWriter t m | m -> t where
   tellImages :: Behavior t [Image] -> m ()
   default tellImages :: (f m' ~ m, Monad m', MonadTrans f, ImageWriter t m') => Behavior t [Image] -> m ()
   tellImages = lift . tellImages
+  -- | Apply a transformation to the images produced by the child actions
+  mapImages :: (Behavior t [Image] -> Behavior t [Image]) -> m a -> m a
 
 instance (Monad m, Reflex t) => ImageWriter t (BehaviorWriterT t [Image] m) where
   tellImages = tellBehavior
+  mapImages f x = do
+    (a, images) <- lift $ runBehaviorWriterT x
+    tellImages $ f images
+    pure a
 
 -- | A chunk of the display area
 data Region = Region
@@ -283,7 +286,7 @@ withinImage (Region left top width height)
 -- * mouse inputs inside the region have their coordinates translated such
 --   that (0,0) is the top-left corner of the region
 pane
-  :: (Reflex t, Monad m, MonadNodeId m, HasVtyWidgetCtx t m, HasVtyInput t m)
+  :: (Reflex t, Monad m, MonadNodeId m, HasVtyWidgetCtx t m, HasVtyInput t m, ImageWriter t m)
   => Dynamic t Region
   -> Dynamic t Bool -- ^ Whether the widget should be focused when the parent is.
   -> m a
@@ -299,7 +302,7 @@ pane dr foc child = do
         attachWith (\(r,f) e -> filterInput r f e)
           (liftA2 (,) reg (current foc))
   let imagesWithinRegion images = liftA2 (\is r -> map (withinImage r) is) images reg
-  localInput inputFilter $ localCtx subContext imagesWithinRegion child
+  mapImages imagesWithinRegion $ localInput inputFilter $ localCtx subContext child
   where
     filterInput :: Region -> Bool -> VtyEvent -> Maybe VtyEvent
     filterInput (Region l t w h) focused e = case e of
@@ -444,7 +447,7 @@ keyCombos ks = do
 
 -- | A plain split of the available space into vertically stacked panes.
 -- No visual separator is built in here.
-splitV :: (Reflex t, Monad m, MonadNodeId m, HasVtyWidgetCtx t m, HasDisplaySize t m, HasVtyInput t m)
+splitV :: (Reflex t, Monad m, MonadNodeId m, HasVtyWidgetCtx t m, HasDisplaySize t m, HasVtyInput t m, ImageWriter t m)
        => Dynamic t (Int -> Int)
        -- ^ Function used to determine size of first pane based on available size
        -> Dynamic t (Bool, Bool)
@@ -465,7 +468,7 @@ splitV sizeFunD focD wA wB = do
 
 -- | A plain split of the available space into horizontally stacked panes.
 -- No visual separator is built in here.
-splitH :: (Reflex t, Monad m, MonadNodeId m, HasDisplaySize t m, HasVtyWidgetCtx t m, HasVtyInput t m)
+splitH :: (Reflex t, Monad m, MonadNodeId m, HasDisplaySize t m, HasVtyWidgetCtx t m, HasVtyInput t m, ImageWriter t m)
        => Dynamic t (Int -> Int)
        -- ^ Function used to determine size of first pane based on available size
        -> Dynamic t (Bool, Bool)
@@ -485,7 +488,7 @@ splitH sizeFunD focD wA wB = do
 -- | A split of the available space into two parts with a draggable separator.
 -- Starts with half the space allocated to each, and the first pane has focus.
 -- Clicking in a pane switches focus.
-splitVDrag :: (Reflex t, MonadFix m, MonadHold t m, MonadNodeId m, HasDisplaySize t m, HasVtyInput t m, HasVtyWidgetCtx t m)
+splitVDrag :: (Reflex t, MonadFix m, MonadHold t m, MonadNodeId m, HasDisplaySize t m, HasVtyInput t m, HasVtyWidgetCtx t m, ImageWriter t m)
   => m ()
   -> m a
   -> m b
