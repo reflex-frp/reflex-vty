@@ -8,12 +8,12 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# OPTIONS_GHC -threaded #-}
 
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Fix
 import Control.Monad.NodeId
+import Data.Functor
 import Data.Functor.Misc
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -45,6 +45,7 @@ type Manager t m =
 data Example = Example_TextEditor
              | Example_Todo
              | Example_ScrollableTextDisplay
+             | Example_ClickButtonsGetEmojis
   deriving (Show, Read, Eq, Ord, Enum, Bounded)
 
 main :: IO ()
@@ -62,10 +63,12 @@ main = mainWidget $ do
           a <- tf 5 $ textButtonStatic def "Todo List"
           b <- tf 5 $ textButtonStatic def "Text Editor"
           c <- tf 5 $ textButtonStatic def "Scrollable text display"
+          d <- tf 5 $ textButtonStatic def "Clickable buttons"
           return $ leftmost
             [ Left Example_Todo <$ a
             , Left Example_TextEditor <$ b
             , Left Example_ScrollableTextDisplay <$ c
+            , Left Example_ClickButtonsGetEmojis <$ d
             ]
     let escapable w = do
           void w
@@ -77,11 +80,50 @@ main = mainWidget $ do
           Left Example_Todo -> escapable taskList
           Left Example_TextEditor -> escapable testBoxes
           Left Example_ScrollableTextDisplay -> escapable scrolling
+          Left Example_ClickButtonsGetEmojis -> escapable easyExample
           Right () -> buttons
     return ()
   return $ fforMaybe inp $ \case
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
+
+-- * Mouse button and emojis example
+easyExample :: (VtyExample t m, Manager t m, MonadHold t m) => m (Event t ())
+easyExample = do
+  row $ grout (fixed 39) $ col $ do
+    (a1,b1,c1) <- grout (fixed 3) $ row $ do
+      a <- tile flex $ btn "POTATO"
+      b <- tile flex $ btn "TOMATO"
+      c <- tile flex $ btn "EGGPLANT"
+      return (a,b,c)
+    (a2,b2,c2) <- grout (fixed 3) $ row $ do
+      a <- tile flex $ btn "CHEESE"
+      b <- tile flex $ btn "BEES"
+      c <- tile flex $ btn "MY KNEES"
+      return (a,b,c)
+    (a3,b3,c3) <- grout (fixed 3) $ row $ do
+      a <- tile flex $ btn "TIME"
+      b <- tile flex $ btn "RHYME"
+      c <- tile flex $ btn "A BIG CRIME"
+      return (a,b,c)
+    tile (fixed 7) $ boxTitle (constant def) "CLICK BUTTONS TO DRAW*" $ do
+      outputDyn <- foldDyn (<>) "" $ mergeWith (<>)
+        [a1 $> "\129364", b1 $> "🍅", c1 $> "🍆", a2 $> "\129472", b2 $> "🐝🐝", c2 $> "💘", a3 $> "⏰", b3 $> "📜", c3 $> "💰🔪🔒"]
+      text (current outputDyn)
+    tile flex $ text "* Requires font support for emojis. Box may render incorrectly unless your vty is initialized with an updated char width map."
+  inp <- input
+  return $ fforMaybe inp $ \case
+    V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
+    _ -> Nothing
+  where
+    btn label = do
+      let cfg = def { _buttonConfig_focusStyle = pure doubleBoxStyle }
+      buttonClick <- textButtonStatic cfg label
+      keyPress <- keyCombos $ Set.fromList
+        [ (V.KEnter, [])
+        , (V.KChar ' ', [])
+        ]
+      pure $ leftmost [() <$ buttonClick, () <$ keyPress]
 
 -- * Task list example
 taskList
