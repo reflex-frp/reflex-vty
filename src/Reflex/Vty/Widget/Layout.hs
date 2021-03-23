@@ -165,6 +165,20 @@ runFocus (Focus x) = do
       Refocus_Id fid -> Just fid
       Refocus_Shift n -> shiftFS fs mf n
 
+-- | Runs an action in the focus monad, providing it with information about
+-- whether any of the foci created within it are focused.
+anyChildFocused
+  :: (MonadFocus t m, MonadFix m)
+  => (Dynamic t Bool -> m a)
+  -> m a
+anyChildFocused f = do
+  fid <- focusedId
+  rec (a, fs) <- subFoci (f b)
+      let b = liftA2 (\foc s -> case foc of
+            Nothing -> False
+            Just f' -> OSet.member f' $ unFocusSet s) fid fs
+  pure a
+
 -- ** Focus controls
 
 -- | Request focus be shifted backward and forward based on tab presses. <Tab>
@@ -436,20 +450,6 @@ instance (MonadFix m, MonadFocus t m) => MonadFocus t (Layout t m) where
     ((a, w), sf) <- lift $ lift $ subFoci $ flip runReaderT y $ runDynamicWriterT x
     tellDyn w
     pure (a, sf)
-
--- | Runs an action in the focus monad, providing it with information about
--- whether any of the foci created within it are focused.
-anyChildFocused
-  :: (MonadFocus t m, MonadFix m)
-  => (Dynamic t Bool -> m a)
-  -> m a
-anyChildFocused f = do
-  fid <- focusedId
-  rec (a, fs) <- subFoci (f b)
-      let b = liftA2 (\foc s -> case foc of
-            Nothing -> False
-            Just f' -> OSet.member f' $ unFocusSet s) fid fs
-  pure a
 
 -- | Runs a 'Layout' action, using the given orientation and region to
 -- calculate layout solutions.
