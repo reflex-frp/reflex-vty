@@ -48,6 +48,9 @@
   * `textInputTile`: Now requires `HasVtyWidgetCtx`, `HasVtyInput`, `MonadLayout`, and `MonadFocus` instead
 * _Breaking Change_: `CheckboxConfig` now has a field taking an `Event` to set the value of the checkbox.
 * _Breaking Change_: `checkbox` now accepts keyboard input (spacebar to check and uncheck) and is displayed in bold when focused.
+* _Breaking Change_: `HasVtyInput` now has a method `localInput` for filtering the input a child widget may receive
+* Add `anyChildFocused`, which provides information about whether subwidgets are focused
+* Add `filterKeys`, which is the same as `localInput` but only cares about keyboard events
 
 ## 0.1.4.1
 * Migrate to new dependent-sum / dependent-map (after the "some" package split)
