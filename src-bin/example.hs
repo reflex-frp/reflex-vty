@@ -15,6 +15,8 @@ import Reflex
 import Reflex.Network
 import Reflex.Vty
 
+import Example.CPU
+
 type VtyExample t m =
   ( MonadFix m
   , Reflex t
@@ -35,29 +37,39 @@ data Example = Example_TextEditor
              | Example_Todo
              | Example_ScrollableTextDisplay
              | Example_ClickButtonsGetEmojis
+             | Example_CPUStat
   deriving (Show, Read, Eq, Ord, Enum, Bounded)
 
-main :: IO ()
-main = mainWidget $ do
+withCtrlC :: (Monad m, HasVtyInput t m, Reflex t) => m () -> m (Event t ())
+withCtrlC f = do
   inp <- input
+  f
+  return $ fforMaybe inp $ \case
+    V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
+    _ -> Nothing
+
+main :: IO ()
+main = mainWidget $ withCtrlC $ do
   initManager_ $ do
     tabNavigation
     let gf = grout . fixed
-        tf = tile . fixed
+        t = tile flex 
         buttons = col $ do
-          gf 4 $ col $ do
+          gf 3 $ col $ do
             gf 1 $ text "Select an example."
             gf 1 $ text "Esc will bring you back here."
             gf 1 $ text "Ctrl+c to quit."
-          a <- tf 5 $ textButtonStatic def "Todo List"
-          b <- tf 5 $ textButtonStatic def "Text Editor"
-          c <- tf 5 $ textButtonStatic def "Scrollable text display"
-          d <- tf 5 $ textButtonStatic def "Clickable buttons"
+          a <- t $ textButtonStatic def "Todo List"
+          b <- t $ textButtonStatic def "Text Editor"
+          c <- t $ textButtonStatic def "Scrollable text display"
+          d <- t $ textButtonStatic def "Clickable buttons"
+          e <- t $ textButtonStatic def "CPU Usage"
           return $ leftmost
             [ Left Example_Todo <$ a
             , Left Example_TextEditor <$ b
             , Left Example_ScrollableTextDisplay <$ c
             , Left Example_ClickButtonsGetEmojis <$ d
+            , Left Example_CPUStat <$ e
             ]
     let escapable w = do
           void w
@@ -70,11 +82,9 @@ main = mainWidget $ do
           Left Example_TextEditor -> escapable testBoxes
           Left Example_ScrollableTextDisplay -> escapable scrolling
           Left Example_ClickButtonsGetEmojis -> escapable easyExample
+          Left Example_CPUStat -> escapable cpuStats
           Right () -> buttons
     return ()
-  return $ fforMaybe inp $ \case
-    V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
-    _ -> Nothing
 
 -- * Mouse button and emojis example
 easyExample :: (VtyExample t m, Manager t m, MonadHold t m) => m (Event t ())

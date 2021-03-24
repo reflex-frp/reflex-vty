@@ -534,7 +534,7 @@ fill c = do
   let fillImg = current $ liftA2 (\w h -> [V.charFill V.defAttr c w h]) dw dh
   tellImages fillImg
 
--- | Fill the background with the bottom
+-- | Fill the background with the bottom box style
 hRule :: (HasDisplaySize t m, ImageWriter t m) => BoxStyle -> m ()
 hRule boxStyle = fill (_boxStyle_s boxStyle)
 
