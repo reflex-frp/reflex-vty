@@ -54,6 +54,7 @@
 * _Breaking Change_: `ImageWriter` now has a method `mapImages` for transforming the images emitted by a child widget
 * Add `hoistRunLayout` to apply a transformation to the context of a `Layout` action and run that action
 * Add an `MFunctor` instance for `VtyWidget`
+* Bug: fix distribution of available space when it cannot be evenly distributed. Previously, all leftover space would be allocated to the first stretchable widget.
 
 ## 0.1.4.1
 * Migrate to new dependent-sum / dependent-map (after the "some" package split)

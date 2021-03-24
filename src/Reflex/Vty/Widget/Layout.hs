@@ -319,16 +319,27 @@ solve o0 r0 (LayoutForest cs) =
       -> [(a, Constraint)]
       -> [(a, Int)]
     computeSizes available constraints =
+      -- The minimum amount of space we need. Calculated by adding up all of
+      -- the fixed size items and all the minimum sizes of stretchable items
       let minTotal = sum $ ffor constraints $ \case
             (_, Constraint_Fixed n) -> n
             (_, Constraint_Min n) -> n
+      -- The leftover space is the area we can allow stretchable items to
+      -- expand into
           leftover = max 0 (available - minTotal)
+      -- The number of stretchable items that will try to share some of the
+      -- leftover space
           numStretch = length $ filter (isMin . snd) constraints
+      -- Space to allocate to the stretchable items (this is the same for all
+      -- items and there may still be additional leftover space that will have
+      -- to be unevenly distributed)
           szStretch = floor $ leftover % max numStretch 1
+      -- Remainder of available space after even distribution. This extra space
+      -- will be distributed to as many stretchable widgets as possible.
           adjustment = max 0 $ available - minTotal - szStretch * numStretch
       in snd $ mapAccumL (\adj (a, c) -> case c of
           Constraint_Fixed n -> (adj, (a, n))
-          Constraint_Min n -> (0, (a, n + szStretch + adj))) adjustment constraints
+          Constraint_Min n -> (max 0 (adj-1), (a, n + szStretch + signum adj))) adjustment constraints
     isMin (Constraint_Min _) = True
     isMin _ = False
 
