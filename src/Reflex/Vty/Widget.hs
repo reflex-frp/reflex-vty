@@ -578,7 +578,7 @@ roundedBoxStyle = BoxStyle '╭' '─' '╮' '│' '╯' '─' '╰' '│'
 -- | Draws a titled box in the provided style and a child widget inside of that box
 boxTitle :: (Monad m, Reflex t, MonadNodeId m, HasDisplaySize t m, ImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
     => Behavior t BoxStyle
-    -> Text
+    -> Behavior t Text
     -> m a
     -> m a
 boxTitle boxStyle title child = do
@@ -586,18 +586,18 @@ boxTitle boxStyle title child = do
   dw <- displayWidth
   let boxReg = Region 0 0 <$> dw <*> dh
       innerReg = Region 1 1 <$> (subtract 2 <$> dw) <*> (subtract 2 <$> dh)
-  tellImages (boxImages <$> boxStyle <*> current boxReg)
+  tellImages (boxImages <$> title <*> boxStyle <*> current boxReg)
   tellImages (fmap (\r -> [regionBlankImage r]) (current innerReg))
   pane innerReg (pure True) child
   where
-    boxImages :: BoxStyle -> Region -> [Image]
-    boxImages style (Region left top width height) =
+    boxImages :: Text -> BoxStyle -> Region -> [Image]
+    boxImages title' style (Region left top width height) =
       let right = left + width - 1
           bottom = top + height - 1
           sides =
             [ withinImage (Region (left + 1) top (width - 2) 1) $
                 V.text' V.defAttr $
-                  hPadText title (_boxStyle_n style) (width - 2)
+                  hPadText title' (_boxStyle_n style) (width - 2)
             , withinImage (Region right (top + 1) 1 (height - 2)) $
                 V.charFill V.defAttr (_boxStyle_e style) 1 (height - 2)
             , withinImage (Region (left + 1) bottom (width - 2) 1) $

@@ -55,6 +55,8 @@
 * Add `hoistRunLayout` to apply a transformation to the context of a `Layout` action and run that action
 * Add an `MFunctor` instance for `VtyWidget`
 * Bug: fix distribution of available space when it cannot be evenly distributed. Previously, all leftover space would be allocated to the first stretchable widget.
+* Add a CPU usage indicator to the example executable
+* _Breaking Change_: `boxTitle` now takes a `Behavior t Text` as its title, instead of a plain `Text`
 
 ## 0.1.4.1
 * Migrate to new dependent-sum / dependent-map (after the "some" package split)

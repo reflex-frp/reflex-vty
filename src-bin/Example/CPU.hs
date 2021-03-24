@@ -8,6 +8,8 @@ import Control.Monad.Fix
 import Control.Monad.IO.Class
 import Data.Time
 import Data.Word
+import qualified Data.Text as T
+import Text.Printf
 
 import Reflex
 import Reflex.Vty
@@ -69,19 +71,18 @@ idleStats =
 
 -- | Draws the cpu usage percent as a live-updating bar graph. The output should look like:
 --
---
--- > ╔═══════ CPU Usage ══════╗
--- > ║                        ║
--- > ║                        ║
--- > ║                        ║
--- > ║                        ║
--- > ║                        ║
--- > ║                        ║
--- > ║████████████████████████║
--- > ║████████████████████████║
--- > ║████████████████████████║
--- > ║████████████████████████║
--- > ╚════════════════════════╝
+-- > ╔══════ CPU Usage:  38% ══════╗
+-- > ║                             ║
+-- > ║                             ║
+-- > ║                             ║
+-- > ║                             ║
+-- > ║                             ║
+-- > ║                             ║
+-- > ║█████████████████████████████║
+-- > ║█████████████████████████████║
+-- > ║█████████████████████████████║
+-- > ║█████████████████████████████║
+-- > ╚═════════════════════════════╝
 --
 cpuStats
   :: ( Reflex t
@@ -111,7 +112,8 @@ cpuStats = do
         Just get' -> Just (sumStats get' nonIdleStats, sumStats get' idleStats)
   active <- foldDyn cpuPercentStep ((0, 0), 0) cpuStat
   let pct = fmap snd active
-  boxTitle (pure doubleBoxStyle) " CPU Usage " $ col $ do
+      title = current $ ffor pct $ \x -> " CPU Usage: " <> T.pack (printf "%3.0f" $ x * 100) <> "% "
+  boxTitle (pure doubleBoxStyle) title $ col $ do
     grout flex blank
     dh <- displayHeight
     let h :: Dynamic t Int = ceiling <$> ((*) <$> (fromIntegral <$> dh) <*> pct)
