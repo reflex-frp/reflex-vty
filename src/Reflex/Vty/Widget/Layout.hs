@@ -13,7 +13,7 @@ import Control.Monad.Reader
 import Data.List (mapAccumL)
 import Data.Map.Ordered (OMap)
 import qualified Data.Map.Ordered as OMap
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isNothing)
 import Data.Ratio ((%))
 import Data.Semigroup (First(..))
 import Data.Set.Ordered (OSet)
@@ -164,7 +164,9 @@ runFocus (Focus x) = do
     f (fs, rf) mf = case getFirst rf of
       Refocus_Clear -> Nothing
       Refocus_Id fid -> Just fid
-      Refocus_Shift n -> shiftFS fs mf n
+      Refocus_Shift n -> if n < 0 && isNothing mf
+        then shiftFS fs (OSet.elemAt (unFocusSet fs) 0) n
+        else shiftFS fs mf n
 
 -- | Runs an action in the focus monad, providing it with information about
 -- whether any of the foci created within it are focused.
