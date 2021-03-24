@@ -108,6 +108,7 @@ newtype Focus t m a = Focus
     , HasDisplaySize t
     , PostBuild t
     , MonadNodeId
+    , MonadIO
     )
 
 
@@ -390,6 +391,7 @@ newtype Layout t m a = Layout
     , HasDisplaySize t
     , PostBuild t
     , MonadNodeId
+    , MonadIO
     )
 
 instance MonadTrans (Layout t) where
