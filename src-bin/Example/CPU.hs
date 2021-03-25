@@ -10,6 +10,7 @@ import Data.Ratio
 import Data.Time
 import Data.Word
 import qualified Data.Text as T
+import qualified Graphics.Vty as V
 import Text.Printf
 
 import Reflex
@@ -136,15 +137,56 @@ chart pct = do
     grout flex blank
     dh <- displayHeight
     let heights = calcRowHeights <$> dh <*> pct
-    tile (fixed 1) $ fill $ current $ eighthBlocks . snd <$> heights
-    tile (fixed $ fst <$> heights) $ fill $ pure '█'
+        quarters = fst <$> heights
+        eighths = snd <$> heights
+        eighthRow = ffor eighths $ \x -> if x == 0 then 0 else 1
+    tile (fixed eighthRow) $ fill' (current $ eighthBlocks <$> eighths) $ current $
+      ffor quarters $ \q ->
+        if | _quarter_fourth q > 0 -> red
+           | _quarter_third q > 0 -> orange
+           | _quarter_second q > 0 -> yellow
+           | otherwise -> white
+    tile (fixed $ _quarter_fourth <$> quarters) $ fill' (pure '█') (pure red)
+    tile (fixed $ _quarter_third <$> quarters) $ fill' (pure '█') (pure orange)
+    tile (fixed $ _quarter_second <$> quarters) $ fill' (pure '█') (pure yellow)
+    tile (fixed $ _quarter_first <$> quarters) $ fill' (pure '█') (pure white)
   where
     -- Calculate number of full rows, height of partial row
-    calcRowHeights :: Int -> Ratio Word64 -> (Int, Int)
+    calcRowHeights :: Int -> Ratio Word64 -> (Quarter Int, Int)
     calcRowHeights h r =
       let (full, leftovers) = divMod (numerator r * fromIntegral h) (denominator r)
           partial = ceiling $ 8 * (leftovers % denominator r)
-      in (fromIntegral full, partial)
+          quarter = ceiling $ fromIntegral h / (4 :: Double)
+          n = fromIntegral full
+      in if | n <= quarter ->
+                (Quarter n 0 0 0, partial)
+            | n <= (2 * quarter) ->
+                (Quarter quarter (n - quarter) 0 0, partial)
+            | n <= (3 * quarter) ->
+                (Quarter quarter quarter (n - (2 * quarter)) 0, partial)
+            | otherwise ->
+                (Quarter quarter quarter quarter (n - (3 * quarter)), partial)
+    fill' bc attr = do
+      dw <- displayWidth
+      dh <- displayHeight
+      let fillImg =
+            (\w h c a -> [V.charFill a c w h])
+            <$> current dw
+            <*> current dh
+            <*> bc
+            <*> attr
+      tellImages fillImg
+    red = V.withForeColor V.defAttr $ V.rgbColor 255 0 0
+    orange = V.withForeColor V.defAttr $ V.rgbColor 255 165 0
+    yellow = V.withForeColor V.defAttr $ V.rgbColor 255 255 0
+    white = V.withForeColor V.defAttr $ V.rgbColor 255 255 255
+
+data Quarter a = Quarter
+  { _quarter_first :: a
+  , _quarter_second :: a
+  , _quarter_third :: a
+  , _quarter_fourth :: a
+  }
 
 eighthBlocks :: (Eq a, Num a, Ord a) => a -> Char
 eighthBlocks n =
