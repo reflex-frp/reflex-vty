@@ -140,16 +140,16 @@ chart pct = do
         quarters = fst <$> heights
         eighths = snd <$> heights
         eighthRow = ffor eighths $ \x -> if x == 0 then 0 else 1
-    tile (fixed eighthRow) $ fill' (current $ eighthBlocks <$> eighths) $ current $
+    grout (fixed eighthRow) $ fill' (current $ eighthBlocks <$> eighths) $ current $
       ffor quarters $ \q ->
         if | _quarter_fourth q > 0 -> red
            | _quarter_third q > 0 -> orange
            | _quarter_second q > 0 -> yellow
            | otherwise -> white
-    tile (fixed $ _quarter_fourth <$> quarters) $ fill' (pure '█') (pure red)
-    tile (fixed $ _quarter_third <$> quarters) $ fill' (pure '█') (pure orange)
-    tile (fixed $ _quarter_second <$> quarters) $ fill' (pure '█') (pure yellow)
-    tile (fixed $ _quarter_first <$> quarters) $ fill' (pure '█') (pure white)
+    grout (fixed $ _quarter_fourth <$> quarters) $ fill' (pure '█') (pure red)
+    grout (fixed $ _quarter_third <$> quarters) $ fill' (pure '█') (pure orange)
+    grout (fixed $ _quarter_second <$> quarters) $ fill' (pure '█') (pure yellow)
+    grout (fixed $ _quarter_first <$> quarters) $ fill' (pure '█') (pure white)
   where
     -- Calculate number of full rows, height of partial row
     calcRowHeights :: Int -> Ratio Word64 -> (Quarter Int, Int)
@@ -176,10 +176,12 @@ chart pct = do
             <*> bc
             <*> attr
       tellImages fillImg
-    red = V.withForeColor V.defAttr $ V.rgbColor 255 0 0
-    orange = V.withForeColor V.defAttr $ V.rgbColor 255 165 0
-    yellow = V.withForeColor V.defAttr $ V.rgbColor 255 255 0
-    white = V.withForeColor V.defAttr $ V.rgbColor 255 255 255
+    color :: Int -> Int -> Int -> V.Color
+    color = V.rgbColor
+    red = V.withForeColor V.defAttr $ color 255 0 0
+    orange = V.withForeColor V.defAttr $ color 255 165 0
+    yellow = V.withForeColor V.defAttr $ color 255 255 0
+    white = V.withForeColor V.defAttr $ color 255 255 255
 
 data Quarter a = Quarter
   { _quarter_first :: a
