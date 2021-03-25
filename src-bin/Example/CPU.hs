@@ -6,6 +6,7 @@ module Example.CPU where
 import Control.Exception
 import Control.Monad.Fix
 import Control.Monad.IO.Class
+import Data.Ratio
 import Data.Time
 import Data.Word
 import qualified Data.Text as T
@@ -112,38 +113,77 @@ cpuStats = do
         Just get' -> Just (sumStats get' nonIdleStats, sumStats get' idleStats)
   active <- foldDyn cpuPercentStep ((0, 0), 0) cpuStat
   let pct = fmap snd active
-      title = current $ ffor pct $ \x -> " CPU Usage: " <> T.pack (printf "%3.0f" $ x * 100) <> "% "
-  boxTitle (pure doubleBoxStyle) title $ col $ do
+  chart pct
+
+chart
+  :: ( MonadFix m
+     , MonadFocus t m
+     , MonadLayout t m
+     , MonadNodeId m
+     , ImageWriter t m
+     , HasVtyInput t m
+     , HasVtyWidgetCtx t m
+     , HasDisplaySize t m
+     )
+  => Dynamic t (Ratio Word64) -> m ()
+chart pct = do
+  let title = ffor pct $ \x -> mconcat
+        [ " CPU Usage: "
+        , T.pack (printf "%3d" $ (ceiling $ x * 100 :: Int))
+        , "% "
+        ]
+  boxTitle (pure doubleBoxStyle) (current title) $ col $ do
     grout flex blank
     dh <- displayHeight
-    let h :: Dynamic t Int = ceiling <$> ((*) <$> (fromIntegral <$> dh) <*> pct)
-    tile (fixed h) $ fill '█'
+    let heights = calcRowHeights <$> dh <*> pct
+    tile (fixed 1) $ fill $ current $ eighthBlocks . snd <$> heights
+    tile (fixed $ fst <$> heights) $ fill $ pure '█'
+  where
+    -- Calculate number of full rows, height of partial row
+    calcRowHeights :: Int -> Ratio Word64 -> (Int, Int)
+    calcRowHeights h r =
+      let (full, leftovers) = divMod (numerator r * fromIntegral h) (denominator r)
+          partial = ceiling $ 8 * (leftovers % denominator r)
+      in (fromIntegral full, partial)
+
+eighthBlocks :: (Eq a, Num a, Ord a) => a -> Char
+eighthBlocks n =
+  if
+     | n <= 0 -> ' '
+     | n == 1 -> '▁'
+     | n == 2 -> '▂'
+     | n == 3 -> '▃'
+     | n == 4 -> '▄'
+     | n == 5 -> '▅'
+     | n == 6 -> '▆'
+     | n == 7 -> '▇'
+     | otherwise -> '█'
 
 -- | Determine the current percentage usage according to this algorithm:
 --
 -- PrevIdle = previdle + previowait
 -- Idle = idle + iowait
--- 
+--
 -- PrevNonIdle = prevuser + prevnice + prevsystem + previrq + prevsoftirq + prevsteal
 -- NonIdle = user + nice + system + irq + softirq + steal
--- 
+--
 -- PrevTotal = PrevIdle + PrevNonIdle
 -- Total = Idle + NonIdle
--- 
+--
 -- totald = Total - PrevTotal
 -- idled = Idle - PrevIdle
--- 
+--
 -- CPU_Percentage = (totald - idled)/totald
 --
 -- Source: https://stackoverflow.com/questions/23367857/accurate-calculation-of-cpu-usage-given-in-percentage-in-linux
 cpuPercentStep
   :: (Word64, Word64) -- Current active, Current idle
-  -> ((Word64, Word64), Double) -- (Previous idle, Previous total), previous percent
-  -> ((Word64, Word64), Double) -- (New idle, new total), percent
+  -> ((Word64, Word64), Ratio Word64) -- (Previous idle, Previous total), previous percent
+  -> ((Word64, Word64), Ratio Word64) -- (New idle, new total), percent
 cpuPercentStep (nonidle, idle) ((previdle, prevtotal), _) =
   let total = idle + nonidle
       idled = idle - previdle
       totald = total - prevtotal
   in ( (idle, total)
-     , (fromIntegral $ totald - idled) / fromIntegral totald
+     , (totald - idled) % totald
      )

@@ -527,16 +527,20 @@ splitVDrag wS wA wB = do
       return (m, x')
 
 -- | Fill the background with a particular character.
-fill :: (HasDisplaySize t m, ImageWriter t m) => Char -> m ()
-fill c = do
+fill :: (HasDisplaySize t m, ImageWriter t m) => Behavior t Char -> m ()
+fill bc = do
   dw <- displayWidth
   dh <- displayHeight
-  let fillImg = current $ liftA2 (\w h -> [V.charFill V.defAttr c w h]) dw dh
+  let fillImg =
+        (\w h c -> [V.charFill V.defAttr c w h])
+        <$> current dw
+        <*> current dh
+        <*> bc
   tellImages fillImg
 
 -- | Fill the background with the bottom box style
 hRule :: (HasDisplaySize t m, ImageWriter t m) => BoxStyle -> m ()
-hRule boxStyle = fill (_boxStyle_s boxStyle)
+hRule boxStyle = fill $ pure (_boxStyle_s boxStyle)
 
 -- | Defines a set of symbols to use to draw the outlines of boxes
 -- C.f. https://en.wikipedia.org/wiki/Box-drawing_character

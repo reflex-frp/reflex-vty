@@ -57,6 +57,7 @@
 * Bug: fix distribution of available space when it cannot be evenly distributed. Previously, all leftover space would be allocated to the first stretchable widget.
 * Add a CPU usage indicator to the example executable
 * _Breaking Change_: `boxTitle` now takes a `Behavior t Text` as its title, instead of a plain `Text`
+* _Breaking Change_: `fill` now takes a `Behavior t Char` instead of a `Char`
 
 ## 0.1.4.1
 * Migrate to new dependent-sum / dependent-map (after the "some" package split)
