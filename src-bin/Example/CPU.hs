@@ -97,11 +97,11 @@ cpuStats
      , TriggerEvent t m
      , HasDisplayRegion t m
      , HasImageWriter t m
-     , MonadLayout t m
-     , MonadFocus t m
+     , HasLayout t m
+     , HasFocus t m
      , MonadNodeId m
-     , HasVtyWidgetCtx t m
-     , HasVtyInput t m
+     , HasInput t m
+     , HasFocusReader t m
      )
   => m ()
 cpuStats = do
@@ -118,13 +118,13 @@ cpuStats = do
 
 chart
   :: ( MonadFix m
-     , MonadFocus t m
-     , MonadLayout t m
+     , HasFocus t m
+     , HasLayout t m
      , MonadNodeId m
      , HasImageWriter t m
-     , HasVtyInput t m
-     , HasVtyWidgetCtx t m
+     , HasInput t m
      , HasDisplayRegion t m
+     , HasFocusReader t m
      )
   => Dynamic t (Ratio Word64) -> m ()
 chart pct = do

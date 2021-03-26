@@ -20,17 +20,17 @@ import Example.CPU
 type VtyExample t m =
   ( MonadFix m
   , Reflex t
-  , HasVtyInput t m
-  , HasVtyWidgetCtx t m
+  , HasInput t m
   , HasImageWriter t m
   , MonadNodeId m
   , HasDisplayRegion t m
   , HasFocus t m
+  , HasFocusReader t m
   )
 
 type Manager t m =
-  ( MonadLayout t m
-  , MonadFocus t m
+  ( HasLayout t m
+  , HasFocus t m
   )
 
 data Example = Example_TextEditor
@@ -40,7 +40,7 @@ data Example = Example_TextEditor
              | Example_CPUStat
   deriving (Show, Read, Eq, Ord, Enum, Bounded)
 
-withCtrlC :: (Monad m, HasVtyInput t m, Reflex t) => m () -> m (Event t ())
+withCtrlC :: (Monad m, HasInput t m, Reflex t) => m () -> m (Event t ())
 withCtrlC f = do
   inp <- input
   f
