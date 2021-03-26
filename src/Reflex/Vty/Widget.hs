@@ -473,6 +473,8 @@ pane dr foc child = localRegion (const dr) $
     localFocus (const foc) $
       inputInFocusedRegion >>= \e -> localInput (const e) child
 
+-- * Misc
+
 -- | A widget that draws nothing
 blank :: Monad m => m ()
 blank = return ()
