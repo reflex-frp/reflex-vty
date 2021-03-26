@@ -62,6 +62,7 @@ import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Morph
 import Control.Monad.NodeId
 import Control.Monad.Reader (ReaderT, ask, asks, local, runReaderT)
+import Control.Monad.Ref
 import Control.Monad.Trans (MonadTrans, lift)
 import Data.Default (Default(..))
 import Data.Set (Set)
@@ -78,11 +79,7 @@ import Reflex.Vty.Host
 
 -- | The context within which a 'VtyWidget' runs
 data VtyWidgetCtx t = VtyWidgetCtx
-  { _vtyWidgetCtx_width :: Dynamic t Int
-    -- ^ The width of the region allocated to the widget.
-  , _vtyWidgetCtx_height :: Dynamic t Int
-    -- ^ The height of the region allocated to the widget.
-  , _vtyWidgetCtx_focus :: Dynamic t Bool
+  { _vtyWidgetCtx_focus :: Dynamic t Bool
     -- ^ Whether the widget should behave as if it has focus for keyboard input.
   }
 
@@ -102,9 +99,9 @@ instance (Adjustable t m, MonadHold t m, Reflex t) => Adjustable t (VtyWidget t 
 
 -- | A widget that can read its context and produce image output
 newtype VtyWidget t m a = VtyWidget
-  { unVtyWidget :: BehaviorWriterT t [Image]
-      (ReaderT (VtyWidgetCtx t)
-        (ReaderT (Event t VtyEvent) m)) a
+  { unVtyWidget ::
+      ReaderT (VtyWidgetCtx t)
+        (ReaderT (Event t VtyEvent) m) a
   } deriving
     ( Functor
     , Applicative
@@ -112,25 +109,26 @@ newtype VtyWidget t m a = VtyWidget
     , MonadSample t
     , MonadHold t
     , MonadFix
-    , NotReady t
-    , ImageWriter t
-    , PostBuild t
-    , TriggerEvent t
-    , MonadReflexCreateTrigger t
     , MonadIO
+    , MonadRef
     )
 
+deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (VtyWidget t m)
+deriving instance NotReady t m => NotReady t (VtyWidget t m)
 deriving instance PerformEvent t m => PerformEvent t (VtyWidget t m)
+deriving instance PostBuild t m => PostBuild t (VtyWidget t m)
+deriving instance TriggerEvent t m => TriggerEvent t (VtyWidget t m)
+instance HasImageWriter t m => HasImageWriter t (VtyWidget t m)
+instance HasDisplayRegion t m => HasDisplayRegion t (VtyWidget t m)
 
 instance MonadTrans (VtyWidget t) where
-  lift f = VtyWidget $ lift $ lift $ lift f
+  lift f = VtyWidget $ lift $ lift f
 
 instance MFunctor (VtyWidget t) where
-  hoist f = VtyWidget . hoist (hoist (hoist f)) . unVtyWidget
+  hoist f = VtyWidget . hoist (hoist f) . unVtyWidget
 
-instance MonadNodeId m => MonadNodeId (VtyWidget t m) where
-  getNextNodeId = VtyWidget $ do
-    lift $ lift getNextNodeId
+instance MonadNodeId m => MonadNodeId (VtyWidget t m)
+
 
 -- | A reader-like class for the vty widget context. Allows actions to be run in a sub-context.
 class HasVtyWidgetCtx t m | m -> t where
@@ -140,7 +138,7 @@ class HasVtyWidgetCtx t m | m -> t where
   localCtx :: (VtyWidgetCtx t -> VtyWidgetCtx t) -> m a -> m a
 
 instance (Monad m, Reflex t) => HasVtyWidgetCtx t (VtyWidget t m) where
-  askCtx = VtyWidget $ lift ask
+  askCtx = VtyWidget $ ask
   localCtx f (VtyWidget x) = VtyWidget $ local f x
 
 -- | Runs a 'VtyWidget' with a given context
@@ -149,13 +147,18 @@ runVtyWidget
   => Event t VtyEvent
   -> VtyWidgetCtx t
   -> VtyWidget t m a
-  -> m (a, Behavior t [Image])
-runVtyWidget e ctx w = runReaderT (runReaderT (runBehaviorWriterT (unVtyWidget w)) ctx) e
+  -> m a
+runVtyWidget e ctx w = runReaderT (runReaderT (unVtyWidget w) ctx) e
 
 -- | Sets up the top-level context for a 'VtyWidget' and runs it with that context
 mainWidgetWithHandle
   :: V.Vty
-  -> (forall t m. (MonadVtyApp t m, MonadNodeId m) => VtyWidget t m (Event t ()))
+  -> (forall t m.
+      ( MonadVtyApp t m
+      , HasImageWriter t m
+      , MonadNodeId m
+      , HasDisplayRegion t m
+      ) => VtyWidget t m (Event t ()))
   -> IO ()
 mainWidgetWithHandle vty child =
   runVtyAppWithHandle vty $ \dr0 inp -> do
@@ -166,13 +169,14 @@ mainWidgetWithHandle vty child =
           V.EvResize {} -> Nothing
           x -> Just x
     let ctx = VtyWidgetCtx
-          { _vtyWidgetCtx_width = fmap fst size
-          , _vtyWidgetCtx_height = fmap snd size
-          , _vtyWidgetCtx_focus = constDyn True
+          { _vtyWidgetCtx_focus = constDyn True
           }
-    (shutdown, images) <- runNodeIdT $ runVtyWidget inp' ctx $ do
-      tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
-      child
+    (shutdown, images) <- runDisplayRegion (fmap (\(w, h) -> Region 0 0 w h) size) $
+      runImageWriter $
+        runNodeIdT $
+          runVtyWidget inp' ctx $ do
+            tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
+            child
     return $ VtyResult
       { _vtyResult_picture = fmap (V.picForLayers . reverse) images
       , _vtyResult_shutdown = shutdown
@@ -187,25 +191,72 @@ mainWidget child = do
   mainWidgetWithHandle vty child
 
 -- | A class for things that know their own display size dimensions
-class (Reflex t, Monad m) => HasDisplaySize t m | m -> t where
-  -- | Retrieve the display width (columns)
-  displayWidth :: m (Dynamic t Int)
-  default displayWidth :: (f m' ~ m, MonadTrans f, HasDisplaySize t m') => m (Dynamic t Int)
-  displayWidth = lift displayWidth
-  -- | Retrieve the display height (rows)
-  displayHeight :: m (Dynamic t Int)
-  default displayHeight :: (f m' ~ m, MonadTrans f, HasDisplaySize t m') => m (Dynamic t Int)
-  displayHeight = lift displayHeight
+class (Reflex t, Monad m) => HasDisplayRegion t m | m -> t where
+  -- | Retrieve the display region
+  askRegion :: m (Dynamic t Region)
+  default askRegion :: (f m' ~ m, MonadTrans f, HasDisplayRegion t m') => m (Dynamic t Region)
+  askRegion = lift askRegion
+  -- | Run an action in a local region, by applying a transformation to the region
+  localRegion :: (Dynamic t Region -> Dynamic t Region) -> m a -> m a
+  default localRegion :: (f m' ~ m, Monad m', MFunctor f, HasDisplayRegion t m') => (Dynamic t Region -> Dynamic t Region) -> m a -> m a
+  localRegion f = hoist (localRegion f)
 
-instance (Reflex t, Monad m) => HasDisplaySize t (VtyWidget t m) where
-  displayWidth = VtyWidget . lift $ asks _vtyWidgetCtx_width
-  displayHeight = VtyWidget . lift $ asks _vtyWidgetCtx_height
+displayWidth :: HasDisplayRegion t m => m (Dynamic t Int)
+displayWidth = fmap _region_width <$> askRegion
 
-instance HasDisplaySize t m => HasDisplaySize t (ReaderT x m)
-instance HasDisplaySize t m => HasDisplaySize t (BehaviorWriterT t x m)
-instance HasDisplaySize t m => HasDisplaySize t (DynamicWriterT t x m)
-instance HasDisplaySize t m => HasDisplaySize t (EventWriterT t x m)
-instance HasDisplaySize t m => HasDisplaySize t (NodeIdT m)
+displayHeight :: HasDisplayRegion t m => m (Dynamic t Int)
+displayHeight = fmap _region_height <$> askRegion
+
+instance HasDisplayRegion t m => HasDisplayRegion t (ReaderT x m)
+instance HasDisplayRegion t m => HasDisplayRegion t (BehaviorWriterT t x m)
+instance HasDisplayRegion t m => HasDisplayRegion t (DynamicWriterT t x m)
+instance HasDisplayRegion t m => HasDisplayRegion t (EventWriterT t x m)
+instance HasDisplayRegion t m => HasDisplayRegion t (NodeIdT m)
+
+newtype DisplayRegion t m a = DisplayRegion { unDisplayRegion :: ReaderT (Dynamic t Region) m a }
+  deriving
+    ( Functor
+    , Applicative
+    , Monad
+    , MonadFix
+    , MonadHold t
+    , MonadIO
+    , MonadRef
+    , MonadSample t
+    )
+
+instance (Monad m, Reflex t) => HasDisplayRegion t (DisplayRegion t m) where
+  askRegion = DisplayRegion ask
+  localRegion f = DisplayRegion . local f . unDisplayRegion
+
+deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (DisplayRegion t m)
+deriving instance NotReady t m => NotReady t (DisplayRegion t m)
+deriving instance PerformEvent t m => PerformEvent t (DisplayRegion t m)
+deriving instance PostBuild t m => PostBuild t (DisplayRegion t m)
+deriving instance TriggerEvent t m => TriggerEvent t (DisplayRegion t m)
+instance HasImageWriter t m => HasImageWriter t (DisplayRegion t m)
+
+instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (DisplayRegion t m) where
+  runWithReplace (DisplayRegion a) e = DisplayRegion $ runWithReplace a $ fmap unDisplayRegion e
+  traverseIntMapWithKeyWithAdjust f m e = DisplayRegion $ traverseIntMapWithKeyWithAdjust (\k v -> unDisplayRegion $ f k v) m e
+  traverseDMapWithKeyWithAdjust f m e = DisplayRegion $ traverseDMapWithKeyWithAdjust (\k v -> unDisplayRegion $ f k v) m e
+  traverseDMapWithKeyWithAdjustWithMove f m e = DisplayRegion $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unDisplayRegion $ f k v) m e
+
+
+instance MonadTrans (DisplayRegion t) where
+  lift = DisplayRegion . lift
+
+instance MFunctor (DisplayRegion t) where
+  hoist f = DisplayRegion . hoist f . unDisplayRegion
+
+instance MonadNodeId m => MonadNodeId (DisplayRegion t m)
+
+runDisplayRegion
+  :: (Reflex t, Monad m)
+  => Dynamic t Region
+  -> DisplayRegion t m a
+  -> m a
+runDisplayRegion r = flip runReaderT r . unDisplayRegion
 
 -- | A class for things that can receive vty events as input
 class HasVtyInput t m | m -> t where
@@ -223,8 +274,8 @@ filterKeys f x = localInput (ffilter (\case
   _ -> True)) x
 
 instance (Reflex t, Monad m) => HasVtyInput t (VtyWidget t m) where
-  input = VtyWidget . lift $ lift $ ask
-  localInput f (VtyWidget m) = VtyWidget $ hoist (hoist (local f)) m
+  input = VtyWidget . lift $ ask
+  localInput f (VtyWidget m) = VtyWidget $ hoist (local f) m
 
 -- | A class for things that can dynamically gain and lose focus
 class HasFocus t m | m -> t where
@@ -233,23 +284,68 @@ class HasFocus t m | m -> t where
   focus = lift focus
 
 instance (Reflex t, Monad m) => HasFocus t (VtyWidget t m) where
-  focus = VtyWidget . lift $ asks _vtyWidgetCtx_focus
+  focus = VtyWidget $ asks _vtyWidgetCtx_focus
 
 -- | A class for widgets that can produce images to draw to the display
-class (Reflex t, Monad m) => ImageWriter t m | m -> t where
+class (Reflex t, Monad m) => HasImageWriter t m | m -> t where
   -- | Send images upstream for rendering
   tellImages :: Behavior t [Image] -> m ()
-  default tellImages :: (f m' ~ m, Monad m', MonadTrans f, ImageWriter t m') => Behavior t [Image] -> m ()
+  default tellImages :: (f m' ~ m, Monad m', MonadTrans f, HasImageWriter t m') => Behavior t [Image] -> m ()
   tellImages = lift . tellImages
   -- | Apply a transformation to the images produced by the child actions
   mapImages :: (Behavior t [Image] -> Behavior t [Image]) -> m a -> m a
+  default mapImages :: (f m' ~ m, Monad m', MFunctor f, HasImageWriter t m') => (Behavior t [Image] -> Behavior t [Image]) -> m a -> m a
+  mapImages f = hoist (mapImages f)
 
-instance (Monad m, Reflex t) => ImageWriter t (BehaviorWriterT t [Image] m) where
-  tellImages = tellBehavior
-  mapImages f x = do
+newtype ImageWriter t m a = ImageWriter { unImageWriter :: BehaviorWriterT t [Image] m a }
+  deriving
+    ( Functor
+    , Applicative
+    , Monad
+    , MonadFix
+    , MonadHold t
+    , MonadIO
+    , MonadRef
+    , MonadReflexCreateTrigger t
+    , MonadSample t
+    , NotReady t
+    , PerformEvent t
+    , PostBuild t
+    , TriggerEvent t 
+    )
+
+instance MonadTrans (ImageWriter t) where
+  lift = ImageWriter . lift
+
+instance MFunctor (ImageWriter t) where
+  hoist f = ImageWriter . (hoist f) . unImageWriter
+
+instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (ImageWriter t m) where
+  runWithReplace (ImageWriter a) e = ImageWriter $ runWithReplace a $ fmap unImageWriter e
+  traverseIntMapWithKeyWithAdjust f m e = ImageWriter $ traverseIntMapWithKeyWithAdjust (\k v -> unImageWriter $ f k v) m e
+  traverseDMapWithKeyWithAdjust f m e = ImageWriter $ traverseDMapWithKeyWithAdjust (\k v -> unImageWriter $ f k v) m e
+  traverseDMapWithKeyWithAdjustWithMove f m e = ImageWriter $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unImageWriter $ f k v) m e
+
+instance HasImageWriter t m => HasImageWriter t (ReaderT x m)
+instance HasImageWriter t m => HasImageWriter t (BehaviorWriterT t x m)
+instance HasImageWriter t m => HasImageWriter t (DynamicWriterT t x m)
+instance HasImageWriter t m => HasImageWriter t (EventWriterT t x m)
+instance HasImageWriter t m => HasImageWriter t (NodeIdT m)
+
+instance (Monad m, Reflex t) => HasImageWriter t (ImageWriter t m) where
+  tellImages = ImageWriter . tellBehavior
+  mapImages f (ImageWriter x) = ImageWriter $ do
     (a, images) <- lift $ runBehaviorWriterT x
-    tellImages $ f images
+    tellBehavior $ f images
     pure a
+
+instance HasDisplayRegion t m => HasDisplayRegion t (ImageWriter t m)
+
+runImageWriter
+  :: (Reflex t, Monad m)
+  => ImageWriter t m a
+  -> m (a, Behavior t [Image])
+runImageWriter = runBehaviorWriterT . unImageWriter
 
 -- | A chunk of the display area
 data Region = Region
@@ -287,7 +383,7 @@ withinImage (Region left top width height)
 -- * mouse inputs inside the region have their coordinates translated such
 --   that (0,0) is the top-left corner of the region
 pane
-  :: (Reflex t, Monad m, MonadNodeId m, HasVtyWidgetCtx t m, HasVtyInput t m, ImageWriter t m)
+  :: (Reflex t, Monad m, MonadNodeId m, HasVtyWidgetCtx t m, HasVtyInput t m, HasImageWriter t m, HasDisplayRegion t m)
   => Dynamic t Region
   -> Dynamic t Bool -- ^ Whether the widget should be focused when the parent is.
   -> m a
@@ -296,14 +392,12 @@ pane dr foc child = do
   let reg = current dr
   let subContext ctx = VtyWidgetCtx
         { _vtyWidgetCtx_focus = liftA2 (&&) (_vtyWidgetCtx_focus ctx) foc
-        , _vtyWidgetCtx_width = _region_width <$> dr
-        , _vtyWidgetCtx_height = _region_height <$> dr
         }
       inputFilter = fmapMaybe id .
         attachWith (\(r,f) e -> filterInput r f e)
           (liftA2 (,) reg (current foc))
   let imagesWithinRegion images = liftA2 (\is r -> map (withinImage r) is) images reg
-  mapImages imagesWithinRegion $ localInput inputFilter $ localCtx subContext child
+  localRegion (const dr) $ mapImages imagesWithinRegion $ localInput inputFilter $ localCtx subContext child
   where
     filterInput :: Region -> Bool -> VtyEvent -> Maybe VtyEvent
     filterInput (Region l t w h) focused e = case e of
@@ -448,7 +542,7 @@ keyCombos ks = do
 
 -- | A plain split of the available space into vertically stacked panes.
 -- No visual separator is built in here.
-splitV :: (Reflex t, Monad m, MonadNodeId m, HasVtyWidgetCtx t m, HasDisplaySize t m, HasVtyInput t m, ImageWriter t m)
+splitV :: (Reflex t, Monad m, MonadNodeId m, HasVtyWidgetCtx t m, HasDisplayRegion t m, HasVtyInput t m, HasImageWriter t m)
        => Dynamic t (Int -> Int)
        -- ^ Function used to determine size of first pane based on available size
        -> Dynamic t (Bool, Bool)
@@ -469,7 +563,7 @@ splitV sizeFunD focD wA wB = do
 
 -- | A plain split of the available space into horizontally stacked panes.
 -- No visual separator is built in here.
-splitH :: (Reflex t, Monad m, MonadNodeId m, HasDisplaySize t m, HasVtyWidgetCtx t m, HasVtyInput t m, ImageWriter t m)
+splitH :: (Reflex t, Monad m, MonadNodeId m, HasDisplayRegion t m, HasVtyWidgetCtx t m, HasVtyInput t m, HasImageWriter t m)
        => Dynamic t (Int -> Int)
        -- ^ Function used to determine size of first pane based on available size
        -> Dynamic t (Bool, Bool)
@@ -489,7 +583,7 @@ splitH sizeFunD focD wA wB = do
 -- | A split of the available space into two parts with a draggable separator.
 -- Starts with half the space allocated to each, and the first pane has focus.
 -- Clicking in a pane switches focus.
-splitVDrag :: (Reflex t, MonadFix m, MonadHold t m, MonadNodeId m, HasDisplaySize t m, HasVtyInput t m, HasVtyWidgetCtx t m, ImageWriter t m)
+splitVDrag :: (Reflex t, MonadFix m, MonadHold t m, MonadNodeId m, HasDisplayRegion t m, HasVtyInput t m, HasVtyWidgetCtx t m, HasImageWriter t m)
   => m ()
   -> m a
   -> m b
@@ -527,7 +621,7 @@ splitVDrag wS wA wB = do
       return (m, x')
 
 -- | Fill the background with a particular character.
-fill :: (HasDisplaySize t m, ImageWriter t m) => Behavior t Char -> m ()
+fill :: (HasDisplayRegion t m, HasImageWriter t m) => Behavior t Char -> m ()
 fill bc = do
   dw <- displayWidth
   dh <- displayHeight
@@ -539,7 +633,7 @@ fill bc = do
   tellImages fillImg
 
 -- | Fill the background with the bottom box style
-hRule :: (HasDisplaySize t m, ImageWriter t m) => BoxStyle -> m ()
+hRule :: (HasDisplayRegion t m, HasImageWriter t m) => BoxStyle -> m ()
 hRule boxStyle = fill $ pure (_boxStyle_s boxStyle)
 
 -- | Defines a set of symbols to use to draw the outlines of boxes
@@ -580,7 +674,7 @@ roundedBoxStyle :: BoxStyle
 roundedBoxStyle = BoxStyle '╭' '─' '╮' '│' '╯' '─' '╰' '│'
 
 -- | Draws a titled box in the provided style and a child widget inside of that box
-boxTitle :: (Monad m, Reflex t, MonadNodeId m, HasDisplaySize t m, ImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
+boxTitle :: (Monad m, Reflex t, MonadNodeId m, HasDisplayRegion t m, HasImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
     => Behavior t BoxStyle
     -> Behavior t Text
     -> m a
@@ -632,7 +726,7 @@ boxTitle boxStyle title child = do
         right = mkHalf delta
 
 -- | A box without a title
-box :: (Monad m, Reflex t, MonadNodeId m, HasDisplaySize t m, ImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
+box :: (Monad m, Reflex t, MonadNodeId m, HasDisplayRegion t m, HasImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
     => Behavior t BoxStyle
     -> m a
     -> m a
@@ -640,7 +734,7 @@ box boxStyle = boxTitle boxStyle mempty
 
 -- | A box whose style is static
 boxStatic
-  :: (Monad m, Reflex t, MonadNodeId m, HasDisplaySize t m, ImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
+  :: (Monad m, Reflex t, MonadNodeId m, HasDisplayRegion t m, HasImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
   => BoxStyle
   -> m a
   -> m a
@@ -656,7 +750,7 @@ instance Reflex t => Default (RichTextConfig t) where
 
 -- | A widget that displays text with custom time-varying attributes
 richText
-  :: (Reflex t, Monad m, HasDisplaySize t m, ImageWriter t m)
+  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m)
   => RichTextConfig t
   -> Behavior t Text
   -> m ()
@@ -674,7 +768,7 @@ richText cfg t = do
 
 -- | Renders text, wrapped to the container width
 text
-  :: (Reflex t, Monad m, HasDisplaySize t m, ImageWriter t m)
+  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m)
   => Behavior t Text
   -> m ()
 text = richText def
@@ -682,7 +776,7 @@ text = richText def
 -- | Scrollable text widget. The output pair exposes the current scroll position and total number of lines (including those
 -- that are hidden)
 scrollableText
-  :: forall t m. (Reflex t, MonadHold t m, MonadFix m, HasDisplaySize t m, HasVtyInput t m, ImageWriter t m)
+  :: forall t m. (Reflex t, MonadHold t m, MonadFix m, HasDisplayRegion t m, HasVtyInput t m, HasImageWriter t m)
   => Event t Int
   -- ^ Number of lines to scroll by
   -> Behavior t Text
@@ -714,7 +808,7 @@ scrollableText scrollBy t = do
 -- | Renders any behavior whose value can be converted to
 -- 'String' as text
 display
-  :: (Reflex t, Monad m, Show a, HasDisplaySize t m, ImageWriter t m)
+  :: (Reflex t, Monad m, Show a, HasDisplayRegion t m, HasImageWriter t m)
   => Behavior t a
   -> m ()
 display a = text $ T.pack . show <$> a

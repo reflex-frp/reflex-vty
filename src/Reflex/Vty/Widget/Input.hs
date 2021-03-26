@@ -30,7 +30,7 @@ instance Reflex t => Default (ButtonConfig t) where
 
 -- | A button widget that contains a sub-widget
 button
-  :: (Reflex t, Monad m, MonadNodeId m, HasFocus t m, HasDisplaySize t m, ImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
+  :: (Reflex t, Monad m, MonadNodeId m, HasFocus t m, HasDisplayRegion t m, HasImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
   => ButtonConfig t
   -> m ()
   -> m (Event t ())
@@ -48,7 +48,7 @@ button cfg child = do
 
 -- | A button widget that displays text that can change
 textButton
-  :: (Reflex t, Monad m, MonadNodeId m, HasDisplaySize t m, HasFocus t m, ImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
+  :: (Reflex t, Monad m, MonadNodeId m, HasDisplayRegion t m, HasFocus t m, HasImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
   => ButtonConfig t
   -> Behavior t Text
   -> m (Event t ())
@@ -56,7 +56,7 @@ textButton cfg = button cfg . text -- TODO Centering etc.
 
 -- | A button widget that displays a static bit of text
 textButtonStatic
-  :: (Reflex t, Monad m, MonadNodeId m, HasDisplaySize t m, HasFocus t m, ImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
+  :: (Reflex t, Monad m, MonadNodeId m, HasDisplayRegion t m, HasFocus t m, HasImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
   => ButtonConfig t
   -> Text
   -> m (Event t ())
@@ -64,7 +64,7 @@ textButtonStatic cfg = textButton cfg . pure
 
 -- | A clickable link widget
 link
-  :: (Reflex t, Monad m, HasDisplaySize t m, ImageWriter t m, HasVtyInput t m)
+  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasVtyInput t m)
   => Behavior t Text
   -> m (Event t MouseUp)
 link t = do
@@ -76,7 +76,7 @@ link t = do
 
 -- | A clickable link widget with a static label
 linkStatic
-  :: (Reflex t, Monad m, ImageWriter t m, HasDisplaySize t m, HasVtyInput t m)
+  :: (Reflex t, Monad m, HasImageWriter t m, HasDisplayRegion t m, HasVtyInput t m)
   => Text
   -> m (Event t MouseUp)
 linkStatic = link . pure
@@ -120,7 +120,7 @@ instance (Reflex t) => Default (CheckboxConfig t) where
 
 -- | A checkbox widget
 checkbox
-  :: (MonadHold t m, MonadFix m, Reflex t, HasVtyInput t m, HasDisplaySize t m, ImageWriter t m, HasFocus t m)
+  :: (MonadHold t m, MonadFix m, Reflex t, HasVtyInput t m, HasDisplayRegion t m, HasImageWriter t m, HasFocus t m)
   => CheckboxConfig t
   -> Bool
   -> m (Dynamic t Bool)

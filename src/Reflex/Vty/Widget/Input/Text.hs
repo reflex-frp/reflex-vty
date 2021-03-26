@@ -43,7 +43,7 @@ data TextInput t = TextInput
 
 -- | A widget that allows text input
 textInput
-  :: (Reflex t, MonadHold t m, MonadFix m, HasVtyInput t m, HasFocus t m, HasDisplaySize t m, ImageWriter t m)
+  :: (Reflex t, MonadHold t m, MonadFix m, HasVtyInput t m, HasFocus t m, HasDisplayRegion t m, HasImageWriter t m, HasDisplayRegion t m)
   => TextInputConfig t
   -> m (TextInput t)
 textInput cfg = do
@@ -81,7 +81,7 @@ textInput cfg = do
 
 -- | A widget that allows multiline text input
 multilineTextInput
-  :: (Reflex t, MonadHold t m, MonadFix m, HasVtyInput t m, HasFocus t m, HasDisplaySize t m, ImageWriter t m)
+  :: (Reflex t, MonadHold t m, MonadFix m, HasVtyInput t m, HasFocus t m, HasDisplayRegion t m, HasImageWriter t m)
   => TextInputConfig t
   -> m (TextInput t)
 multilineTextInput cfg = do
@@ -99,7 +99,7 @@ multilineTextInput cfg = do
 -- the computed line count to greedily size the tile when vertically
 -- oriented, and uses the fallback width when horizontally oriented.
 textInputTile
-  :: (Monad m, MonadNodeId m, Reflex t, MonadFix m, MonadLayout t m, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, ImageWriter t m)
+  :: (Monad m, MonadNodeId m, Reflex t, MonadFix m, MonadLayout t m, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, HasImageWriter t m, HasDisplayRegion t m)
   => m (TextInput t)
   -> Dynamic t Int
   -> m (TextInput t)

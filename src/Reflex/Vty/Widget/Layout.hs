@@ -105,7 +105,7 @@ newtype Focus t m a = Focus
     , PerformEvent t
     , NotReady t
     , MonadReflexCreateTrigger t
-    , HasDisplaySize t
+    , HasDisplayRegion t
     , PostBuild t
     , MonadNodeId
     , MonadIO
@@ -130,7 +130,7 @@ instance (Reflex t, MonadFix m, HasVtyInput t m) => HasVtyInput t (Focus t m) wh
 instance (HasVtyWidgetCtx t m, Reflex t, MonadFix m) => HasVtyWidgetCtx t (Focus t m) where
   localCtx f = hoist (localCtx f)
 
-instance (ImageWriter t m, MonadFix m) => ImageWriter t (Focus t m) where
+instance (HasImageWriter t m, MonadFix m) => HasImageWriter t (Focus t m) where
   mapImages f = hoist (mapImages f)
 
 instance (HasFocus t m, Monad m) => HasFocus t (Focus t m)
@@ -382,18 +382,18 @@ newtype Layout t m a = Layout
   deriving
     ( Functor
     , Applicative
+    , HasDisplayRegion t
     , Monad
-    , MonadHold t
-    , MonadSample t
     , MonadFix
-    , TriggerEvent t
-    , PerformEvent t
-    , NotReady t
-    , MonadReflexCreateTrigger t
-    , HasDisplaySize t
-    , PostBuild t
-    , MonadNodeId
+    , MonadHold t
     , MonadIO
+    , MonadNodeId
+    , MonadReflexCreateTrigger t
+    , MonadSample t
+    , NotReady t
+    , PerformEvent t
+    , PostBuild t
+    , TriggerEvent t
     )
 
 instance MonadTrans (Layout t) where
@@ -408,7 +408,7 @@ instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (Layout t m
   traverseDMapWithKeyWithAdjust f m e = Layout $ traverseDMapWithKeyWithAdjust (\k v -> unLayout $ f k v) m e
   traverseDMapWithKeyWithAdjustWithMove f m e = Layout $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unLayout $ f k v) m e
 
-instance (HasVtyWidgetCtx t m, HasDisplaySize t m, Reflex t, MonadFix m) => HasVtyWidgetCtx t (Layout t m) where
+instance (HasVtyWidgetCtx t m, HasDisplayRegion t m, Reflex t, MonadFix m) => HasVtyWidgetCtx t (Layout t m) where
   localCtx f x = do
     solution <- Layout ask
     let orientation = snd . rootLT <$> solution
@@ -421,7 +421,7 @@ instance (HasVtyWidgetCtx t m, HasDisplaySize t m, Reflex t, MonadFix m) => HasV
 -- | Apply a transformation to the context of a child 'Layout' action and run
 -- that action
 hoistRunLayout
-  :: (HasDisplaySize t m, MonadFix m, Monad n)
+  :: (HasDisplayRegion t m, MonadFix m, Monad n)
   => (m a -> n b)
   -> Layout t m a
   -> Layout t n b
@@ -434,10 +434,10 @@ hoistRunLayout f x = do
     let reg = Region 0 0 <$> dw <*> dh
     runLayout orientation reg x
 
-instance (HasVtyInput t m, HasDisplaySize t m, MonadFix m, Reflex t) => HasVtyInput t (Layout t m) where
+instance (HasVtyInput t m, HasDisplayRegion t m, MonadFix m, Reflex t) => HasVtyInput t (Layout t m) where
   localInput = hoistRunLayout . localInput
 
-instance (HasDisplaySize t m, ImageWriter t m, MonadFix m) => ImageWriter t (Layout t m) where
+instance (HasDisplayRegion t m, HasImageWriter t m, MonadFix m) => HasImageWriter t (Layout t m) where
   mapImages f = hoistRunLayout (mapImages f)
 
 instance (HasFocus t m, Monad m) => HasFocus t (Layout t m)
@@ -480,7 +480,7 @@ runLayout o r (Layout x) = do
   return result
 
 -- | Initialize and run the layout monad, using all of the available screen space.
-initLayout :: (HasDisplaySize t m, MonadFix m) => Layout t m a -> m a
+initLayout :: (HasDisplayRegion t m, MonadFix m) => Layout t m a -> m a
 initLayout f = do
   dw <- displayWidth
   dh <- displayHeight
@@ -496,7 +496,7 @@ initLayout f = do
 
 -- | Initialize a 'Layout' and 'Focus'  management context, returning the produced 'FocusSet'.
 initManager
-  :: (HasDisplaySize t m, Reflex t, MonadHold t m, MonadFix m)
+  :: (HasDisplayRegion t m, Reflex t, MonadHold t m, MonadFix m)
   => Layout t (Focus t m) a
   -> m (a, Dynamic t FocusSet)
 initManager =
@@ -504,7 +504,7 @@ initManager =
 
 -- | Initialize a 'Layout' and 'Focus'  management context.
 initManager_
-  :: (HasDisplaySize t m, Reflex t, MonadHold t m, MonadFix m)
+  :: (HasDisplayRegion t m, Reflex t, MonadHold t m, MonadFix m)
   => Layout t (Focus t m) a
   -> m a
 initManager_ = fmap fst . initManager
@@ -517,7 +517,7 @@ initManager_ = fmap fst . initManager
 -- provided constraint. Returns the 'FocusId' allowing for manual focus
 -- management.
 tile'
-  :: (MonadNodeId m, MonadFix m, Reflex t, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, MonadLayout t m, ImageWriter t m)
+  :: (MonadNodeId m, MonadFix m, Reflex t, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, MonadLayout t m, HasImageWriter t m, HasDisplayRegion t m)
   => Dynamic t Constraint
   -> m a
   -> m (FocusId, a)
@@ -536,7 +536,7 @@ tile' c w = do
 -- | A widget that is focusable and occupies a layout region based on the
 -- provided constraint.
 tile
-  :: (MonadNodeId m, MonadFix m, Reflex t, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, MonadLayout t m, ImageWriter t m)
+  :: (MonadNodeId m, MonadFix m, Reflex t, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, MonadLayout t m, HasImageWriter t m, HasDisplayRegion t m)
   => Dynamic t Constraint
   -> m a
   -> m a
@@ -547,7 +547,7 @@ tile c = fmap snd . tile' c
 -- | A widget that is not focusable and occupies a layout region based on the
 -- provided constraint.
 grout
-  :: (Reflex t, MonadNodeId m, HasVtyWidgetCtx t m, MonadLayout t m, HasVtyInput t m, ImageWriter t m)
+  :: (Reflex t, MonadNodeId m, HasVtyWidgetCtx t m, MonadLayout t m, HasVtyInput t m, HasImageWriter t m, HasDisplayRegion t m)
   => Dynamic t Constraint
   -> m a
   -> m a
