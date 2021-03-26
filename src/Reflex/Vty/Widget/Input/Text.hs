@@ -18,6 +18,7 @@ import Reflex
 
 import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Layout
+import Reflex.Vty.Widget.Input.Mouse
 
 -- | Configuration options for a 'textInput'. For more information on
 -- 'TextZipper', see 'Data.Text.Zipper'.
@@ -43,7 +44,7 @@ data TextInput t = TextInput
 
 -- | A widget that allows text input
 textInput
-  :: (Reflex t, MonadHold t m, MonadFix m, HasVtyInput t m, HasFocus t m, HasDisplayRegion t m, HasImageWriter t m, HasDisplayRegion t m)
+  :: (Reflex t, MonadHold t m, MonadFix m, HasInput t m, HasFocusReader t m, HasDisplayRegion t m, HasImageWriter t m, HasDisplayRegion t m)
   => TextInputConfig t
   -> m (TextInput t)
 textInput cfg = do
@@ -81,7 +82,7 @@ textInput cfg = do
 
 -- | A widget that allows multiline text input
 multilineTextInput
-  :: (Reflex t, MonadHold t m, MonadFix m, HasVtyInput t m, HasFocus t m, HasDisplayRegion t m, HasImageWriter t m)
+  :: (Reflex t, MonadHold t m, MonadFix m, HasInput t m, HasFocusReader t m, HasDisplayRegion t m, HasImageWriter t m)
   => TextInputConfig t
   -> m (TextInput t)
 multilineTextInput cfg = do
@@ -99,7 +100,7 @@ multilineTextInput cfg = do
 -- the computed line count to greedily size the tile when vertically
 -- oriented, and uses the fallback width when horizontally oriented.
 textInputTile
-  :: (Monad m, MonadNodeId m, Reflex t, MonadFix m, MonadLayout t m, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, HasImageWriter t m, HasDisplayRegion t m)
+  :: (Monad m, MonadNodeId m, Reflex t, MonadFix m, HasLayout t m, HasInput t m, HasFocus t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
   => m (TextInput t)
   -> Dynamic t Int
   -> m (TextInput t)

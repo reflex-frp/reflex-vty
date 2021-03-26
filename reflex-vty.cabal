@@ -23,9 +23,13 @@ library
   exposed-modules: Reflex.Vty
                  , Reflex.Vty.Host
                  , Reflex.Vty.Widget
+                 , Reflex.Vty.Widget.Box
                  , Reflex.Vty.Widget.Input
+                 , Reflex.Vty.Widget.Input.Mouse
                  , Reflex.Vty.Widget.Input.Text
                  , Reflex.Vty.Widget.Layout
+                 , Reflex.Vty.Widget.Split
+                 , Reflex.Vty.Widget.Text
                  , Data.Text.Zipper
                  , Reflex.Class.Switchable
                  , Reflex.Spider.Orphans

@@ -23,6 +23,7 @@ import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Host.Class (MonadReflexCreateTrigger)
 import Reflex.Vty.Widget
+import Reflex.Vty.Widget.Input.Mouse
 
 -- * Focus
 --
@@ -34,7 +35,7 @@ import Reflex.Vty.Widget
 -- a tab press in a sibling element, a click event).
 --
 -- Focusable elements will usually be created via 'tile', but can also be
--- constructed via 'makeFocus' in 'MonadFocus'. The latter option allows for
+-- constructed via 'makeFocus' in 'HasFocus'. The latter option allows for
 -- more find-grained control of focus behavior.
 
 -- ** Storing focus state
@@ -75,7 +76,7 @@ shiftFS (FocusSet s) fid n = case OSet.findIndex <$> fid <*> pure s of
 -- ** The focus management monad
 
 -- | A class for things that can produce focusable elements.
-class (Monad m, Reflex t) => MonadFocus t m | m -> t where
+class (Monad m, Reflex t) => HasFocus t m | m -> t where
   -- | Create a focusable element.
   makeFocus :: m FocusId
   -- | Emit an 'Event' of requests to change the focus.
@@ -124,18 +125,15 @@ instance (Adjustable t m, MonadHold t m, MonadFix m) => Adjustable t (Focus t m)
   traverseDMapWithKeyWithAdjust f m e = Focus $ traverseDMapWithKeyWithAdjust (\k v -> unFocus $ f k v) m e
   traverseDMapWithKeyWithAdjustWithMove f m e = Focus $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unFocus $ f k v) m e
 
-instance (Reflex t, MonadFix m, HasVtyInput t m) => HasVtyInput t (Focus t m) where
+instance (Reflex t, MonadFix m, HasInput t m) => HasInput t (Focus t m) where
   localInput f = hoist (localInput f)
-
-instance (HasVtyWidgetCtx t m, Reflex t, MonadFix m) => HasVtyWidgetCtx t (Focus t m) where
-  localCtx f = hoist (localCtx f)
 
 instance (HasImageWriter t m, MonadFix m) => HasImageWriter t (Focus t m) where
   mapImages f = hoist (mapImages f)
 
-instance (HasFocus t m, Monad m) => HasFocus t (Focus t m)
+instance (HasFocusReader t m, Monad m) => HasFocusReader t (Focus t m)
 
-instance (Reflex t, MonadFix m, MonadNodeId m) => MonadFocus t (Focus t m) where
+instance (Reflex t, MonadFix m, MonadNodeId m) => HasFocus t (Focus t m) where
   makeFocus = do
     fid <- FocusId <$> lift getNextNodeId
     Focus $ tellDyn $ pure $ singletonFS fid
@@ -171,7 +169,7 @@ runFocus (Focus x) = do
 -- | Runs an action in the focus monad, providing it with information about
 -- whether any of the foci created within it are focused.
 anyChildFocused
-  :: (MonadFocus t m, MonadFix m)
+  :: (HasFocus t m, MonadFix m)
   => (Dynamic t Bool -> m a)
   -> m a
 anyChildFocused f = do
@@ -186,7 +184,7 @@ anyChildFocused f = do
 
 -- | Request focus be shifted backward and forward based on tab presses. <Tab>
 -- shifts focus forward and <Shift+Tab> shifts focus backward.
-tabNavigation :: (Reflex t, MonadNodeId m, HasVtyInput t m, MonadFocus t m) => m ()
+tabNavigation :: (Reflex t, MonadNodeId m, HasInput t m, HasFocus t m) => m ()
 tabNavigation = do
   fwd <- fmap (const 1) <$> key (V.KChar '\t')
   back <- fmap (const (-1)) <$> key V.KBackTab
@@ -244,14 +242,14 @@ data Orientation = Orientation_Column
 
 -- | Create a row-oriented 'axis'
 row
-  :: (Reflex t, MonadNodeId m, MonadFix m, MonadLayout t m)
+  :: (Reflex t, MonadNodeId m, MonadFix m, HasLayout t m)
   => m a
   -> m a
 row = axis (pure Orientation_Row) flex
 
 -- | Create a column-oriented 'axis'
 col
-  :: (Reflex t, MonadNodeId m, MonadFix m, MonadLayout t m)
+  :: (Reflex t, MonadNodeId m, MonadFix m, HasLayout t m)
   => m a
   -> m a
 col = axis (pure Orientation_Column) flex
@@ -362,7 +360,7 @@ chunk o r (offset, sz) = case o of
 -- ** The layout monad
 
 -- | A class of operations for creating screen layouts.
-class Monad m => MonadLayout t m | m -> t where
+class Monad m => HasLayout t m | m -> t where
   -- | Creates a parent element in the current layout with the given size
   -- constraint, which lays out its children according to the provided
   -- orientation.
@@ -408,16 +406,6 @@ instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (Layout t m
   traverseDMapWithKeyWithAdjust f m e = Layout $ traverseDMapWithKeyWithAdjust (\k v -> unLayout $ f k v) m e
   traverseDMapWithKeyWithAdjustWithMove f m e = Layout $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unLayout $ f k v) m e
 
-instance (HasVtyWidgetCtx t m, HasDisplayRegion t m, Reflex t, MonadFix m) => HasVtyWidgetCtx t (Layout t m) where
-  localCtx f x = do
-    solution <- Layout ask
-    let orientation = snd . rootLT <$> solution
-    lift $ localCtx f $ do
-      dw <- displayWidth
-      dh <- displayHeight
-      let reg = Region 0 0 <$> dw <*> dh
-      runLayout orientation reg x
-
 -- | Apply a transformation to the context of a child 'Layout' action and run
 -- that action
 hoistRunLayout
@@ -434,15 +422,15 @@ hoistRunLayout f x = do
     let reg = Region 0 0 <$> dw <*> dh
     runLayout orientation reg x
 
-instance (HasVtyInput t m, HasDisplayRegion t m, MonadFix m, Reflex t) => HasVtyInput t (Layout t m) where
+instance (HasInput t m, HasDisplayRegion t m, MonadFix m, Reflex t) => HasInput t (Layout t m) where
   localInput = hoistRunLayout . localInput
 
 instance (HasDisplayRegion t m, HasImageWriter t m, MonadFix m) => HasImageWriter t (Layout t m) where
   mapImages f = hoistRunLayout (mapImages f)
 
-instance (HasFocus t m, Monad m) => HasFocus t (Layout t m)
+instance (HasFocusReader t m, Monad m) => HasFocusReader t (Layout t m)
 
-instance (Monad m, MonadNodeId m, Reflex t, MonadFix m) => MonadLayout t (Layout t m) where
+instance (Monad m, MonadNodeId m, Reflex t, MonadFix m) => HasLayout t (Layout t m) where
   axis o c (Layout x) = Layout $ do
     nodeId <- getNextNodeId
     (result, forest) <- lift $ local (\t -> fromMaybe (LayoutTree (Region 0 0 0 0, Orientation_Column) mempty) . lookupLF nodeId . childrenLT <$> t) $ runDynamicWriterT x
@@ -455,7 +443,7 @@ instance (Monad m, MonadNodeId m, Reflex t, MonadFix m) => MonadLayout t (Layout
     pure $ maybe (Region 0 0 0 0) (fst . rootLT) . lookupLF nodeId . childrenLT <$> solutions
   askOrientation = Layout $ asks $ fmap (snd . rootLT)
 
-instance (MonadFix m, MonadFocus t m) => MonadFocus t (Layout t m) where
+instance (MonadFix m, HasFocus t m) => HasFocus t (Layout t m) where
   makeFocus = lift makeFocus
   requestFocus = lift . requestFocus
   isFocused = lift . isFocused
@@ -490,7 +478,7 @@ initLayout f = do
 -- * The tile "window manager"
 --
 -- $tiling
--- Generally MonadLayout and MonadFocus are used together to build a user
+-- Generally HasLayout and HasFocus are used together to build a user
 -- interface. These functions check the available screen size and initialize
 -- the layout monad with that information, and also initialize the focus monad.
 
@@ -517,7 +505,7 @@ initManager_ = fmap fst . initManager
 -- provided constraint. Returns the 'FocusId' allowing for manual focus
 -- management.
 tile'
-  :: (MonadNodeId m, MonadFix m, Reflex t, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, MonadLayout t m, HasImageWriter t m, HasDisplayRegion t m)
+  :: (MonadNodeId m, MonadFix m, Reflex t, HasInput t m, HasFocus t m, HasLayout t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
   => Dynamic t Constraint
   -> m a
   -> m (FocusId, a)
@@ -536,7 +524,7 @@ tile' c w = do
 -- | A widget that is focusable and occupies a layout region based on the
 -- provided constraint.
 tile
-  :: (MonadNodeId m, MonadFix m, Reflex t, HasVtyWidgetCtx t m, HasVtyInput t m, MonadFocus t m, MonadLayout t m, HasImageWriter t m, HasDisplayRegion t m)
+  :: (MonadNodeId m, MonadFix m, Reflex t, HasInput t m, HasFocus t m, HasLayout t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
   => Dynamic t Constraint
   -> m a
   -> m a
@@ -547,7 +535,7 @@ tile c = fmap snd . tile' c
 -- | A widget that is not focusable and occupies a layout region based on the
 -- provided constraint.
 grout
-  :: (Reflex t, MonadNodeId m, HasVtyWidgetCtx t m, MonadLayout t m, HasVtyInput t m, HasImageWriter t m, HasDisplayRegion t m)
+  :: (Reflex t, MonadNodeId m, HasLayout t m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
   => Dynamic t Constraint
   -> m a
   -> m a

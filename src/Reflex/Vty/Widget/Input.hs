@@ -8,6 +8,7 @@ module Reflex.Vty.Widget.Input
   ) where
 
 
+import Reflex.Vty.Widget.Input.Mouse as Export
 import Reflex.Vty.Widget.Input.Text as Export
 
 import Control.Monad (join)
@@ -18,6 +19,10 @@ import Data.Text (Text)
 import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Vty.Widget
+import Reflex.Vty.Widget.Box
+import Reflex.Vty.Widget.Text
+
+-- * Buttons
 
 -- | Configuration options for the 'button' widget
 data ButtonConfig t = ButtonConfig
@@ -30,7 +35,7 @@ instance Reflex t => Default (ButtonConfig t) where
 
 -- | A button widget that contains a sub-widget
 button
-  :: (Reflex t, Monad m, MonadNodeId m, HasFocus t m, HasDisplayRegion t m, HasImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
+  :: (Reflex t, Monad m, MonadNodeId m, HasFocusReader t m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m)
   => ButtonConfig t
   -> m ()
   -> m (Event t ())
@@ -48,7 +53,7 @@ button cfg child = do
 
 -- | A button widget that displays text that can change
 textButton
-  :: (Reflex t, Monad m, MonadNodeId m, HasDisplayRegion t m, HasFocus t m, HasImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
+  :: (Reflex t, Monad m, MonadNodeId m, HasDisplayRegion t m, HasFocusReader t m, HasImageWriter t m, HasInput t m)
   => ButtonConfig t
   -> Behavior t Text
   -> m (Event t ())
@@ -56,15 +61,17 @@ textButton cfg = button cfg . text -- TODO Centering etc.
 
 -- | A button widget that displays a static bit of text
 textButtonStatic
-  :: (Reflex t, Monad m, MonadNodeId m, HasDisplayRegion t m, HasFocus t m, HasImageWriter t m, HasVtyWidgetCtx t m, HasVtyInput t m)
+  :: (Reflex t, Monad m, MonadNodeId m, HasDisplayRegion t m, HasFocusReader t m, HasImageWriter t m, HasInput t m)
   => ButtonConfig t
   -> Text
   -> m (Event t ())
 textButtonStatic cfg = textButton cfg . pure
 
+-- * Links
+
 -- | A clickable link widget
 link
-  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasVtyInput t m)
+  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m)
   => Behavior t Text
   -> m (Event t MouseUp)
 link t = do
@@ -76,10 +83,12 @@ link t = do
 
 -- | A clickable link widget with a static label
 linkStatic
-  :: (Reflex t, Monad m, HasImageWriter t m, HasDisplayRegion t m, HasVtyInput t m)
+  :: (Reflex t, Monad m, HasImageWriter t m, HasDisplayRegion t m, HasInput t m)
   => Text
   -> m (Event t MouseUp)
 linkStatic = link . pure
+
+-- * Checkboxes
 
 -- | Characters used to render checked and unchecked textboxes
 data CheckboxStyle = CheckboxStyle
@@ -120,7 +129,7 @@ instance (Reflex t) => Default (CheckboxConfig t) where
 
 -- | A checkbox widget
 checkbox
-  :: (MonadHold t m, MonadFix m, Reflex t, HasVtyInput t m, HasDisplayRegion t m, HasImageWriter t m, HasFocus t m)
+  :: (MonadHold t m, MonadFix m, Reflex t, HasInput t m, HasDisplayRegion t m, HasImageWriter t m, HasFocusReader t m)
   => CheckboxConfig t
   -> Bool
   -> m (Dynamic t Bool)
