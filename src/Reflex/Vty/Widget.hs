@@ -4,57 +4,57 @@ Description: Basic set of widgets and building blocks for reflex-vty application
 -}
 {-# Language UndecidableInstances #-}
 
-module Reflex.Vty.Widget
-  ( VtyWidgetCtx(..)
-  , VtyWidget(..)
-  , VtyWidgetOut(..)
-  , ImageWriter(..)
-  , runVtyWidget
-  , mainWidget
-  , mainWidgetWithHandle
-  , HasDisplaySize(..)
-  , HasFocus(..)
-  , HasVtyInput(..)
-  , HasVtyWidgetCtx(..)
-  , Region(..)
-  , regionSize
-  , regionBlankImage
-  , Drag(..)
-  , drag
-  , MouseDown(..)
-  , MouseUp(..)
-  , mouseDown
-  , mouseUp
-  , ScrollDirection(..)
-  , mouseScroll
-  , pane
-  , splitV
-  , splitH
-  , splitVDrag
-  , boxTitle
-  , box
-  , boxStatic
-  , RichTextConfig(..)
-  , richText
-  , text
-  , scrollableText
-  , display
-  , BoxStyle(..)
-  , hyphenBoxStyle
-  , singleBoxStyle
-  , roundedBoxStyle
-  , thickBoxStyle
-  , doubleBoxStyle
-  , fill
-  , hRule
-  , filterKeys
-  , KeyCombo
-  , key
-  , keys
-  , keyCombo
-  , keyCombos
-  , blank
-  ) where
+module Reflex.Vty.Widget where
+  -- ( VtyWidgetCtx(..)
+  -- , VtyWidget(..)
+  -- , VtyWidgetOut(..)
+  -- , ImageWriter(..)
+  -- , runVtyWidget
+  -- , mainWidget
+  -- , mainWidgetWithHandle
+  -- , HasDisplayRegion(..)
+  -- , HasFocus(..)
+  -- , HasVtyInput(..)
+  -- , HasVtyWidgetCtx(..)
+  -- , Region(..)
+  -- , regionSize
+  -- , regionBlankImage
+  -- , Drag(..)
+  -- , drag
+  -- , MouseDown(..)
+  -- , MouseUp(..)
+  -- , mouseDown
+  -- , mouseUp
+  -- , ScrollDirection(..)
+  -- , mouseScroll
+  -- , pane
+  -- , splitV
+  -- , splitH
+  -- , splitVDrag
+  -- , boxTitle
+  -- , box
+  -- , boxStatic
+  -- , RichTextConfig(..)
+  -- , richText
+  -- , text
+  -- , scrollableText
+  -- , display
+  -- , BoxStyle(..)
+  -- , hyphenBoxStyle
+  -- , singleBoxStyle
+  -- , roundedBoxStyle
+  -- , thickBoxStyle
+  -- , doubleBoxStyle
+  -- , fill
+  -- , hRule
+  -- , filterKeys
+  -- , KeyCombo
+  -- , key
+  -- , keys
+  -- , keyCombo
+  -- , keyCombos
+  -- , blank
+  -- ) where
 
 import Control.Applicative (liftA2)
 import Control.Monad.Fix (MonadFix)
@@ -184,7 +184,12 @@ mainWidgetWithHandle vty child =
 
 -- | Like 'mainWidgetWithHandle', but uses a default vty configuration
 mainWidget
-  :: (forall t m. (MonadVtyApp t m, MonadNodeId m) => VtyWidget t m (Event t ()))
+  :: (forall t m.
+      ( MonadVtyApp t m
+      , HasImageWriter t m
+      , MonadNodeId m
+      , HasDisplayRegion t m
+      ) => VtyWidget t m (Event t ()))
   -> IO ()
 mainWidget child = do
   vty <- getDefaultVty

@@ -22,9 +22,9 @@ type VtyExample t m =
   , Reflex t
   , HasVtyInput t m
   , HasVtyWidgetCtx t m
-  , ImageWriter t m
+  , HasImageWriter t m
   , MonadNodeId m
-  , HasDisplaySize t m
+  , HasDisplayRegion t m
   , HasFocus t m
   )
 

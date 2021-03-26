@@ -95,8 +95,8 @@ cpuStats
      , PerformEvent t m
      , PostBuild t m
      , TriggerEvent t m
-     , HasDisplaySize t m
-     , ImageWriter t m
+     , HasDisplayRegion t m
+     , HasImageWriter t m
      , MonadLayout t m
      , MonadFocus t m
      , MonadNodeId m
@@ -121,10 +121,10 @@ chart
      , MonadFocus t m
      , MonadLayout t m
      , MonadNodeId m
-     , ImageWriter t m
+     , HasImageWriter t m
      , HasVtyInput t m
      , HasVtyWidgetCtx t m
-     , HasDisplaySize t m
+     , HasDisplayRegion t m
      )
   => Dynamic t (Ratio Word64) -> m ()
 chart pct = do
