@@ -455,7 +455,7 @@ imagesInRegion reg = liftA2 (\r is -> map (withinImage r) is) reg
 
 -- * Running sub-widgets
 
--- | Low-level widget combinator that runs a child 'Input' within
+-- | Low-level widget combinator that runs a child widget within
 -- a given region and context. This widget filters and modifies the input
 -- that the child widget receives such that:
 -- * unfocused widgets receive no key events
