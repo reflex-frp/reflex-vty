@@ -31,7 +31,6 @@ library
                  , Reflex.Vty.Widget.Split
                  , Reflex.Vty.Widget.Text
                  , Data.Text.Zipper
-                 , Reflex.Class.Switchable
                  , Reflex.Spider.Orphans
                  , Control.Monad.NodeId
   build-depends:
