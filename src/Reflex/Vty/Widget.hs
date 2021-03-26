@@ -206,8 +206,12 @@ inputInFocusedRegion
 inputInFocusedRegion = do
   inp <- input
   reg <- current <$> askRegion
-  f <- current <$> focus
-  pure $ gate f $ fmapMaybe id $ attachWith mouseInRegion reg inp
+  foc <- current <$> focus
+  pure $ fmapMaybe id $ attachWith filterInput ((,) <$> reg <*> foc) inp
+  where
+    filterInput (r, f) = \case
+      V.EvKey {} | not f -> Nothing
+      x -> mouseInRegion r x
 
 -- * Getting and setting the display region
 
