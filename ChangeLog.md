@@ -69,6 +69,9 @@
     * `multilineTextInput`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, and `HasDisplayRegion`
     * `textInputTile`: Now requires `HasFocusReader`, `HasInput`, `HasLayout`, and `HasFocus`
 * _Misc_:
+  * (#40 Add alignment support to TextZipper)[https://github.com/reflex-frp/reflex-vty/pull/40]
+    * Add alignment (left/center/right) support to TextZipper
+    * Add basic unit tests for newly created alignment methods in TextZipper
   * Add default instances for `HasInput`, `HasFocus`, and `HasImageWriter`
   * Export `withinImage` and add `imagesInRegion` to crop images to a region
   * Add `anyChildFocused`, which provides information about whether subwidgets are focused
