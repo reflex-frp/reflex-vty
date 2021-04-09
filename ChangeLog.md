@@ -3,6 +3,9 @@
 ## Unreleased
 * Remove text-icu dependency and switch to `wcwidth` from vty package to compute character width in `Data.Text.Zipper`.
 * `goToDisplayLinePosition` in `Data.Text.Zipper` correctly accounts for character width now.
+* (#40 Add alignment support to TextZipper)[https://github.com/reflex-frp/reflex-vty/pull/40]
+  * Add alignment (left/center/right) support to TextZipper
+  * Add basic unit tests for newly created alignment methods in TextZipper
 
 ## 0.1.4.1
 * Migrate to new dependent-sum / dependent-map (after the "some" package split)

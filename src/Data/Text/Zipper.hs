@@ -1,5 +1,5 @@
 {-|
-Module: Potato.Data.Text.Zipper
+Module: Data.Text.Zipper
 Description: A zipper for text documents that allows convenient editing and navigation
 
 'TextZipper' is designed to be help manipulate the contents of a text input field. It keeps track of the logical lines of text (i.e., lines separated by user-entered newlines) and the current cursor position. Several functions are defined in this module to navigate and edit the TextZipper from the cursor position.
