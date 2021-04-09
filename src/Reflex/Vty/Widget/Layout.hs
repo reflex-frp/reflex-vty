@@ -361,7 +361,7 @@ chunk o r (offset, sz) = case o of
 
 -- | A class of operations for creating screen layouts.
 class Monad m => HasLayout t m | m -> t where
-  -- | Creates a parent element in the current layout with the given size
+  -- | Starts a parent element in the current layout with the given size
   -- constraint, which lays out its children according to the provided
   -- orientation.
   axis :: Dynamic t Orientation -> Dynamic t Constraint -> m a -> m a
