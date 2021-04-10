@@ -224,6 +224,10 @@ data Region = Region
   }
   deriving (Show, Read, Eq, Ord)
 
+-- | A region that occupies no space.
+nilRegion :: Region
+nilRegion = Region 0 0 0 0
+
 -- | The width and height of a 'Region'
 regionSize :: Region -> (Int, Int)
 regionSize (Region _ _ w h) = (w, h)
@@ -467,7 +471,7 @@ imagesInRegion reg = liftA2 (\r is -> map (withinImage r) is) reg
 -- * mouse inputs inside the region have their coordinates translated such
 --   that (0,0) is the top-left corner of the region
 pane
-  :: (Reflex t, Monad m, MonadNodeId m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
+  :: (Reflex t, Monad m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
   => Dynamic t Region
   -> Dynamic t Bool -- ^ Whether the widget should be focused when the parent is.
   -> m a

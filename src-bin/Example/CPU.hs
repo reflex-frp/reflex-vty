@@ -99,7 +99,6 @@ cpuStats
      , HasImageWriter t m
      , HasLayout t m
      , HasFocus t m
-     , MonadNodeId m
      , HasInput t m
      , HasFocusReader t m
      )
@@ -120,7 +119,6 @@ chart
   :: ( MonadFix m
      , HasFocus t m
      , HasLayout t m
-     , MonadNodeId m
      , HasImageWriter t m
      , HasInput t m
      , HasDisplayRegion t m

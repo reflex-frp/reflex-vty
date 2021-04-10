@@ -1,7 +1,6 @@
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Fix
-import Control.Monad.NodeId
 import Data.Functor
 import Data.Functor.Misc
 import Data.Map (Map)
@@ -22,7 +21,6 @@ type VtyExample t m =
   , Reflex t
   , HasInput t m
   , HasImageWriter t m
-  , MonadNodeId m
   , HasDisplayRegion t m
   , HasFocus t m
   , HasFocusReader t m
@@ -235,7 +233,7 @@ scrolling = col $ do
 --  * Text editor example with resizable boxes
 
 testBoxes
-  :: (MonadHold t m, MonadNodeId m, VtyExample t m)
+  :: (MonadHold t m, VtyExample t m)
   => m ()
 testBoxes = do
   dw <- displayWidth

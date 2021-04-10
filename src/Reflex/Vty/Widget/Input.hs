@@ -13,7 +13,6 @@ import Reflex.Vty.Widget.Input.Text as Export
 
 import Control.Monad (join)
 import Control.Monad.Fix (MonadFix)
-import Control.Monad.NodeId (MonadNodeId)
 import Data.Default (Default(..))
 import Data.Text (Text)
 import qualified Graphics.Vty as V
@@ -35,7 +34,7 @@ instance Reflex t => Default (ButtonConfig t) where
 
 -- | A button widget that contains a sub-widget
 button
-  :: (Reflex t, Monad m, MonadNodeId m, HasFocusReader t m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m)
+  :: (Reflex t, Monad m, HasFocusReader t m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m)
   => ButtonConfig t
   -> m ()
   -> m (Event t ())
@@ -53,7 +52,7 @@ button cfg child = do
 
 -- | A button widget that displays text that can change
 textButton
-  :: (Reflex t, Monad m, MonadNodeId m, HasDisplayRegion t m, HasFocusReader t m, HasImageWriter t m, HasInput t m)
+  :: (Reflex t, Monad m, HasDisplayRegion t m, HasFocusReader t m, HasImageWriter t m, HasInput t m)
   => ButtonConfig t
   -> Behavior t Text
   -> m (Event t ())
@@ -61,7 +60,7 @@ textButton cfg = button cfg . text -- TODO Centering etc.
 
 -- | A button widget that displays a static bit of text
 textButtonStatic
-  :: (Reflex t, Monad m, MonadNodeId m, HasDisplayRegion t m, HasFocusReader t m, HasImageWriter t m, HasInput t m)
+  :: (Reflex t, Monad m, HasDisplayRegion t m, HasFocusReader t m, HasImageWriter t m, HasInput t m)
   => ButtonConfig t
   -> Text
   -> m (Event t ())

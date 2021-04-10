@@ -184,7 +184,7 @@ anyChildFocused f = do
 
 -- | Request focus be shifted backward and forward based on tab presses. <Tab>
 -- shifts focus forward and <Shift+Tab> shifts focus backward.
-tabNavigation :: (Reflex t, MonadNodeId m, HasInput t m, HasFocus t m) => m ()
+tabNavigation :: (Reflex t, HasInput t m, HasFocus t m) => m ()
 tabNavigation = do
   fwd <- fmap (const 1) <$> key (V.KChar '\t')
   back <- fmap (const (-1)) <$> key V.KBackTab
@@ -242,14 +242,14 @@ data Orientation = Orientation_Column
 
 -- | Create a row-oriented 'axis'
 row
-  :: (Reflex t, MonadNodeId m, MonadFix m, HasLayout t m)
+  :: (Reflex t, MonadFix m, HasLayout t m)
   => m a
   -> m a
 row = axis (pure Orientation_Row) flex
 
 -- | Create a column-oriented 'axis'
 col
-  :: (Reflex t, MonadNodeId m, MonadFix m, HasLayout t m)
+  :: (Reflex t, MonadFix m, HasLayout t m)
   => m a
   -> m a
 col = axis (pure Orientation_Column) flex
@@ -433,14 +433,15 @@ instance (HasFocusReader t m, Monad m) => HasFocusReader t (Layout t m)
 instance (Monad m, MonadNodeId m, Reflex t, MonadFix m) => HasLayout t (Layout t m) where
   axis o c (Layout x) = Layout $ do
     nodeId <- getNextNodeId
-    (result, forest) <- lift $ local (\t -> fromMaybe (LayoutTree (Region 0 0 0 0, Orientation_Column) mempty) . lookupLF nodeId . childrenLT <$> t) $ runDynamicWriterT x
+    let dummyParentLayout = LayoutTree (nilRegion, Orientation_Column) mempty
+    (result, forest) <- lift $ local (\t -> fromMaybe dummyParentLayout . lookupLF nodeId . childrenLT <$> t) $ runDynamicWriterT x
     tellDyn $ singletonLF nodeId <$> (LayoutTree <$> ((,) <$> c <*> o) <*> forest)
     pure result
   region c = do
     nodeId <- lift getNextNodeId
     Layout $ tellDyn $ ffor c $ \c' -> singletonLF nodeId $ LayoutTree (c', Orientation_Row) mempty
     solutions <- Layout ask
-    pure $ maybe (Region 0 0 0 0) (fst . rootLT) . lookupLF nodeId . childrenLT <$> solutions
+    pure $ maybe nilRegion (fst . rootLT) . lookupLF nodeId . childrenLT <$> solutions
   askOrientation = Layout $ asks $ fmap (snd . rootLT)
 
 instance (MonadFix m, HasFocus t m) => HasFocus t (Layout t m) where
@@ -505,7 +506,7 @@ initManager_ = fmap fst . initManager
 -- provided constraint. Returns the 'FocusId' allowing for manual focus
 -- management.
 tile'
-  :: (MonadNodeId m, MonadFix m, Reflex t, HasInput t m, HasFocus t m, HasLayout t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
+  :: (MonadFix m, Reflex t, HasInput t m, HasFocus t m, HasLayout t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
   => Dynamic t Constraint
   -> m a
   -> m (FocusId, a)
@@ -524,7 +525,7 @@ tile' c w = do
 -- | A widget that is focusable and occupies a layout region based on the
 -- provided constraint.
 tile
-  :: (MonadNodeId m, MonadFix m, Reflex t, HasInput t m, HasFocus t m, HasLayout t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
+  :: (MonadFix m, Reflex t, HasInput t m, HasFocus t m, HasLayout t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
   => Dynamic t Constraint
   -> m a
   -> m a
@@ -535,7 +536,7 @@ tile c = fmap snd . tile' c
 -- | A widget that is not focusable and occupies a layout region based on the
 -- provided constraint.
 grout
-  :: (Reflex t, MonadNodeId m, HasLayout t m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
+  :: (Reflex t, HasLayout t m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
   => Dynamic t Constraint
   -> m a
   -> m a
