@@ -2,11 +2,6 @@
 Module: Reflex.Vty.Widget.Input.Text
 Description: Widgets for accepting text input from users and manipulating text within those inputs
 -}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecursiveDo #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 module Reflex.Vty.Widget.Input.Text
   ( module Reflex.Vty.Widget.Input.Text
   , def
@@ -14,7 +9,6 @@ module Reflex.Vty.Widget.Input.Text
 
 import Control.Monad (join)
 import Control.Monad.Fix (MonadFix)
-import Control.Monad.NodeId (MonadNodeId)
 import Data.Default (Default(..))
 import Data.Text (Text)
 import Data.Text.Zipper
@@ -23,6 +17,7 @@ import Reflex
 
 import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Layout
+import Reflex.Vty.Widget.Input.Mouse
 
 -- | Configuration options for a 'textInput'. For more information on
 -- 'TextZipper', see 'Data.Text.Zipper'.
@@ -48,9 +43,9 @@ data TextInput t = TextInput
 
 -- | A widget that allows text input
 textInput
-  :: (Reflex t, MonadHold t m, MonadFix m)
+  :: (Reflex t, MonadHold t m, MonadFix m, HasInput t m, HasFocusReader t m, HasDisplayRegion t m, HasImageWriter t m, HasDisplayRegion t m)
   => TextInputConfig t
-  -> VtyWidget t m (TextInput t)
+  -> m (TextInput t)
 textInput cfg = do
   i <- input
   f <- focus
@@ -86,9 +81,9 @@ textInput cfg = do
 
 -- | A widget that allows multiline text input
 multilineTextInput
-  :: (Reflex t, MonadHold t m, MonadFix m)
+  :: (Reflex t, MonadHold t m, MonadFix m, HasInput t m, HasFocusReader t m, HasDisplayRegion t m, HasImageWriter t m)
   => TextInputConfig t
-  -> VtyWidget t m (TextInput t)
+  -> m (TextInput t)
 multilineTextInput cfg = do
   i <- input
   textInput $ cfg
@@ -104,13 +99,13 @@ multilineTextInput cfg = do
 -- the computed line count to greedily size the tile when vertically
 -- oriented, and uses the fallback width when horizontally oriented.
 textInputTile
-  :: (Reflex t, MonadHold t m, MonadFix m, MonadNodeId m)
-  => VtyWidget t m (TextInput t)
+  :: (Monad m, Reflex t, MonadFix m, HasLayout t m, HasInput t m, HasFocus t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
+  => m (TextInput t)
   -> Dynamic t Int
-  -> Layout t m (TextInput t)
+  -> m (TextInput t)
 textInputTile txt width = do
   o <- askOrientation
-  rec t <- fixed sz txt
+  rec t <- tile (Constraint_Fixed <$> sz) txt
       let sz = join $ ffor o $ \case
             Orientation_Column -> _textInput_lines t
             Orientation_Row -> width

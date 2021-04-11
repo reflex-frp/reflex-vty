@@ -2,12 +2,6 @@
 Module: Reflex.Vty.Host
 Description: Scaffolding for running a reflex-vty application
 -}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE RankNTypes #-}
-
 module Reflex.Vty.Host
   ( VtyApp
   , VtyResult(..)
@@ -202,7 +196,6 @@ runVtyAppWithHandle vty vtyGuest = flip onException (V.shutdown vty) $
           updateVty
           loop
   where
-    -- TODO Some part of this is probably general enough to belong in reflex
     -- | Use the given 'FireCommand' to fire events that have subscribers
     -- and call the callback for the 'TriggerInvocation' of each.
     fireEventTriggerRefs

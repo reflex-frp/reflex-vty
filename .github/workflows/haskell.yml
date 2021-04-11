@@ -23,11 +23,11 @@ jobs:
         cache-name: cache-cabal
       with:
         path: ~/.cabal
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+        key: ${{ runner.os }}-1-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
         restore-keys: |
-          ${{ runner.os }}-build-${{ env.cache-name }}-
-          ${{ runner.os }}-build-
-          ${{ runner.os }}-
+          ${{ runner.os }}-1-build-${{ env.cache-name }}-
+          ${{ runner.os }}-1-build-
+          ${{ runner.os }}-1-
 
     - name: Install dependencies
       run: |

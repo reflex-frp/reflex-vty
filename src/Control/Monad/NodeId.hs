@@ -2,12 +2,7 @@
 Module: Control.Monad.NodeId
 Description: Monad providing a supply of unique identifiers
 -}
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# Language UndecidableInstances #-}
 module Control.Monad.NodeId
   ( NodeId
   , MonadNodeId (..)
@@ -15,6 +10,7 @@ module Control.Monad.NodeId
   , runNodeIdT
   ) where
 
+import Control.Monad.Morph
 import Control.Monad.Reader
 import Control.Monad.Ref
 import Data.IORef
@@ -39,10 +35,12 @@ newtype NodeIdT m a = NodeIdT { unNodeIdT :: ReaderT (IORef NodeId) m a }
   deriving
     ( Functor
     , Applicative
+    , MFunctor
     , Monad
     , MonadFix
     , MonadHold t
     , MonadIO
+    , MonadRef
     , MonadReflexCreateTrigger t
     , MonadSample t
     , MonadTrans
@@ -50,7 +48,6 @@ newtype NodeIdT m a = NodeIdT { unNodeIdT :: ReaderT (IORef NodeId) m a }
     , PerformEvent t
     , PostBuild t
     , TriggerEvent t
-    , MonadRef
     )
 
 instance MonadNodeId m => MonadNodeId (ReaderT x m)
