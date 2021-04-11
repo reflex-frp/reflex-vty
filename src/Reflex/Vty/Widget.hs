@@ -237,9 +237,9 @@ regionSize :: Region -> (Int, Int)
 regionSize (Region _ _ w h) = (w, h)
 
 -- | Produces an 'Image' that fills a region with space characters
-regionBlankImage :: Region -> Image
-regionBlankImage r@(Region _ _ width height) =
-  withinImage r $ V.charFill V.defAttr ' ' width height
+regionBlankImage :: V.Attr -> Region -> Image
+regionBlankImage attr r@(Region _ _ width height) =
+  withinImage r $ V.charFill attr ' ' width height
 
 -- | A class for things that know their own display size dimensions
 class (Reflex t, Monad m) => HasDisplayRegion t m | m -> t where
