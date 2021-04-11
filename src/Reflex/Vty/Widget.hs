@@ -35,6 +35,7 @@ mainWidgetWithHandle
       , HasDisplayRegion t m
       , HasFocusReader t m
       , HasInput t m
+      , HasTheme t m
       ) => m (Event t ()))
   -> IO ()
 mainWidgetWithHandle vty child =
@@ -45,12 +46,14 @@ mainWidgetWithHandle vty child =
     let inp' = fforMaybe inp $ \case
           V.EvResize {} -> Nothing
           x -> Just x
-    (shutdown, images) <- runFocusReader (pure True) $ runDisplayRegion (fmap (\(w, h) -> Region 0 0 w h) size) $
-      runImageWriter $
-        runNodeIdT $
-          runInput inp' $ do
-            tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
-            child
+    (shutdown, images) <- runThemeReader (constant V.defAttr) $
+      runFocusReader (pure True) $
+        runDisplayRegion (fmap (\(w, h) -> Region 0 0 w h) size) $
+          runImageWriter $
+            runNodeIdT $
+              runInput inp' $ do
+                tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
+                child
     return $ VtyResult
       { _vtyResult_picture = fmap (V.picForLayers . reverse) images
       , _vtyResult_shutdown = shutdown
@@ -69,6 +72,7 @@ mainWidget
       , MonadNodeId m
       , HasDisplayRegion t m
       , HasFocusReader t m
+      , HasTheme t m
       , HasInput t m
       ) => m (Event t ()))
   -> IO ()
@@ -457,6 +461,10 @@ instance HasTheme t m => HasTheme t (BehaviorWriterT t x m)
 instance HasTheme t m => HasTheme t (DynamicWriterT t x m)
 instance HasTheme t m => HasTheme t (EventWriterT t x m)
 instance HasTheme t m => HasTheme t (NodeIdT m)
+instance HasTheme t m => HasTheme t (Input t m)
+instance HasTheme t m => HasTheme t (ImageWriter t m)
+instance HasTheme t m => HasTheme t (DisplayRegion t m)
+instance HasTheme t m => HasTheme t (FocusReader t m)
 
 -- | A widget that has access to information about whether it is focused
 newtype ThemeReader t m a = ThemeReader
