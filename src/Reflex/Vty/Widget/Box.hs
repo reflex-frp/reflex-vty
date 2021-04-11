@@ -13,7 +13,7 @@ import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Text
 
 -- | Fill the background with the bottom box style
-hRule :: (HasDisplayRegion t m, HasImageWriter t m) => BoxStyle -> m ()
+hRule :: (HasDisplayRegion t m, HasImageWriter t m, HasTheme t m) => BoxStyle -> m ()
 hRule boxStyle = fill $ pure (_boxStyle_s boxStyle)
 
 -- | Defines a set of symbols to use to draw the outlines of boxes

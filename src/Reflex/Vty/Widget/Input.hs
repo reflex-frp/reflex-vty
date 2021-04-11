@@ -34,7 +34,7 @@ instance Reflex t => Default (ButtonConfig t) where
 
 -- | A button widget that contains a sub-widget
 button
-  :: (Reflex t, Monad m, HasFocusReader t m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m)
+  :: (Reflex t, Monad m, HasFocusReader t m, HasTheme t m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m)
   => ButtonConfig t
   -> m ()
   -> m (Event t ())
@@ -52,7 +52,7 @@ button cfg child = do
 
 -- | A button widget that displays text that can change
 textButton
-  :: (Reflex t, Monad m, HasDisplayRegion t m, HasFocusReader t m, HasImageWriter t m, HasInput t m)
+  :: (Reflex t, Monad m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m, HasImageWriter t m, HasInput t m)
   => ButtonConfig t
   -> Behavior t Text
   -> m (Event t ())
@@ -60,7 +60,7 @@ textButton cfg = button cfg . text -- TODO Centering etc.
 
 -- | A button widget that displays a static bit of text
 textButtonStatic
-  :: (Reflex t, Monad m, HasDisplayRegion t m, HasFocusReader t m, HasImageWriter t m, HasInput t m)
+  :: (Reflex t, Monad m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m, HasImageWriter t m, HasInput t m)
   => ButtonConfig t
   -> Text
   -> m (Event t ())
@@ -70,19 +70,20 @@ textButtonStatic cfg = textButton cfg . pure
 
 -- | A clickable link widget
 link
-  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m)
+  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasTheme t m)
   => Behavior t Text
   -> m (Event t MouseUp)
 link t = do
+  bt <- theme
   let cfg = RichTextConfig
-        { _richTextConfig_attributes = pure $ V.withStyle V.defAttr V.underline
+        { _richTextConfig_attributes = fmap (\attr -> V.withStyle attr V.underline) bt
         }
   richText cfg t
   mouseUp
 
 -- | A clickable link widget with a static label
 linkStatic
-  :: (Reflex t, Monad m, HasImageWriter t m, HasDisplayRegion t m, HasInput t m)
+  :: (Reflex t, Monad m, HasImageWriter t m, HasDisplayRegion t m, HasInput t m, HasTheme t m)
   => Text
   -> m (Event t MouseUp)
 linkStatic = link . pure
@@ -128,7 +129,7 @@ instance (Reflex t) => Default (CheckboxConfig t) where
 
 -- | A checkbox widget
 checkbox
-  :: (MonadHold t m, MonadFix m, Reflex t, HasInput t m, HasDisplayRegion t m, HasImageWriter t m, HasFocusReader t m)
+  :: (MonadHold t m, MonadFix m, Reflex t, HasInput t m, HasDisplayRegion t m, HasImageWriter t m, HasFocusReader t m, HasTheme t m)
   => CheckboxConfig t
   -> Bool
   -> m (Dynamic t Bool)
