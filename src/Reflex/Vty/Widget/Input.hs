@@ -116,6 +116,7 @@ checkboxStyleTick = CheckboxStyle
 -- | Configuration options for a checkbox
 data CheckboxConfig t = CheckboxConfig
   { _checkboxConfig_checkboxStyle :: Behavior t CheckboxStyle
+  -- TODO DELETE and use HasTheme instead
   , _checkboxConfig_attributes :: Behavior t V.Attr
   , _checkboxConfig_setValue :: Event t Bool
   }
