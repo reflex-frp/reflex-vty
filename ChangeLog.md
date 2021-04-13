@@ -68,6 +68,10 @@
     * `textInput`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, and `HasDisplayRegion`
     * `multilineTextInput`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, and `HasDisplayRegion`
     * `textInputTile`: Now requires `HasFocusReader`, `HasInput`, `HasLayout`, and `HasFocus`
+  * TextZipper interface changes
+    * `_displayLines_offsetMap` type changed to `OffsetMapWithAlignment`
+    * `_displayLines_cursorY` replaced with `_displayLines_cursorPos` which include X position
+    * some exposed methods intended for internal use only have been removed
 * _Misc_:
   * (#40 Add alignment support to TextZipper)[https://github.com/reflex-frp/reflex-vty/pull/40]
     * Add alignment (left/center/right) support to TextZipper

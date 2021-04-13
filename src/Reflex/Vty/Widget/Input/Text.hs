@@ -65,7 +65,7 @@ textInput cfg = do
             <*> (mapZipper <$> _textInputConfig_display cfg <*> v)
             <*> cursorAttrs
           img = images . _displayLines_spans <$> rows
-      y <- holdUniqDyn $ _displayLines_cursorY <$> rows
+      y <- holdUniqDyn $ fmap snd _displayLines_cursorPos <$> rows
       let newScrollTop :: Int -> (Int, Int) -> Int
           newScrollTop st (h, cursorY)
             | cursorY < st = cursorY

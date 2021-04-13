@@ -67,7 +67,7 @@ spec = do
         , (4, (2,8)) -- jump by 2 for char and 1 for space
         , (5, (3,11)) -- jump by 2 for char and 1 for space
         ]
-    it "displayLinesWithAlignment - cursorPos" $ do
+    it "displayLines - cursorPos" $ do
       let
         dl0 = displayLinesWithAlignment TextAlignment_Right 10 () () (fromText "")
         dl1 = displayLinesWithAlignment TextAlignment_Right 10 () () (fromText "aoeu")
@@ -76,10 +76,10 @@ spec = do
         dl4 = displayLinesWithAlignment TextAlignment_Right 10 () () (insertChar 'a' $ fromText "aoeu")
         dl5 = displayLinesWithAlignment TextAlignment_Right 10 () () (left $ insertChar 'a' $ fromText "aoeu")
         dl6 = displayLinesWithAlignment TextAlignment_Right 10 () () (deleteLeft $ insertChar 'a' $ fromText "aoeu")
-      _displayLinesWithAlignment_cursorPos dl0 `shouldBe` (0,0)
-      _displayLinesWithAlignment_cursorPos dl1 `shouldBe` (4,0)
-      _displayLinesWithAlignment_cursorPos dl2 `shouldBe` (0,1)
-      _displayLinesWithAlignment_cursorPos dl3 `shouldBe` (0,1)
-      _displayLinesWithAlignment_cursorPos dl4 `shouldBe` (5,0)
-      _displayLinesWithAlignment_cursorPos dl5 `shouldBe` (4,0)
-      _displayLinesWithAlignment_cursorPos dl6 `shouldBe` (4,0)
+      _displayLines_cursorPos dl0 `shouldBe` (0,0)
+      _displayLines_cursorPos dl1 `shouldBe` (4,0)
+      _displayLines_cursorPos dl2 `shouldBe` (0,1)
+      _displayLines_cursorPos dl3 `shouldBe` (0,1)
+      _displayLines_cursorPos dl4 `shouldBe` (5,0)
+      _displayLines_cursorPos dl5 `shouldBe` (4,0)
+      _displayLines_cursorPos dl6 `shouldBe` (4,0)
