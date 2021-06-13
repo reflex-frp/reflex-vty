@@ -33,6 +33,8 @@
     * Introduce a `FocusReader` monad transformer
     * Replace `HasVtyInput` with `HasInput`
     * Introduce an `Input` monad transformer
+    * Introduce `HasTheme` reader class to allow setting Vty attributes of all built-in widgets
+    * Introduce `ThemeReader` monad transformer
   * Remove `DynRegion` and `currentRegion`. Use `Dynamic t Region`  and `current` instead. This also changes the type of `pane`'s argument.
   * `CheckboxConfig` now has a field taking an `Event` to set the value of the checkbox.
   * `checkbox` now accepts keyboard input (spacebar to check and uncheck) and is displayed in bold when focused.
@@ -54,24 +56,20 @@
     * `splitH`: Now requires `HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasFocusReader t m`
     * `splitVDrag`: Now requires `HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasFocusReader t m`
     * `fill`: Now requires `HasImageWriter` and `HasDisplayRegion`
-    * `boxTitle`: Now requires `HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m`
-    * `box`: Now requires `HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m`
-    * `boxStatic`: Now requires `HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m`
+    * `boxTitle`: Now requires `HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m, HasTheme t m`
+    * `box`: Now requires `HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m, HasTheme t m`
+    * `boxStatic`: Now requires `HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m, HasTheme t m`
     * `richText`: Now requires `HasImageWriter`, and `HasDisplayRegion`
-    * `scrollableText`: Now requires `HasInput`, `HasImageWriter`, and `HasDisplayRegion`
+    * `scrollableText`: Now requires `HasInput`, `HasImageWriter`, `HasTheme`, and `HasDisplayRegion`
     * `blank`: Now requires `Monad`
-    * `button`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, and `HasDisplayRegion`
-    * `textButton`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, and `HasDisplayRegion`
-    * `textButtonStatic`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, and `HasDisplayRegion`
-    * `link`: Now requires `HasInput`, `HasImageWriter`, and `HasDisplayRegion`
+    * `button`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, `HasTheme`, and `HasDisplayRegion`
+    * `textButton`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, `HasTheme`, and `HasDisplayRegion`
+    * `textButtonStatic`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, `HasTheme`, and `HasDisplayRegion`
+    * `link`: Now requires `HasInput`, `HasImageWriter`, `HasTheme`, and `HasDisplayRegion`
     * `checkbox`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, and `HasDisplayRegion`
-    * `textInput`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, and `HasDisplayRegion`
-    * `multilineTextInput`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, and `HasDisplayRegion`
-    * `textInputTile`: Now requires `HasFocusReader`, `HasInput`, `HasLayout`, and `HasFocus`
-  * TextZipper interface changes
-    * `_displayLines_offsetMap` type changed to `OffsetMapWithAlignment`
-    * `_displayLines_cursorY` replaced with `_displayLines_cursorPos` which include X position
-    * some exposed methods intended for internal use only have been removed
+    * `textInput`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, `HasTheme`, and `HasDisplayRegion`
+    * `multilineTextInput`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, `HasTheme`, and `HasDisplayRegion`
+    * `textInputTile`: Now requires `HasFocusReader`, `HasInput`, `HasLayout`, `HasTheme`, and `HasFocus`
 * _Misc_:
   * (#40 Add alignment support to TextZipper)[https://github.com/reflex-frp/reflex-vty/pull/40]
     * Add alignment (left/center/right) support to TextZipper

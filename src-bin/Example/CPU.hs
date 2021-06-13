@@ -100,7 +100,7 @@ cpuStats
      , HasLayout t m
      , HasFocus t m
      , HasInput t m
-     , HasFocusReader t m
+     , HasFocusReader t m, HasTheme t m
      )
   => m ()
 cpuStats = do
@@ -122,7 +122,7 @@ chart
      , HasImageWriter t m
      , HasInput t m
      , HasDisplayRegion t m
-     , HasFocusReader t m
+     , HasFocusReader t m, HasTheme t m
      )
   => Dynamic t (Ratio Word64) -> m ()
 chart pct = do
