@@ -457,6 +457,19 @@ displayLinesWithAlignment alignment width tag cursorTag (TextZipper lb b a la) =
                   []     -> [[cursor]]
                   (l:ls) -> (cursor : l) : ls
 
+      curLineSpanNormalCase = if cursorAfterEOL
+        then [ spansCurLineBefore, spansCurLineAfter ]
+        else [ spansCurLineBefore <> spansCurLineAfter ]
+
+      -- for right alignment, we want draw the cursor tag to be on the character just before the logical cursor position
+      curLineSpan = if alignment == TextAlignment_Right && not cursorAfterEOL
+        then case reverse spansCurLineBefore of
+          [] -> curLineSpanNormalCase
+          (Span _ x):xs -> case spansCurLineAfter of
+            [] -> error "should not be possible" -- curLineSpanNormalCase
+            (Span _ y):ys -> [reverse (Span cursorTag x:xs) <> ((Span tag y):ys)]
+        else curLineSpanNormalCase
+
       cursorY = sum
         [ length spansBefore
         , length spansCurrentBefore
@@ -469,9 +482,7 @@ displayLinesWithAlignment alignment width tag cursorTag (TextZipper lb b a la) =
         { _displayLines_spans = concat
           [ spansBefore
           , spansCurrentBefore
-          , if cursorAfterEOL
-              then [ spansCurLineBefore, spansCurLineAfter ]
-              else [ spansCurLineBefore <> spansCurLineAfter ]
+          , curLineSpan
           , spansCurrentAfter
           , spansAfter
           ]
