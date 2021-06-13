@@ -170,7 +170,7 @@ deleteLeftWord (TextZipper lb b a la) =
 -- | Insert up to n spaces to get to the next logical column that is a multiple of n
 tab :: Int -> TextZipper -> TextZipper
 tab n z@(TextZipper _ b _ _) =
-  insert (T.replicate (fromEnum $ n - (T.length b `mod` max 1 n)) " ") z
+  insert (T.replicate (fromEnum $ n - T.length b `mod` max 1 n) " ") z
 
 -- | The plain text contents of the zipper
 value :: TextZipper -> Text
@@ -314,9 +314,7 @@ wordsWithWhitespace :: Text -> [Text]
 wordsWithWhitespace t@(Text arr off len) = loop 0 0 False
   where
     loop !start !n !wasSpace
-        | n >= len = if start == n
-                     then []
-                     else [Text arr (start+off) (n-start)]
+        | n >= len = [Text arr (start+off) (n-start) | not (start == n)]
         | isSpace c = loop start (n+d) True
         | wasSpace = Text arr (start+off) (n-start) : loop n n False
         | otherwise = loop start (n+d) False
@@ -380,7 +378,7 @@ wrapWithOffsetAndAlignment alignment maxWidth n txt = assert (n <= maxWidth) r w
 
 -- converts deleted eol spaces into logical lines
 eolSpacesToLogicalLines :: [[WrappedLine]] -> [[(Text, Int)]]
-eolSpacesToLogicalLines = fmap (fmap (\(WrappedLine a _ c) -> (a,c))) . join . fmap (L.groupBy (\(WrappedLine _ b _) _ -> not b))
+eolSpacesToLogicalLines = fmap (fmap (\(WrappedLine a _ c) -> (a,c))) . ((L.groupBy (\(WrappedLine _ b _) _ -> not b)) =<<)
 
 offsetMapWithAlignmentInternal :: [[WrappedLine]] -> OffsetMapWithAlignment
 offsetMapWithAlignmentInternal = offsetMapWithAlignment . eolSpacesToLogicalLines
@@ -434,7 +432,7 @@ displayLinesWithAlignment alignment width tag cursorTag (TextZipper lb b a la) =
 
       -- TODO cursor goes here if align right
       (spansCurrentBefore, spansCurLineBefore) = fromMaybe ([], []) $
-        initLast $ map ((:[]) . Span tag) $ fmap _wrappedLines_text $ (wrapWithOffsetAndAlignment alignment width 0 b)
+        initLast $ map ((:[]) . Span tag) $ _wrappedLines_text <$> (wrapWithOffsetAndAlignment alignment width 0 b)
       -- Calculate the number of columns on the cursor's display line before the cursor
       curLineOffset = spansWidth spansCurLineBefore
       -- Check whether the spans on the current display line are long enough that
@@ -455,7 +453,7 @@ displayLinesWithAlignment alignment width tag cursorTag (TextZipper lb b a la) =
           Just (c, rest) ->
             let o = if cursorAfterEOL then cursorCharWidth else curLineOffset + cursorCharWidth
                 cursor = Span cursorTag (T.singleton c)
-            in case map ((:[]) . Span tag) $ fmap _wrappedLines_text $ (wrapWithOffsetAndAlignment alignment width o rest) of
+            in case map ((:[]) . Span tag) $ _wrappedLines_text <$> (wrapWithOffsetAndAlignment alignment width o rest) of
                   []     -> [[cursor]]
                   (l:ls) -> (cursor : l) : ls
 
@@ -531,4 +529,4 @@ wrapWithOffset
   -> Int -- ^ Offset for first line
   -> Text -- ^ Text to be wrapped
   -> [Text]
-wrapWithOffset maxWidth n xs = fmap _wrappedLines_text $ wrapWithOffsetAndAlignment TextAlignment_Left maxWidth n xs
+wrapWithOffset maxWidth n xs = _wrappedLines_text <$> wrapWithOffsetAndAlignment TextAlignment_Left maxWidth n xs
