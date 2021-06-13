@@ -367,7 +367,7 @@ wrapWithOffsetAndAlignment
   -> [WrappedLine] -- (words on that line, hidden space char, offset from beginning of line)
 wrapWithOffsetAndAlignment _ maxWidth _ _ | maxWidth <= 0 = []
 wrapWithOffsetAndAlignment alignment maxWidth n txt = assert (n <= maxWidth) r where
-  r' = splitWordsAtDisplayWidth maxWidth $ T.replicate n " " : wordsWithWhitespace txt
+  r' = splitWordsAtDisplayWidth maxWidth $ wordsWithWhitespace ( T.replicate n "." <> txt)
   fmapfn (t,b) = case alignment of
     TextAlignment_Left   -> WrappedLine t b 0
     TextAlignment_Right  -> WrappedLine t b (maxWidth-l)

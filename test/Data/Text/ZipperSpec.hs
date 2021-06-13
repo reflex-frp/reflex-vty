@@ -9,14 +9,15 @@ import           Prelude
 import           Test.Hspec
 
 import qualified Data.Map         as Map
-import           Data.Text
+import qualified          Data.Text as T
+import Control.Monad
 
 import           Data.Text.Zipper
 
 
 someSentence = "12345 1234 12"
 
-splitSentenceAtDisplayWidth :: Int -> Text -> [(Text, Bool)]
+splitSentenceAtDisplayWidth :: Int -> T.Text -> [(T.Text, Bool)]
 splitSentenceAtDisplayWidth w t = splitWordsAtDisplayWidth w (wordsWithWhitespace t)
 
 spec :: Spec
@@ -38,6 +39,7 @@ spec = do
       wrapWithOffsetAndAlignment TextAlignment_Left 5 0 someSentence `shouldBe` [(WrappedLine "12345" True 0), (WrappedLine "1234" True 0), (WrappedLine "12" False 0)]
       wrapWithOffsetAndAlignment TextAlignment_Right 5 0 someSentence `shouldBe` [(WrappedLine "12345" True 0), (WrappedLine "1234" True 1), (WrappedLine "12" False 3)]
       wrapWithOffsetAndAlignment TextAlignment_Center 5 0 someSentence `shouldBe` [(WrappedLine "12345" True 0), (WrappedLine "1234" True 0), (WrappedLine "12" False 1)]
+      wrapWithOffsetAndAlignment TextAlignment_Left 5 1 someSentence `shouldBe` [(WrappedLine "1234" False 0), (WrappedLine "5" True 0), (WrappedLine "1234" True 0), (WrappedLine "12" False 0)]
     it "eolSpacesToLogicalLines" $ do
       eolSpacesToLogicalLines
         [
@@ -83,3 +85,11 @@ spec = do
       _displayLines_cursorPos dl4 `shouldBe` (5,0)
       _displayLines_cursorPos dl5 `shouldBe` (4,0)
       _displayLines_cursorPos dl6 `shouldBe` (4,0)
+    it "displayLinesWithAlignment - spans" $ do
+      let
+        someText = top $ fromText "0123456789abcdefgh"
+      -- outer span length should be invariant when changing TextAlignment and CursorPosition
+      forM_ [0..4] $ \x -> do
+        forM_ [TextAlignment_Left, TextAlignment_Center, TextAlignment_Right] $ \ta -> do
+          length (_displayLines_spans $ (displayLinesWithAlignment ta 5 () () someText) {_displayLines_cursorPos = (x,x)}) `shouldBe` 4
+          length (_displayLines_spans $ (displayLinesWithAlignment ta 10 () () someText) {_displayLines_cursorPos = (x,x)}) `shouldBe` 2
