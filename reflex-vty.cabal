@@ -12,7 +12,7 @@ maintainer: maintainer@obsidian.systems
 copyright: 2020 Obsidian Systems LLC
 category: FRP
 build-type: Simple
-cabal-version: >=1.18
+cabal-version: 1.18
 extra-source-files:
   README.md
   ChangeLog.md
