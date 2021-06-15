@@ -1,5 +1,9 @@
 # Revision history for reflex-vty
 
+## 0.1.4.2
+
+* Wider bounds for GHC 8.10 support
+
 ## 0.1.4.1
 
 * Migrate to new dependent-sum / dependent-map (after the "some" package split)
