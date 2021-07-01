@@ -365,6 +365,7 @@ wrapWithOffsetAndAlignment
   -> [WrappedLine] -- (words on that line, hidden space char, offset from beginning of line)
 wrapWithOffsetAndAlignment _ maxWidth _ _ | maxWidth <= 0 = []
 wrapWithOffsetAndAlignment alignment maxWidth n txt = assert (n <= maxWidth) r where
+  -- we pad by offset amount with any non-space character which we will remove later so that no changes need to be made to splitWordsAtDisplayWidth
   r' = splitWordsAtDisplayWidth maxWidth $ wordsWithWhitespace ( T.replicate n "." <> txt)
   fmapfn (t,b) = case alignment of
     TextAlignment_Left   -> WrappedLine t b 0
@@ -378,7 +379,7 @@ wrapWithOffsetAndAlignment alignment maxWidth n txt = assert (n <= maxWidth) r w
 
 -- converts deleted eol spaces into logical lines
 eolSpacesToLogicalLines :: [[WrappedLine]] -> [[(Text, Int)]]
-eolSpacesToLogicalLines = fmap (fmap (\(WrappedLine a _ c) -> (a,c))) . ((L.groupBy (\(WrappedLine _ b _) _ -> not b)) =<<)
+eolSpacesToLogicalLines = fmap (fmap (\(WrappedLine a _ c) -> (a,c))) .  concatMap (L.groupBy (\(WrappedLine _ b _) _ -> not b))
 
 offsetMapWithAlignmentInternal :: [[WrappedLine]] -> OffsetMapWithAlignment
 offsetMapWithAlignmentInternal = offsetMapWithAlignment . eolSpacesToLogicalLines

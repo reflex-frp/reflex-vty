@@ -40,6 +40,9 @@ spec =
     wrapWithOffsetAndAlignment TextAlignment_Right 5 0 someSentence `shouldBe` [(WrappedLine "12345" True 0), (WrappedLine "1234" True 1), (WrappedLine "12" False 3)]
     wrapWithOffsetAndAlignment TextAlignment_Center 5 0 someSentence `shouldBe` [(WrappedLine "12345" True 0), (WrappedLine "1234" True 0), (WrappedLine "12" False 1)]
     wrapWithOffsetAndAlignment TextAlignment_Left 5 1 someSentence `shouldBe` [(WrappedLine "1234" False 0), (WrappedLine "5" True 0), (WrappedLine "1234" True 0), (WrappedLine "12" False 0)]
+
+    -- leading spaces and offset case
+    wrapWithOffsetAndAlignment TextAlignment_Left 5 1 ("   " <> someSentence) `shouldBe` [(WrappedLine "  " True 0), (WrappedLine "12345" True 0), (WrappedLine "1234" True 0), (WrappedLine "12" False 0)]
   it "eolSpacesToLogicalLines" $ do
     eolSpacesToLogicalLines
       [
