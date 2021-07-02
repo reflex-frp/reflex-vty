@@ -12,7 +12,7 @@ module Data.Text.Zipper where
 import           Prelude
 
 import Control.Exception (assert)
-import Control.Monad.State (evalState, forM, get, put, join)
+import Control.Monad.State (evalState, forM, get, put)
 import Data.Char (isSpace)
 import Data.Map (Map)
 import Data.Maybe (fromMaybe)
@@ -418,10 +418,13 @@ displayLinesWithAlignment alignment width tag cursorTag (TextZipper lb b a la) =
       linesBefore = map (wrapWithOffsetAndAlignment alignment width 0) $ reverse lb
       linesAfter :: [[WrappedLine]] -- The wrapped lines after the cursor line
       linesAfter = map (wrapWithOffsetAndAlignment alignment width 0) la
+
+      -- simulate trailing cursor character when computing OffsetMap
+      afterWithCursor = if T.null a then " " else a
       offsets :: OffsetMapWithAlignment
       offsets = offsetMapWithAlignmentInternal $ mconcat
         [ linesBefore
-        , [wrapWithOffsetAndAlignment alignment width 0 $ b <> a]
+        , [wrapWithOffsetAndAlignment alignment width 0 $ b <> afterWithCursor]
         , linesAfter
         ]
       flattenLines = concatMap (fmap _wrappedLines_text)

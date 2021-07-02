@@ -88,6 +88,11 @@ spec =
     _displayLines_cursorPos dl4 `shouldBe` (5,0)
     _displayLines_cursorPos dl5 `shouldBe` (4,0)
     _displayLines_cursorPos dl6 `shouldBe` (4,0)
+  it "displayLines - offsetMap" $ do
+    let
+      dl0 = displayLinesWithAlignment TextAlignment_Left 5 () () (end $ fromText "aoeku")
+    _displayLines_cursorPos dl0 `shouldBe` (0,1)
+    Map.size (_displayLines_offsetMap dl0) `shouldBe` 2 -- cursor character is on second line
   it "displayLinesWithAlignment - spans" $ do
     let
       someText = top $ fromText "0123456789abcdefgh"
