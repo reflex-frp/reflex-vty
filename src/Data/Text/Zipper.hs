@@ -12,7 +12,7 @@ module Data.Text.Zipper where
 import           Prelude
 
 import Control.Exception (assert)
-import Control.Monad.State (evalState, forM, get, put, join)
+import Control.Monad.State (evalState, forM, get, put)
 import Data.Char (isSpace)
 import Data.Map (Map)
 import Data.Maybe (fromMaybe)
@@ -365,6 +365,7 @@ wrapWithOffsetAndAlignment
   -> [WrappedLine] -- (words on that line, hidden space char, offset from beginning of line)
 wrapWithOffsetAndAlignment _ maxWidth _ _ | maxWidth <= 0 = []
 wrapWithOffsetAndAlignment alignment maxWidth n txt = assert (n <= maxWidth) r where
+  -- we pad by offset amount with any non-space character which we will remove later so that no changes need to be made to splitWordsAtDisplayWidth
   r' = splitWordsAtDisplayWidth maxWidth $ wordsWithWhitespace ( T.replicate n "." <> txt)
   fmapfn (t,b) = case alignment of
     TextAlignment_Left   -> WrappedLine t b 0
@@ -378,7 +379,7 @@ wrapWithOffsetAndAlignment alignment maxWidth n txt = assert (n <= maxWidth) r w
 
 -- converts deleted eol spaces into logical lines
 eolSpacesToLogicalLines :: [[WrappedLine]] -> [[(Text, Int)]]
-eolSpacesToLogicalLines = fmap (fmap (\(WrappedLine a _ c) -> (a,c))) . ((L.groupBy (\(WrappedLine _ b _) _ -> not b)) =<<)
+eolSpacesToLogicalLines = fmap (fmap (\(WrappedLine a _ c) -> (a,c))) .  concatMap (L.groupBy (\(WrappedLine _ b _) _ -> not b))
 
 offsetMapWithAlignmentInternal :: [[WrappedLine]] -> OffsetMapWithAlignment
 offsetMapWithAlignmentInternal = offsetMapWithAlignment . eolSpacesToLogicalLines
@@ -417,10 +418,13 @@ displayLinesWithAlignment alignment width tag cursorTag (TextZipper lb b a la) =
       linesBefore = map (wrapWithOffsetAndAlignment alignment width 0) $ reverse lb
       linesAfter :: [[WrappedLine]] -- The wrapped lines after the cursor line
       linesAfter = map (wrapWithOffsetAndAlignment alignment width 0) la
+
+      -- simulate trailing cursor character when computing OffsetMap
+      afterWithCursor = if T.null a then " " else a
       offsets :: OffsetMapWithAlignment
       offsets = offsetMapWithAlignmentInternal $ mconcat
         [ linesBefore
-        , [wrapWithOffsetAndAlignment alignment width 0 $ b <> a]
+        , [wrapWithOffsetAndAlignment alignment width 0 $ b <> afterWithCursor]
         , linesAfter
         ]
       flattenLines = concatMap (fmap _wrappedLines_text)
