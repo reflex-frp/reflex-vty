@@ -445,9 +445,9 @@ runImageWriter
   -> m (a, Behavior t [Image])
 runImageWriter = runBehaviorWriterT . unImageWriter
 
--- * theming
+-- * Theming
 
--- | A class for things that can dynamically gain and lose focus
+-- | A class for things that can be visually styled
 class (Reflex t, Monad m) => HasTheme t m | m -> t where
   theme :: m (Behavior t V.Attr)
   default theme :: (f m' ~ m, Monad m', MonadTrans f, HasTheme t m') => m (Behavior t V.Attr)
@@ -466,7 +466,7 @@ instance HasTheme t m => HasTheme t (ImageWriter t m)
 instance HasTheme t m => HasTheme t (DisplayRegion t m)
 instance HasTheme t m => HasTheme t (FocusReader t m)
 
--- | A widget that has access to information about whether it is focused
+-- | A widget that has access to theme information
 newtype ThemeReader t m a = ThemeReader
   { unThemeReader :: ReaderT (Behavior t V.Attr) m a }
   deriving
@@ -505,7 +505,7 @@ instance MFunctor (ThemeReader t) where
 
 instance MonadNodeId m => MonadNodeId (ThemeReader t m)
 
--- | Run a 'FocusReader' action with the given focus value
+-- | Run a 'ThemeReader' action with the given focus value
 runThemeReader
   :: (Reflex t, Monad m)
   => Behavior t V.Attr
