@@ -35,6 +35,7 @@ mainWidgetWithHandle
       , HasDisplayRegion t m
       , HasFocusReader t m
       , HasInput t m
+      , HasTheme t m
       ) => m (Event t ()))
   -> IO ()
 mainWidgetWithHandle vty child =
@@ -45,12 +46,14 @@ mainWidgetWithHandle vty child =
     let inp' = fforMaybe inp $ \case
           V.EvResize {} -> Nothing
           x -> Just x
-    (shutdown, images) <- runFocusReader (pure True) $ runDisplayRegion (fmap (\(w, h) -> Region 0 0 w h) size) $
-      runImageWriter $
-        runNodeIdT $
-          runInput inp' $ do
-            tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
-            child
+    (shutdown, images) <- runThemeReader (constant V.defAttr) $
+      runFocusReader (pure True) $
+        runDisplayRegion (fmap (\(w, h) -> Region 0 0 w h) size) $
+          runImageWriter $
+            runNodeIdT $
+              runInput inp' $ do
+                tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
+                child
     return $ VtyResult
       { _vtyResult_picture = fmap (V.picForLayers . reverse) images
       , _vtyResult_shutdown = shutdown
@@ -69,6 +72,7 @@ mainWidget
       , MonadNodeId m
       , HasDisplayRegion t m
       , HasFocusReader t m
+      , HasTheme t m
       , HasInput t m
       ) => m (Event t ()))
   -> IO ()
@@ -233,9 +237,9 @@ regionSize :: Region -> (Int, Int)
 regionSize (Region _ _ w h) = (w, h)
 
 -- | Produces an 'Image' that fills a region with space characters
-regionBlankImage :: Region -> Image
-regionBlankImage r@(Region _ _ width height) =
-  withinImage r $ V.charFill V.defAttr ' ' width height
+regionBlankImage :: V.Attr -> Region -> Image
+regionBlankImage attr r@(Region _ _ width height) =
+  withinImage r $ V.charFill attr ' ' width height
 
 -- | A class for things that know their own display size dimensions
 class (Reflex t, Monad m) => HasDisplayRegion t m | m -> t where
@@ -403,7 +407,7 @@ newtype ImageWriter t m a = ImageWriter
     , NotReady t
     , PerformEvent t
     , PostBuild t
-    , TriggerEvent t 
+    , TriggerEvent t
     )
 
 instance MonadTrans (ImageWriter t) where
@@ -440,6 +444,75 @@ runImageWriter
   => ImageWriter t m a
   -> m (a, Behavior t [Image])
 runImageWriter = runBehaviorWriterT . unImageWriter
+
+-- * theming
+
+-- | A class for things that can dynamically gain and lose focus
+class (Reflex t, Monad m) => HasTheme t m | m -> t where
+  theme :: m (Behavior t V.Attr)
+  default theme :: (f m' ~ m, Monad m', MonadTrans f, HasTheme t m') => m (Behavior t V.Attr)
+  theme = lift theme
+  localTheme :: (Behavior t V.Attr -> Behavior t V.Attr) -> m a -> m a
+  default localTheme :: (f m' ~ m, Monad m', MFunctor f, HasTheme t m') => (Behavior t V.Attr -> Behavior t V.Attr) -> m a -> m a
+  localTheme f = hoist (localTheme f)
+
+instance HasTheme t m => HasTheme t (ReaderT x m)
+instance HasTheme t m => HasTheme t (BehaviorWriterT t x m)
+instance HasTheme t m => HasTheme t (DynamicWriterT t x m)
+instance HasTheme t m => HasTheme t (EventWriterT t x m)
+instance HasTheme t m => HasTheme t (NodeIdT m)
+instance HasTheme t m => HasTheme t (Input t m)
+instance HasTheme t m => HasTheme t (ImageWriter t m)
+instance HasTheme t m => HasTheme t (DisplayRegion t m)
+instance HasTheme t m => HasTheme t (FocusReader t m)
+
+-- | A widget that has access to information about whether it is focused
+newtype ThemeReader t m a = ThemeReader
+  { unThemeReader :: ReaderT (Behavior t V.Attr) m a }
+  deriving
+    ( Functor
+    , Applicative
+    , Monad
+    , MonadFix
+    , MonadHold t
+    , MonadIO
+    , MonadRef
+    , MonadSample t
+    )
+
+instance (Monad m, Reflex t) => HasTheme t (ThemeReader t m) where
+  theme = ThemeReader ask
+  localTheme f = ThemeReader . local f . unThemeReader
+
+deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (ThemeReader t m)
+deriving instance NotReady t m => NotReady t (ThemeReader t m)
+deriving instance PerformEvent t m => PerformEvent t (ThemeReader t m)
+deriving instance PostBuild t m => PostBuild t (ThemeReader t m)
+deriving instance TriggerEvent t m => TriggerEvent t (ThemeReader t m)
+instance HasImageWriter t m => HasImageWriter t (ThemeReader t m)
+
+instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (ThemeReader t m) where
+  runWithReplace (ThemeReader a) e = ThemeReader $ runWithReplace a $ fmap unThemeReader e
+  traverseIntMapWithKeyWithAdjust f m e = ThemeReader $ traverseIntMapWithKeyWithAdjust (\k v -> unThemeReader $ f k v) m e
+  traverseDMapWithKeyWithAdjust f m e = ThemeReader $ traverseDMapWithKeyWithAdjust (\k v -> unThemeReader $ f k v) m e
+  traverseDMapWithKeyWithAdjustWithMove f m e = ThemeReader $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unThemeReader $ f k v) m e
+
+instance MonadTrans (ThemeReader t) where
+  lift = ThemeReader . lift
+
+instance MFunctor (ThemeReader t) where
+  hoist f = ThemeReader . hoist f . unThemeReader
+
+instance MonadNodeId m => MonadNodeId (ThemeReader t m)
+
+-- | Run a 'FocusReader' action with the given focus value
+runThemeReader
+  :: (Reflex t, Monad m)
+  => Behavior t V.Attr
+  -> ThemeReader t m a
+  -> m a
+runThemeReader b = flip runReaderT b . unThemeReader
+
 
 -- ** Manipulating images
 

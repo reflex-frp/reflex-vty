@@ -23,7 +23,7 @@ type VtyExample t m =
   , HasImageWriter t m
   , HasDisplayRegion t m
   , HasFocus t m
-  , HasFocusReader t m
+  , HasFocusReader t m, HasTheme t m
   )
 
 type Manager t m =
@@ -46,12 +46,20 @@ withCtrlC f = do
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
 
+darkTheme :: V.Attr
+darkTheme = V.Attr {
+  V.attrStyle = V.SetTo V.standout
+  , V.attrForeColor = V.SetTo V.black
+  , V.attrBackColor = V.Default
+  , V.attrURL = V.Default
+}
+
 main :: IO ()
 main = mainWidget $ withCtrlC $ do
   initManager_ $ do
     tabNavigation
     let gf = grout . fixed
-        t = tile flex 
+        t = tile flex
         buttons = col $ do
           gf 3 $ col $ do
             gf 1 $ text "Select an example."
@@ -77,7 +85,7 @@ main = mainWidget $ withCtrlC $ do
             _ -> Nothing
     rec out <- networkHold buttons $ ffor (switch (current out)) $ \case
           Left Example_Todo -> escapable taskList
-          Left Example_TextEditor -> escapable testBoxes
+          Left Example_TextEditor -> escapable $ localTheme (const (constant darkTheme)) testBoxes
           Left Example_ScrollableTextDisplay -> escapable scrolling
           Left Example_ClickButtonsGetEmojis -> escapable easyExample
           Left Example_CPUStat -> escapable cpuStats
