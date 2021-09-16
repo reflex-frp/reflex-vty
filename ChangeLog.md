@@ -67,6 +67,10 @@
     * `textButtonStatic`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, `HasTheme`, and `HasDisplayRegion`
     * `link`: Now requires `HasInput`, `HasImageWriter`, `HasTheme`, and `HasDisplayRegion`
     * `checkbox`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, and `HasDisplayRegion`
+  * TextZipper interface changes
+    * `_displayLines_offsetMap` type changed to `OffsetMapWithAlignment`
+    * `_displayLines_cursorY` replaced with `_displayLines_cursorPos` which include X position
+    * some exposed methods intended for internal use only have been removed
     * `textInput`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, `HasTheme`, and `HasDisplayRegion`
     * `multilineTextInput`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, `HasTheme`, and `HasDisplayRegion`
     * `textInputTile`: Now requires `HasFocusReader`, `HasInput`, `HasLayout`, `HasTheme`, and `HasFocus`

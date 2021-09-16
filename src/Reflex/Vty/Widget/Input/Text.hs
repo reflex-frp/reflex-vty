@@ -74,8 +74,7 @@ textInput cfg = do
       attrDyn <- holdDyn attr0 $ pushAlways (\_ -> sample bt) (updated rowInputDyn)
       let rows = ffor2 attrDyn rowInputDyn toDisplayLines
           img = images . _displayLines_spans <$> rows
-
-      y <- holdUniqDyn $ _displayLines_cursorY <$> rows
+      y <- holdUniqDyn $ fmap snd _displayLines_cursorPos <$> rows
       let newScrollTop :: Int -> (Int, Int) -> Int
           newScrollTop st (h, cursorY)
             | cursorY < st = cursorY
