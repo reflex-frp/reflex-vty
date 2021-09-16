@@ -14,13 +14,15 @@ import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Input.Mouse
 
 -- | Fill the background with a particular character.
-fill :: (HasDisplayRegion t m, HasImageWriter t m) => Behavior t Char -> m ()
+fill :: (HasDisplayRegion t m, HasImageWriter t m, HasTheme t m) => Behavior t Char -> m ()
 fill bc = do
   dw <- displayWidth
   dh <- displayHeight
+  bt <- theme
   let fillImg =
-        (\w h c -> [V.charFill V.defAttr c w h])
-        <$> current dw
+        (\attr w h c -> [V.charFill attr c w h])
+        <$> bt
+        <*> current dw
         <*> current dh
         <*> bc
   tellImages fillImg
@@ -33,9 +35,11 @@ data RichTextConfig t = RichTextConfig
 instance Reflex t => Default (RichTextConfig t) where
   def = RichTextConfig $ pure V.defAttr
 
+
+-- TODO delete this and use new local theming
 -- | A widget that displays text with custom time-varying attributes
 richText
-  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m)
+  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m)
   => RichTextConfig t
   -> Behavior t Text
   -> m ()
@@ -53,15 +57,17 @@ richText cfg t = do
 
 -- | Renders text, wrapped to the container width
 text
-  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m)
+  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m)
   => Behavior t Text
   -> m ()
-text = richText def
+text t = do
+  bt <- theme
+  richText (RichTextConfig bt) t
 
 -- | Scrollable text widget. The output pair exposes the current scroll position and total number of lines (including those
 -- that are hidden)
 scrollableText
-  :: forall t m. (Reflex t, MonadHold t m, MonadFix m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m)
+  :: forall t m. (Reflex t, MonadHold t m, MonadFix m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasTheme t m)
   => Event t Int
   -- ^ Number of lines to scroll by
   -> Behavior t Text
@@ -69,7 +75,8 @@ scrollableText
   -- ^ (Current scroll position, total number of lines)
 scrollableText scrollBy t = do
   dw <- displayWidth
-  let imgs = wrap <$> current dw <*> t
+  bt <- theme
+  let imgs = wrap <$> bt <*> current dw <*> t
   kup <- key V.KUp
   kdown <- key V.KDown
   m <- mouseScroll
@@ -88,12 +95,12 @@ scrollableText scrollBy t = do
   tellImages $ fmap ((:[]) . V.vertCat) $ drop <$> current lineIndex <*> imgs
   return $ (,) <$> ((+) <$> current lineIndex <*> pure 1) <*> (length <$> imgs)
   where
-    wrap maxWidth = concatMap (fmap (V.string V.defAttr . T.unpack) . TZ.wrapWithOffset maxWidth 0) . T.split (=='\n')
+    wrap attr maxWidth = concatMap (fmap (V.string attr . T.unpack) . TZ.wrapWithOffset maxWidth 0) . T.split (=='\n')
 
 -- | Renders any behavior whose value can be converted to
 -- 'String' as text
 display
-  :: (Reflex t, Monad m, Show a, HasDisplayRegion t m, HasImageWriter t m)
+  :: (Reflex t, Monad m, Show a, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m)
   => Behavior t a
   -> m ()
 display a = text $ T.pack . show <$> a
