@@ -202,20 +202,57 @@ mouseInRegion (Region l t w h) e = case e of
       | otherwise =
         Just (con (x - l) (y - t))
 
+-- |
+-- * 'Tracking' state means actively tracking the current stream of mouse events
+-- * 'NotTracking' state means not tracking the current stream of mouse events
+-- * 'WaitingForInput' means state will be set on next 'EvMouseDown' event
+data MouseTrackingState = Tracking V.Button | NotTracking | WaitingForInput deriving (Show, Eq)
+
 -- | Filter mouse input outside the current display region and
 -- all input if the region is not focused
+-- mouse drag sequences that start OFF the region are NOT reported
+-- mouse drag sequences that start ON the region and drag off ARE reported
 inputInFocusedRegion
-  :: (HasDisplayRegion t m, HasFocusReader t m, HasInput t m)
+  :: forall t m. (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasFocusReader t m, HasInput t m)
   => m (Event t VtyEvent)
 inputInFocusedRegion = do
   inp <- input
   reg <- current <$> askRegion
   foc <- current <$> focus
-  pure $ fmapMaybe id $ attachWith filterInput ((,) <$> reg <*> foc) inp
-  where
-    filterInput (r, f) = \case
-      V.EvKey {} | not f -> Nothing
-      x -> mouseInRegion r x
+  let
+    isWithin :: Region -> Int -> Int -> Bool
+    isWithin (Region l t w h) x y = not . or $ [ x < l
+                                               , y < t
+                                               , x >= l + w
+                                               , y >= t + h ]
+    trackMouse ::
+      VtyEvent
+      -> (MouseTrackingState, Maybe VtyEvent)
+      -> PushM t (Maybe (MouseTrackingState, Maybe VtyEvent))
+    trackMouse e (tracking, _) = do
+      reg'@(Region l t _ _) <- sample reg
+      -- consider using attachPromptlyDyn instead to get most up to date focus, which allows us to ignore mouse inputs when there is no focus (for stuff like ignoring mouse input when there is a popup)
+      focused <- sample foc
+      return $ case e of
+        V.EvKey _ _ | not focused -> Nothing
+        V.EvMouseDown x y btn m ->
+          if tracking == Tracking btn || (tracking == WaitingForInput && isWithin reg' x y)
+            then Just (Tracking btn, Just $ V.EvMouseDown (x - l) (y - t) btn m)
+            else Just (NotTracking, Nothing)
+        -- vty has mouse buttons override others (seems to be based on ordering of Button) when multiple are pressed.
+        -- So it's possible for child widget to miss out on a 'EvMouseUp' event
+        -- Perhaps a better option is to have both 'pane' and 'drag' report ALL mouse up events?
+        V.EvMouseUp x y mbtn -> case mbtn of
+          Nothing -> case tracking of
+            Tracking _ -> Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
+            _ -> Just (WaitingForInput, Nothing)
+          Just btn -> if tracking == Tracking btn
+            -- only report EvMouseUp for the button we are tracking
+            then Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
+            else Just (WaitingForInput, Nothing)
+        _ -> Just (tracking, Just e)
+  dynInputEvTracking <- foldDynMaybeM trackMouse (WaitingForInput, Nothing) $ inp
+  return (fmapMaybe snd $ updated dynInputEvTracking)
 
 -- * Getting and setting the display region
 
@@ -540,11 +577,12 @@ imagesInRegion reg = liftA2 (\r is -> map (withinImage r) is) reg
 -- a given region and context. This widget filters and modifies the input
 -- that the child widget receives such that:
 -- * unfocused widgets receive no key events
--- * mouse inputs outside the region are ignored
 -- * mouse inputs inside the region have their coordinates translated such
+-- * mouse drag sequences that start OFF the region are ignored
+-- * mouse drag sequences that start ON the region and drag off are NOT ignored
 --   that (0,0) is the top-left corner of the region
 pane
-  :: (Reflex t, Monad m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
+  :: (MonadFix m, MonadHold t m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
   => Dynamic t Region
   -> Dynamic t Bool -- ^ Whether the widget should be focused when the parent is.
   -> m a

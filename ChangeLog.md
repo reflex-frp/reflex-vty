@@ -1,5 +1,14 @@
 # Revision history for reflex-vty
 
+## Unreleased
+* _Breaking Changes_:
+  * Added mouse tracking to the behavior of `pane` such that
+    * Mouse actions that start outside of the region are not tracked
+    * Mouse drag sequences that start OFF the region are NOT reported
+    * Mouse drag sequences that start ON the region and drag off ARE reported
+    * Introduce `MonadHold` constraint to `pane`
+  * Added `MonadHold` constraint to several methods that use `pane`
+
 ## 0.2.0.0
 
 * _Module Reorganization_: The following modules have been added (and are all re-exported by Reflex.Vty):

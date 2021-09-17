@@ -13,7 +13,7 @@ import Reflex.Vty.Widget.Input.Mouse
 -- | A split of the available space into two parts with a draggable separator.
 -- Starts with half the space allocated to each, and the first pane has focus.
 -- Clicking in a pane switches focus.
-splitVDrag :: (Reflex t, MonadFix m, MonadHold t m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasFocusReader t m)
+splitVDrag :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasFocusReader t m)
   => m ()
   -> m a
   -> m b
@@ -52,7 +52,7 @@ splitVDrag wS wA wB = do
 
 -- | A plain split of the available space into vertically stacked panes.
 -- No visual separator is built in here.
-splitV :: (Reflex t, Monad m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasFocusReader t m)
+splitV :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasFocusReader t m)
        => Dynamic t (Int -> Int)
        -- ^ Function used to determine size of first pane based on available size
        -> Dynamic t (Bool, Bool)
@@ -73,7 +73,7 @@ splitV sizeFunD focD wA wB = do
 
 -- | A plain split of the available space into horizontally stacked panes.
 -- No visual separator is built in here.
-splitH :: (Reflex t, Monad m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasFocusReader t m)
+splitH :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasFocusReader t m)
        => Dynamic t (Int -> Int)
        -- ^ Function used to determine size of first pane based on available size
        -> Dynamic t (Bool, Bool)
@@ -89,4 +89,3 @@ splitH sizeFunD focD wA wB = do
   let regA = Region 0 0 <$> (sizeFunD <*> dw) <*> dh
       regB = Region <$> (_region_width <$> regA) <*> 0 <*> liftA2 (-) dw (_region_width <$> regA) <*> dh
   liftA2 (,) (pane regA (fmap fst focD) wA) (pane regB (fmap snd focD) wB)
-
