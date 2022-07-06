@@ -1,5 +1,9 @@
 # Revision history for reflex-vty
 
+## 0.2.0.1
+
+* Loosen version bounds on ref-tf and vty
+
 ## 0.2.0.0
 
 * _Module Reorganization_: The following modules have been added (and are all re-exported by Reflex.Vty):
