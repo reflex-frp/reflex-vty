@@ -1,5 +1,14 @@
 # Revision history for reflex-vty
 
+## Unreleased
+* _Breaking Changes_:
+  * Added mouse tracking to the behavior of `pane` such that
+    * Mouse actions that start outside of the region are not tracked
+    * Mouse drag sequences that start OFF the region are NOT reported
+    * Mouse drag sequences that start ON the region and drag off ARE reported
+    * Introduce `MonadHold` constraint to `pane`
+  * Added `MonadHold` constraint to several methods that use `pane`
+
 ## 0.2.0.0
 
 * _Module Reorganization_: The following modules have been added (and are all re-exported by Reflex.Vty):
@@ -67,6 +76,10 @@
     * `textButtonStatic`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, `HasTheme`, and `HasDisplayRegion`
     * `link`: Now requires `HasInput`, `HasImageWriter`, `HasTheme`, and `HasDisplayRegion`
     * `checkbox`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, and `HasDisplayRegion`
+  * TextZipper interface changes
+    * `_displayLines_offsetMap` type changed to `OffsetMapWithAlignment`
+    * `_displayLines_cursorY` replaced with `_displayLines_cursorPos` which include X position
+    * some exposed methods intended for internal use only have been removed
     * `textInput`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, `HasTheme`, and `HasDisplayRegion`
     * `multilineTextInput`: Now requires `HasFocusReader`, `HasInput`, `HasImageWriter`, `HasTheme`, and `HasDisplayRegion`
     * `textInputTile`: Now requires `HasFocusReader`, `HasInput`, `HasLayout`, `HasTheme`, and `HasFocus`
@@ -81,6 +94,12 @@
   * Add `hoistRunLayout` to apply a transformation to the context of a `Layout` action and run that action
   * Add various `MFunctor` instances
   * Add a CPU usage indicator to the example executable
+
+## 0.1.4.2
+
+* Wider bounds for GHC 8.10 support
+
+## 0.1.4.1
 
 ## 0.1.4.1
 * Migrate to new dependent-sum / dependent-map (after the "some" package split)

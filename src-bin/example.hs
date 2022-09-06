@@ -18,12 +18,14 @@ import Example.CPU
 
 type VtyExample t m =
   ( MonadFix m
+  , MonadHold t m
   , Reflex t
   , HasInput t m
   , HasImageWriter t m
   , HasDisplayRegion t m
   , HasFocus t m
-  , HasFocusReader t m, HasTheme t m
+  , HasFocusReader t m
+  , HasTheme t m
   )
 
 type Manager t m =
