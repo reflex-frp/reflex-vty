@@ -181,7 +181,7 @@ todo t0 = row $ do
             i <- input
             v <- textInput $ def
               { _textInputConfig_value = inp }
-            let ev = _textInput_update v
+            let ev = _textInput_updated v
             inp <- foldDyn (\f cur -> f cur) (TZ.fromText $ _todo_label t0) ev
             let deleteSelf = attachWithMaybe backspaceOnEmpty (fmap TZ.value $ current inp) i
             return (v, inp, deleteSelf)
@@ -254,7 +254,7 @@ testBoxes = do
   pane region1 (constDyn False) . boxStatic singleBoxStyle $ debugInput
   _ <- pane region2 (constDyn True) . boxStatic singleBoxStyle $
     let textBox = boxTitle (pure roundedBoxStyle) "Text Edit" $ mdo
-          let ev = _textInput_update v
+          let ev = _textInput_updated v
           let cfg = def
                   { _textInputConfig_value =
                     inp

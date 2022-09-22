@@ -11,7 +11,6 @@ module Reflex.Vty.Widget.Input.Text
 import Control.Monad (join)
 import Control.Monad.Fix (MonadFix)
 import Data.Default (Default(..))
-import Data.Text (Text)
 import Data.Text.Zipper
 import qualified Graphics.Vty as V
 import Reflex
@@ -24,7 +23,6 @@ import Reflex.Vty.Widget.Input.Mouse
 -- 'TextZipper', see 'Data.Text.Zipper'.
 data TextInputConfig t = TextInputConfig
   { _textInputConfig_value :: Dynamic t TextZipper
-  , _textInputConfig_modify :: Event t (TextZipper -> TextZipper)
   , _textInputConfig_tabWidth :: Int
   , _textInputConfig_display :: Dynamic t (Char -> Char)
   -- ^ Transform the characters in a text input before displaying them. This is useful, e.g., for
@@ -32,13 +30,13 @@ data TextInputConfig t = TextInputConfig
   }
 
 instance Reflex t => Default (TextInputConfig t) where
-  def = TextInputConfig (pure empty) never 4 (pure id)
+  def = TextInputConfig (pure empty) 4 (pure id)
 
 -- | The output produced by text input widgets, including the text
 -- value and the number of display lines (post-wrapping). Note that some
 -- display lines may not be visible due to scrolling.
 data TextInput t = TextInput
-  { _textInput_update :: Event t (TextZipper -> TextZipper)
+  { _textInput_updated :: Event t (TextZipper -> TextZipper)
   , _textInput_lines :: Dynamic t Int
   }
 
@@ -58,7 +56,6 @@ textInput cfg = do
       let v :: Event t (TextZipper -> TextZipper)
           v = mergeWith (.)
             [ uncurry (updateTextZipper (_textInputConfig_tabWidth cfg)) <$> attach (current dh) i
-            , _textInputConfig_modify cfg
             , let displayInfo = (,) <$> current rows <*> scrollTop
               in ffor (attach displayInfo click) $ \((dl, st), MouseDown _ (mx, my) _) ->
                 goToDisplayLinePosition mx (st + my) dl
@@ -85,7 +82,7 @@ textInput cfg = do
       scrollTop <- hold 0 hy
       tellImages $ (\imgs st -> (:[]) . V.vertCat $ drop st imgs) <$> current img <*> scrollTop
   return $ TextInput
-    { _textInput_update = v
+    { _textInput_updated = v
     , _textInput_lines = length . _displayLines_spans <$> rows
     }
 
@@ -96,12 +93,13 @@ multilineTextInput
   -> m (TextInput t)
 multilineTextInput cfg = do
   i <- input
-  textInput $ cfg
-    { _textInputConfig_modify = mergeWith (.)
+  ti <- textInput cfg
+  pure ti
+    { _textInput_updated = mergeWith (.)
       [ fforMaybe i $ \case
           V.EvKey V.KEnter [] -> Just $ insert "\n"
           _ -> Nothing
-      , _textInputConfig_modify cfg
+      , _textInput_updated ti
       ]
     }
 
