@@ -1,3 +1,4 @@
+{-# LANGUAGE RecursiveDo #-}
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Fix
@@ -176,14 +177,16 @@ todo t0 = row $ do
                 }
           value <- tile (fixed 4) $ checkbox cfg $ _todo_done t0
           let setVal = attachWith (\v _ -> not v) (current value) $ gate (current focused) toggleE
-          (fid, (ti, d)) <- tile' flex $ do
+          (fid, (ti, inp, d)) <- tile' flex $ mdo
             i <- input
             v <- textInput $ def
-              { _textInputConfig_initialValue = TZ.fromText $ _todo_label t0 }
-            let deleteSelf = attachWithMaybe backspaceOnEmpty (current $ _textInput_value v) i
-            return (v, deleteSelf)
+              { _textInputConfig_value = inp }
+            let ev = _textInput_update v
+            inp <- foldDyn (\f cur -> f cur) (TZ.fromText $ _todo_label t0) ev
+            let deleteSelf = attachWithMaybe backspaceOnEmpty (fmap TZ.value $ current inp) i
+            return (v, inp, deleteSelf)
       return $ TodoOutput
-        { _todoOutput_todo = Todo <$> _textInput_value ti <*> value
+        { _todoOutput_todo = Todo <$> fmap TZ.value inp <*> value
         , _todoOutput_delete = d
         , _todoOutput_height = _textInput_lines ti
         , _todoOutput_focusId = fid
@@ -250,12 +253,15 @@ testBoxes = do
       region2 = Region <$> (div' dw 4) <*> (div' dh 4) <*> (2 * div' dw 3) <*> (2 * div' dh 3)
   pane region1 (constDyn False) . boxStatic singleBoxStyle $ debugInput
   _ <- pane region2 (constDyn True) . boxStatic singleBoxStyle $
-    let cfg = def
-          { _textInputConfig_initialValue =
-            "This box is a text input. The box below responds to mouse drag inputs. You can also drag the separator between the boxes to resize them."
-          }
-        textBox = boxTitle (pure roundedBoxStyle) "Text Edit" $
-          multilineTextInput cfg
+    let textBox = boxTitle (pure roundedBoxStyle) "Text Edit" $ mdo
+          let ev = _textInput_update v
+          let cfg = def
+                  { _textInputConfig_value =
+                    inp
+                  }
+          inp <- foldDyn (\f cur -> f cur) ("This box is a text input. The box below responds to mouse drag inputs. You can also drag the separator between the boxes to resize them.") ev
+          v <- multilineTextInput cfg
+          pure v
         dragBox = boxStatic roundedBoxStyle dragTest
     in splitVDrag (hRule doubleBoxStyle) textBox dragBox
   return ()

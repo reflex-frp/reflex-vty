@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-|
 Module: Reflex.Vty.Widget.Input.Text
 Description: Widgets for accepting text input from users and manipulating text within those inputs
@@ -22,7 +23,7 @@ import Reflex.Vty.Widget.Input.Mouse
 -- | Configuration options for a 'textInput'. For more information on
 -- 'TextZipper', see 'Data.Text.Zipper'.
 data TextInputConfig t = TextInputConfig
-  { _textInputConfig_initialValue :: TextZipper
+  { _textInputConfig_value :: Dynamic t TextZipper
   , _textInputConfig_modify :: Event t (TextZipper -> TextZipper)
   , _textInputConfig_tabWidth :: Int
   , _textInputConfig_display :: Dynamic t (Char -> Char)
@@ -31,19 +32,19 @@ data TextInputConfig t = TextInputConfig
   }
 
 instance Reflex t => Default (TextInputConfig t) where
-  def = TextInputConfig empty never 4 (pure id)
+  def = TextInputConfig (pure empty) never 4 (pure id)
 
 -- | The output produced by text input widgets, including the text
 -- value and the number of display lines (post-wrapping). Note that some
 -- display lines may not be visible due to scrolling.
 data TextInput t = TextInput
-  { _textInput_value :: Dynamic t Text
+  { _textInput_update :: Event t (TextZipper -> TextZipper)
   , _textInput_lines :: Dynamic t Int
   }
 
 -- | A widget that allows text input
 textInput
-  :: (Reflex t, MonadHold t m, MonadFix m, HasInput t m, HasFocusReader t m, HasTheme t m, HasDisplayRegion t m, HasImageWriter t m, HasDisplayRegion t m)
+  :: forall t m. (Reflex t, MonadHold t m, MonadFix m, HasInput t m, HasFocusReader t m, HasTheme t m, HasDisplayRegion t m, HasImageWriter t m, HasDisplayRegion t m)
   => TextInputConfig t
   -> m (TextInput t)
 textInput cfg = do
@@ -53,20 +54,20 @@ textInput cfg = do
   dw <- displayWidth
   bt <- theme
   attr0 <- sample bt
-  rec v <- foldDyn ($) (_textInputConfig_initialValue cfg) $ mergeWith (.)
-        [ uncurry (updateTextZipper (_textInputConfig_tabWidth cfg)) <$> attach (current dh) i
-        , _textInputConfig_modify cfg
-        , let displayInfo = (,) <$> current rows <*> scrollTop
-          in ffor (attach displayInfo click) $ \((dl, st), MouseDown _ (mx, my) _) ->
-            goToDisplayLinePosition mx (st + my) dl
-        ]
-      click <- mouseDown V.BLeft
-
+  rec click <- mouseDown V.BLeft
+      let v :: Event t (TextZipper -> TextZipper)
+          v = mergeWith (.)
+            [ uncurry (updateTextZipper (_textInputConfig_tabWidth cfg)) <$> attach (current dh) i
+            , _textInputConfig_modify cfg
+            , let displayInfo = (,) <$> current rows <*> scrollTop
+              in ffor (attach displayInfo click) $ \((dl, st), MouseDown _ (mx, my) _) ->
+                goToDisplayLinePosition mx (st + my) dl
+            ]
       -- TODO reverseVideo is prob not what we want. Does not work with `darkTheme` in example.hs (cursor is dark rather than light bg)
       let toCursorAttrs attr = V.withStyle attr V.reverseVideo
           rowInputDyn = (,,)
             <$> dw
-            <*> (mapZipper <$> _textInputConfig_display cfg <*> v)
+            <*> (mapZipper <$> _textInputConfig_display cfg <*> _textInputConfig_value cfg)
             <*> f
           toDisplayLines attr (w, s, x)  =
             let c = if x then toCursorAttrs attr else attr
@@ -84,7 +85,7 @@ textInput cfg = do
       scrollTop <- hold 0 hy
       tellImages $ (\imgs st -> (:[]) . V.vertCat $ drop st imgs) <$> current img <*> scrollTop
   return $ TextInput
-    { _textInput_value = value <$> v
+    { _textInput_update = v
     , _textInput_lines = length . _displayLines_spans <$> rows
     }
 
