@@ -23,6 +23,7 @@ import Reflex.Vty.Widget.Input.Mouse
 -- 'TextZipper', see 'Data.Text.Zipper'.
 data TextInputConfig t = TextInputConfig
   { _textInputConfig_value :: Dynamic t TextZipper
+  -- ^ Value displayed to the user.
   , _textInputConfig_tabWidth :: Int
   , _textInputConfig_display :: Dynamic t (Char -> Char)
   -- ^ Transform the characters in a text input before displaying them. This is useful, e.g., for
@@ -32,15 +33,37 @@ data TextInputConfig t = TextInputConfig
 instance Reflex t => Default (TextInputConfig t) where
   def = TextInputConfig (pure empty) 4 (pure id)
 
--- | The output produced by text input widgets, including the text
--- value and the number of display lines (post-wrapping). Note that some
+-- | The output produced by text input widgets, including updating events
+-- and the number of display lines (post-wrapping). Note that some
 -- display lines may not be visible due to scrolling.
 data TextInput t = TextInput
   { _textInput_updated :: Event t (TextZipper -> TextZipper)
+  -- ^ The text has been updated, here is an event.
+  -- Applying this function to a 'TextZipper' will produce
+  -- a 'TextZipper' with updated cursor position, etc.
   , _textInput_lines :: Dynamic t Int
   }
 
--- | A widget that allows text input
+-- | A widget that allows text input.
+--
+-- The intended use is to provide the input in a Dynamic and update it as the events pour in.
+-- For example, if you just want to have text to display to the user, you may do the following:
+--
+-- @
+--   -- Note: This requires RecursiveDo language extension
+--   ti <- textInput def
+--           { _textInputConfig_value = dynValue }
+--   dynValue <- foldDyn (\upd val -> upd val) empty (_textInput_updated ti)
+-- @
+--
+-- This wires up the textInput to actually display the entered information to the user.
+--
+-- While slightly verbose, it also allows you to implement all sorts of complex behaviour.
+-- For example, cyclical dependencies between two 'textInput's can be expressed by
+-- having a single 'Dynamic t TextZipper' that is given to both textInput's.
+-- Applying Events can be achieved by composing events together and applying it to
+-- the single 'Dynamic'.
+--
 textInput
   :: forall t m. (Reflex t, MonadHold t m, MonadFix m, HasInput t m, HasFocusReader t m, HasTheme t m, HasDisplayRegion t m, HasImageWriter t m, HasDisplayRegion t m)
   => TextInputConfig t
@@ -86,7 +109,7 @@ textInput cfg = do
     , _textInput_lines = length . _displayLines_spans <$> rows
     }
 
--- | A widget that allows multiline text input
+-- | A widget that allows multiline text input.
 multilineTextInput
   :: (Reflex t, MonadHold t m, MonadFix m, HasInput t m, HasFocusReader t m, HasTheme t m, HasDisplayRegion t m, HasImageWriter t m)
   => TextInputConfig t
