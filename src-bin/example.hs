@@ -181,8 +181,7 @@ todo t0 = row $ do
             i <- input
             v <- textInput $ def
               { _textInputConfig_value = inp }
-            let ev = _textInput_updated v
-            inp <- foldDyn (\f cur -> f cur) (TZ.fromText $ _todo_label t0) ev
+            inp <- foldDyn (\new old -> new) (TZ.fromText $ _todo_label t0) (_textInput_updated v)
             let deleteSelf = attachWithMaybe backspaceOnEmpty (fmap TZ.value $ current inp) i
             return (v, inp, deleteSelf)
       return $ TodoOutput
@@ -254,12 +253,13 @@ testBoxes = do
   pane region1 (constDyn False) . boxStatic singleBoxStyle $ debugInput
   _ <- pane region2 (constDyn True) . boxStatic singleBoxStyle $
     let textBox = boxTitle (pure roundedBoxStyle) "Text Edit" $ mdo
-          let ev = _textInput_updated v
           let cfg = def
                   { _textInputConfig_value =
                     inp
                   }
-          inp <- foldDyn (\f cur -> f cur) ("This box is a text input. The box below responds to mouse drag inputs. You can also drag the separator between the boxes to resize them.") ev
+          inp <- foldDyn (\new old -> new)
+            ("This box is a text input. The box below responds to mouse drag inputs. You can also drag the separator between the boxes to resize them.")
+            (_textInput_updated v)
           v <- multilineTextInput cfg
           pure v
         dragBox = boxStatic roundedBoxStyle dragTest
