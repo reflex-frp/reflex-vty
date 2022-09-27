@@ -10,6 +10,7 @@ module Reflex.Vty.Widget.Input.Text
 import Control.Monad (join)
 import Control.Monad.Fix (MonadFix)
 import Data.Default (Default(..))
+import Data.Function ((&))
 import Data.Text (Text)
 import Data.Text.Zipper
 import qualified Graphics.Vty as V
@@ -23,7 +24,29 @@ import Reflex.Vty.Widget.Input.Mouse
 -- 'TextZipper', see 'Data.Text.Zipper'.
 data TextInputConfig t = TextInputConfig
   { _textInputConfig_initialValue :: TextZipper
+  -- ^ Initial value. This is a 'TextZipper' because it is more flexible
+  -- than plain 'Text'. For example, this allows to set the Cursor position,
+  -- by choosing appropriate values for '_textZipper_before' and '_textZipper_after'.
   , _textInputConfig_modify :: Event t (TextZipper -> TextZipper)
+  -- ^ Modify the UI Event chain.
+  --
+  -- For example, the following 'TextInputConfig' inserts an additional 'a'
+  -- when the letter 'b' is entered into 'textInput':
+  --
+  -- @
+  --   i <- input
+  --   textInput def
+  --     { _textInputConfig_modify = fforMaybe i $ \case
+  --         V.EvKey (V.KChar 'b') _ -> Just (insert "a")
+  --         _ -> Nothing
+  --     }
+  -- @
+  , _testInputConfig_setValue :: Maybe (Event t TextZipper)
+  -- ^ Optionally set the value of the textInput field.
+  --
+  -- If set, this will override any Events sent by the UI,
+  -- events from '_testInput_updated' are no longer automatically applied
+  -- to the textInput.
   , _textInputConfig_tabWidth :: Int
   , _textInputConfig_display :: Dynamic t (Char -> Char)
   -- ^ Transform the characters in a text input before displaying them. This is useful, e.g., for
@@ -31,13 +54,18 @@ data TextInputConfig t = TextInputConfig
   }
 
 instance Reflex t => Default (TextInputConfig t) where
-  def = TextInputConfig empty never 4 (pure id)
+  def = TextInputConfig empty never Nothing 4 (pure id)
 
 -- | The output produced by text input widgets, including the text
 -- value and the number of display lines (post-wrapping). Note that some
 -- display lines may not be visible due to scrolling.
 data TextInput t = TextInput
   { _textInput_value :: Dynamic t Text
+  -- ^ The current value of the textInput as Text.
+  , _testInput_updated :: Event t TextZipper
+  -- ^ UI Event updates with the current 'TextZipper'.
+  -- This does not include Events added by '_testInputConfig_setValue', but
+  -- it does include '_textInputConfig_modify' Events.
   , _textInput_lines :: Dynamic t Int
   }
 
@@ -53,12 +81,22 @@ textInput cfg = do
   dw <- displayWidth
   bt <- theme
   attr0 <- sample bt
-  rec v <- foldDyn ($) (_textInputConfig_initialValue cfg) $ mergeWith (.)
-        [ uncurry (updateTextZipper (_textInputConfig_tabWidth cfg)) <$> attach (current dh) i
-        , _textInputConfig_modify cfg
-        , let displayInfo = (,) <$> current rows <*> scrollTop
-          in ffor (attach displayInfo click) $ \((dl, st), MouseDown _ (mx, my) _) ->
-            goToDisplayLinePosition mx (st + my) dl
+  rec
+      -- we split up the events from vty and the one users provide to avoid cyclical
+      -- update dependencies. This way, users may subscribe only to UI updates.
+      valueChangedBySetValue <- case _testInputConfig_setValue cfg of
+        Nothing -> pure never
+        Just eSetValue -> pure $ fmap const eSetValue
+      let valueChangedByUI = mergeWith (.)
+            [ uncurry (updateTextZipper (_textInputConfig_tabWidth cfg)) <$> attach (current dh) i
+            , _textInputConfig_modify cfg
+            , let displayInfo = (,) <$> current rows <*> scrollTop
+              in ffor (attach displayInfo click) $ \((dl, st), MouseDown _ (mx, my) _) ->
+                goToDisplayLinePosition mx (st + my) dl
+            ]
+      v <- foldDyn ($) (_textInputConfig_initialValue cfg) $ mergeWith (.)
+        [ valueChangedBySetValue
+        , valueChangedByUI
         ]
       click <- mouseDown V.BLeft
 
@@ -85,6 +123,7 @@ textInput cfg = do
       tellImages $ (\imgs st -> (:[]) . V.vertCat $ drop st imgs) <$> current img <*> scrollTop
   return $ TextInput
     { _textInput_value = value <$> v
+    , _testInput_updated = attachWith (&) (current v) valueChangedByUI
     , _textInput_lines = length . _displayLines_spans <$> rows
     }
 
