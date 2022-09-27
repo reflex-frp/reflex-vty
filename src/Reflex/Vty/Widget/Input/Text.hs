@@ -45,7 +45,7 @@ data TextInputConfig t = TextInputConfig
   -- ^ Optionally set the value of the textInput field.
   --
   -- If set, this will override any Events sent by the UI,
-  -- events from '_testInput_updated' are no longer automatically applied
+  -- events from '_textInput_userInput' are no longer automatically applied
   -- to the textInput.
   , _textInputConfig_tabWidth :: Int
   , _textInputConfig_display :: Dynamic t (Char -> Char)
@@ -62,7 +62,7 @@ instance Reflex t => Default (TextInputConfig t) where
 data TextInput t = TextInput
   { _textInput_value :: Dynamic t Text
   -- ^ The current value of the textInput as Text.
-  , _testInput_updated :: Event t TextZipper
+  , _textInput_userInput :: Event t TextZipper
   -- ^ UI Event updates with the current 'TextZipper'.
   -- This does not include Events added by '_testInputConfig_setValue', but
   -- it does include '_textInputConfig_modify' Events.
@@ -123,7 +123,7 @@ textInput cfg = do
       tellImages $ (\imgs st -> (:[]) . V.vertCat $ drop st imgs) <$> current img <*> scrollTop
   return $ TextInput
     { _textInput_value = value <$> v
-    , _testInput_updated = attachWith (&) (current v) valueChangedByUI
+    , _textInput_userInput = attachWith (&) (current v) valueChangedByUI
     , _textInput_lines = length . _displayLines_spans <$> rows
     }
 
