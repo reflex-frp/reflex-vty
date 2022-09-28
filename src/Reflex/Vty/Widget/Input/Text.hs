@@ -41,7 +41,7 @@ data TextInputConfig t = TextInputConfig
   --         _ -> Nothing
   --     }
   -- @
-  , _testInputConfig_setValue :: Maybe (Event t TextZipper)
+  , _textInputConfig_setValue :: Maybe (Event t TextZipper)
   -- ^ Optionally set the value of the textInput field.
   --
   -- If set, this will override any Events sent by the UI,
@@ -64,7 +64,7 @@ data TextInput t = TextInput
   -- ^ The current value of the textInput as Text.
   , _textInput_userInput :: Event t TextZipper
   -- ^ UI Event updates with the current 'TextZipper'.
-  -- This does not include Events added by '_testInputConfig_setValue', but
+  -- This does not include Events added by '_textInputConfig_setValue', but
   -- it does include '_textInputConfig_modify' Events.
   , _textInput_lines :: Dynamic t Int
   }
@@ -84,7 +84,7 @@ textInput cfg = do
   rec
       -- we split up the events from vty and the one users provide to avoid cyclical
       -- update dependencies. This way, users may subscribe only to UI updates.
-      valueChangedBySetValue <- case _testInputConfig_setValue cfg of
+      valueChangedBySetValue <- case _textInputConfig_setValue cfg of
         Nothing -> pure never
         Just eSetValue -> pure $ fmap const eSetValue
       let valueChangedByUI = mergeWith (.)
