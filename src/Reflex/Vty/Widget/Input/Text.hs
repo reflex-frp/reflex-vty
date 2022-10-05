@@ -27,26 +27,26 @@ data TextInputConfig t = TextInputConfig
   -- ^ Initial value. This is a 'TextZipper' because it is more flexible
   -- than plain 'Text'. For example, this allows to set the Cursor position,
   -- by choosing appropriate values for '_textZipper_before' and '_textZipper_after'.
-  , _textInputConfig_modify :: Event t (TextZipper -> TextZipper)
-  -- ^ Modify the UI Event chain.
+  , _textInputConfig_updateValue :: Event t (TextZipper -> TextZipper)
+  -- ^ Event to update the value of the 'textInput'.
   --
+  -- Event is applied after other Input sources have been applied to the 'TextZipper',
+  -- thus you may modify the final value that is displayed to the user.
+  --
+  -- You may set the value of displayed text in 'textInput' by ignoring the input parameter.
+  --
+  -- Additionally, you can modify the updated value before displaying it to the user.
   -- For example, the following 'TextInputConfig' inserts an additional 'a'
   -- when the letter 'b' is entered into 'textInput':
   --
   -- @
   --   i <- input
   --   textInput def
-  --     { _textInputConfig_modify = fforMaybe i $ \case
+  --     { _textInputConfig_updateValue = fforMaybe i $ \case
   --         V.EvKey (V.KChar 'b') _ -> Just (insert "a")
   --         _ -> Nothing
   --     }
   -- @
-  , _textInputConfig_setValue :: Maybe (Event t TextZipper)
-  -- ^ Optionally set the value of the textInput field.
-  --
-  -- If set, this will override any Events sent by the UI,
-  -- events from '_textInput_userInput' are no longer automatically applied
-  -- to the textInput.
   , _textInputConfig_tabWidth :: Int
   , _textInputConfig_display :: Dynamic t (Char -> Char)
   -- ^ Transform the characters in a text input before displaying them. This is useful, e.g., for
@@ -54,7 +54,7 @@ data TextInputConfig t = TextInputConfig
   }
 
 instance Reflex t => Default (TextInputConfig t) where
-  def = TextInputConfig empty never Nothing 4 (pure id)
+  def = TextInputConfig empty never 4 (pure id)
 
 -- | The output produced by text input widgets, including the text
 -- value and the number of display lines (post-wrapping). Note that some
@@ -84,18 +84,15 @@ textInput cfg = do
   rec
       -- we split up the events from vty and the one users provide to avoid cyclical
       -- update dependencies. This way, users may subscribe only to UI updates.
-      valueChangedBySetValue <- case _textInputConfig_setValue cfg of
-        Nothing -> pure never
-        Just eSetValue -> pure $ fmap const eSetValue
+      let valueChangedByUser = _textInputConfig_updateValue cfg
       let valueChangedByUI = mergeWith (.)
             [ uncurry (updateTextZipper (_textInputConfig_tabWidth cfg)) <$> attach (current dh) i
-            , _textInputConfig_modify cfg
             , let displayInfo = (,) <$> current rows <*> scrollTop
               in ffor (attach displayInfo click) $ \((dl, st), MouseDown _ (mx, my) _) ->
                 goToDisplayLinePosition mx (st + my) dl
             ]
       v <- foldDyn ($) (_textInputConfig_initialValue cfg) $ mergeWith (.)
-        [ valueChangedBySetValue
+        [ valueChangedByUser
         , valueChangedByUI
         ]
       click <- mouseDown V.BLeft
@@ -135,11 +132,11 @@ multilineTextInput
 multilineTextInput cfg = do
   i <- input
   textInput $ cfg
-    { _textInputConfig_modify = mergeWith (.)
+    { _textInputConfig_updateValue = mergeWith (.)
       [ fforMaybe i $ \case
           V.EvKey V.KEnter [] -> Just $ insert "\n"
           _ -> Nothing
-      , _textInputConfig_modify cfg
+      , _textInputConfig_updateValue cfg
       ]
     }
 
