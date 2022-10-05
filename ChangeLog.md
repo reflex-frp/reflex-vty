@@ -3,7 +3,10 @@
 ## Unreleased
 
 * Re-design `textInput`, `TextInput` and `TextInputConfig`.
-  * Allows users to implement more complex behaviour.
+  * Allows users to implement more complex behavior.
+  * `_textInputConfig_modify` is now applied to the text-value of `textInput`
+    after user input events such as mouse clicks and keyboard input.
+    This may change the observable behavior.
 
 ## 0.2.0.1
 

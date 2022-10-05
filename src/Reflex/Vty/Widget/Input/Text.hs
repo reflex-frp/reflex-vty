@@ -27,13 +27,13 @@ data TextInputConfig t = TextInputConfig
   -- ^ Initial value. This is a 'TextZipper' because it is more flexible
   -- than plain 'Text'. For example, this allows to set the Cursor position,
   -- by choosing appropriate values for '_textZipper_before' and '_textZipper_after'.
-  , _textInputConfig_updateValue :: Event t (TextZipper -> TextZipper)
+  , _textInputConfig_modify :: Event t (TextZipper -> TextZipper)
   -- ^ Event to update the value of the 'textInput'.
   --
   -- Event is applied after other Input sources have been applied to the 'TextZipper',
   -- thus you may modify the final value that is displayed to the user.
   --
-  -- You may set the value of displayed text in 'textInput' by ignoring the input parameter.
+  -- You may set the value of the displayed text in 'textInput' by ignoring the input parameter.
   --
   -- Additionally, you can modify the updated value before displaying it to the user.
   -- For example, the following 'TextInputConfig' inserts an additional 'a'
@@ -42,7 +42,7 @@ data TextInputConfig t = TextInputConfig
   -- @
   --   i <- input
   --   textInput def
-  --     { _textInputConfig_updateValue = fforMaybe i $ \case
+  --     { _textInputConfig_modify = fforMaybe i $ \case
   --         V.EvKey (V.KChar 'b') _ -> Just (insert "a")
   --         _ -> Nothing
   --     }
@@ -84,7 +84,7 @@ textInput cfg = do
   rec
       -- we split up the events from vty and the one users provide to avoid cyclical
       -- update dependencies. This way, users may subscribe only to UI updates.
-      let valueChangedByUser = _textInputConfig_updateValue cfg
+      let valueChangedByUser = _textInputConfig_modify cfg
       let valueChangedByUI = mergeWith (.)
             [ uncurry (updateTextZipper (_textInputConfig_tabWidth cfg)) <$> attach (current dh) i
             , let displayInfo = (,) <$> current rows <*> scrollTop
@@ -132,11 +132,11 @@ multilineTextInput
 multilineTextInput cfg = do
   i <- input
   textInput $ cfg
-    { _textInputConfig_updateValue = mergeWith (.)
+    { _textInputConfig_modify = mergeWith (.)
       [ fforMaybe i $ \case
           V.EvKey V.KEnter [] -> Just $ insert "\n"
           _ -> Nothing
-      , _textInputConfig_updateValue cfg
+      , _textInputConfig_modify cfg
       ]
     }
 
