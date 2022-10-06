@@ -84,7 +84,7 @@ textInput cfg = do
   rec
       -- we split up the events from vty and the one users provide to avoid cyclical
       -- update dependencies. This way, users may subscribe only to UI updates.
-      let valueChangedByUser = _textInputConfig_modify cfg
+      let valueChangedByCaller = _textInputConfig_modify cfg
       let valueChangedByUI = mergeWith (.)
             [ uncurry (updateTextZipper (_textInputConfig_tabWidth cfg)) <$> attach (current dh) i
             , let displayInfo = (,) <$> current rows <*> scrollTop
@@ -92,7 +92,7 @@ textInput cfg = do
                 goToDisplayLinePosition mx (st + my) dl
             ]
       v <- foldDyn ($) (_textInputConfig_initialValue cfg) $ mergeWith (.)
-        [ valueChangedByUser
+        [ valueChangedByCaller
         , valueChangedByUI
         ]
       click <- mouseDown V.BLeft
