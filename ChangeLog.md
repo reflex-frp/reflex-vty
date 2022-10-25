@@ -1,6 +1,6 @@
 # Revision history for reflex-vty
 
-## Unreleased
+## 0.3.0.0
 
 * Re-design `textInput`, `TextInput` and `TextInputConfig`.
   * Allows users to implement more complex behavior.
