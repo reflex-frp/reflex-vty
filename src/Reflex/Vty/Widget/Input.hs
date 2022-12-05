@@ -144,12 +144,12 @@ checkbox cfg v0 = do
     , not <$ space
     , const <$> _checkboxConfig_setValue cfg
     ]
-  let bold = V.withStyle mempty V.bold
-  depressed <- hold mempty $ leftmost
+  let bold = V.withStyle V.defAttr V.bold
+  depressed <- hold V.defAttr $ leftmost
     [ bold <$ md
-    , mempty <$ mu
+    , V.defAttr <$ mu
     ]
-  let focused = ffor (current f) $ \x -> if x then bold else mempty
+  let focused = ffor (current f) $ \x -> if x then bold else V.defAttr
   let attrs = mconcat <$> sequence [_checkboxConfig_attributes cfg, depressed, focused]
   richText (RichTextConfig attrs) $ join . current $ ffor v $ \checked ->
     if checked
