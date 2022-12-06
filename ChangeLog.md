@@ -1,5 +1,9 @@
 # Revision history for reflex-vty
 
+## 0.3.1.0
+
+* Replace `mempty` with `defAttr` for Attr from Graphics.Vty to make it compatible with vty-5.34
+
 ## 0.3.0.0
 
 * Re-design `textInput`, `TextInput` and `TextInputConfig`.

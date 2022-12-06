@@ -3,10 +3,11 @@
 let inherit (reflex-platform.nixpkgs.haskell) lib;
     ghc = reflex-platform.ghc.override {
       overrides = self: super: {
-        vty = self.callHackage "vty" "5.28" {};
-        ansi-terminal = self.callHackage "ansi-terminal" "0.10.3" {};
-        ansi-wl-pprint = self.callHackage "ansi-wl-pprint" "0.6.9" {};
-        test-framework = lib.doJailbreak super.test-framework;
+        vty = self.callHackageDirect {
+          pkg = "vty";
+          ver = "5.37";
+          sha256 = "01ppspii5x02iik9rxkf2idi6r9ngax6w3mqi6d8qj765w3cksiq";
+        } {};
       };
     };
 in

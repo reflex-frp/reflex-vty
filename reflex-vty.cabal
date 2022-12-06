@@ -1,5 +1,5 @@
 name: reflex-vty
-version: 0.3.0.0
+version: 0.3.1.0
 synopsis: Reflex FRP host and widgets for VTY applications
 description:
   Build terminal applications using functional reactive programming (FRP) with Reflex FRP (<https://reflex-frp.org>).
@@ -18,7 +18,7 @@ extra-source-files:
   ChangeLog.md
 extra-doc-files: doc/tasks.png
 tested-with:
-  GHC ==8.4.4 || ==8.6.5 || ==8.8.4 || ==8.10.2
+  GHC ==8.4.4 || ==8.6.5 || ==8.8.4 || ==8.10.7
 
 source-repository head
   type: git
@@ -56,7 +56,7 @@ library
     ref-tf >= 0.4.0 && < 0.6,
     reflex >= 0.8 && < 0.9,
     time >= 1.8.0 && < 1.10,
-    vty >= 5.28 && < 5.34
+    vty >= 5.28 && < 5.38
   hs-source-dirs: src
   default-language: Haskell2010
   ghc-options: -Wall
