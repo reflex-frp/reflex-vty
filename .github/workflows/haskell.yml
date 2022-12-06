@@ -12,8 +12,8 @@ jobs:
 
     name: GHC ${{ matrix.ghc }} on ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-haskell@v1
+    - uses: actions/checkout@v3
+    - uses: haskell/actions/setup@v2
       with:
         ghc-version: ${{ matrix.ghc }}
     - name: Cache
