@@ -18,7 +18,7 @@ extra-source-files:
   ChangeLog.md
 extra-doc-files: doc/tasks.png
 tested-with:
-  GHC ==8.4.4 || ==8.6.5 || ==8.8.4 || ==8.10.2
+  GHC ==8.4.4 || ==8.6.5 || ==8.8.4 || ==8.10.7
 
 source-repository head
   type: git
