@@ -34,6 +34,7 @@ in
           ver = "0.9.0.0";
           sha256 = "0ibashkz3ifwxa61zg3fwamvjwv125l7jhjd74kgjbq13zpx23ib";
         } {};
+        # Jailbroken until https://github.com/audreyt/string-qq/pull/3
         string-qq = pkgs.haskell.lib.dontCheck super.string-qq;
       };
     };
