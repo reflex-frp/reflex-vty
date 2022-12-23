@@ -1,6 +1,7 @@
 # Revision history for reflex-vty
 
 ## Unreleased
+
 * _Breaking Changes_:
   * Added mouse tracking to the behavior of `pane` such that
     * Mouse actions that start outside of the region are not tracked
@@ -8,6 +9,18 @@
     * Mouse drag sequences that start ON the region and drag off ARE reported
     * Introduce `MonadHold` constraint to `pane`
   * Added `MonadHold` constraint to several methods that use `pane`
+
+## 0.3.1.0
+
+* Replace `mempty` with `defAttr` for Attr from Graphics.Vty to make it compatible with vty-5.34
+
+## 0.3.0.0
+
+* Re-design `textInput`, `TextInput` and `TextInputConfig`.
+  * Allows users to implement more complex behavior.
+  * `_textInputConfig_modify` is now applied to the text-value of `textInput`
+    after user input events such as mouse clicks and keyboard input.
+    This may change the observable behavior.
 
 ## 0.2.0.1
 

@@ -9,7 +9,7 @@ module Reflex.Vty.Widget where
 import Control.Applicative (liftA2)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Morph
+import Control.Monad.Morph (MFunctor(..))
 import Control.Monad.NodeId
 import Control.Monad.Reader (ReaderT, ask, local, runReaderT)
 import Control.Monad.Ref
