@@ -27,6 +27,17 @@ From within the nix-shell you can:
 * Run ghcid for immediate compiler feedback when you save a .hs file: `ghcid -c "cabal repl reflex-vty --ghc-options=-Wall"`
 * etc.
 
+##### Selecting a compiler
+
+When entering the nix-shell, you can select from the following compilers: ghc-8.10.7 and ghc-9.4.3. By default, ghc-8.10.7 is selected. To enter a shell with ghc-9.4.3, run:
+
+```bash
+nix-shell --argstr compiler ghc943
+```
+
+You may need to run `cabal clean` and `cabal configure -w ghc-9.4.3` if you were previously working on the project with a different compiler.
+
+
 #### With cabal
 
 Please see the `tested-with` field of the cabal file for known-compatible versions of GHC.
