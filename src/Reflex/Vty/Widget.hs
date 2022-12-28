@@ -216,42 +216,33 @@ inputInFocusedRegion
   :: forall t m. (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasFocusReader t m, HasInput t m)
   => m (Event t VtyEvent)
 inputInFocusedRegion = do
-  inp <- input
-  reg <- current <$> askRegion
-  foc <- current <$> focus
+  inpEv <- input
+  regDyn <- askRegion
+  focDyn <- focus
   let
-    isWithin :: Region -> Int -> Int -> Bool
-    isWithin (Region l t w h) x y = not . or $ [ x < l
-                                               , y < t
-                                               , x >= l + w
-                                               , y >= t + h ]
     trackMouse ::
-      VtyEvent
+      ((Region, Bool), VtyEvent)
       -> (MouseTrackingState, Maybe VtyEvent)
-      -> PushM t (Maybe (MouseTrackingState, Maybe VtyEvent))
-    trackMouse e (tracking, _) = do
-      reg'@(Region l t _ _) <- sample reg
-      -- consider using attachPromptlyDyn instead to get most up to date focus, which allows us to ignore mouse inputs when there is no focus (for stuff like ignoring mouse input when there is a popup)
-      focused <- sample foc
-      return $ case e of
-        V.EvKey _ _ | not focused -> Nothing
-        V.EvMouseDown x y btn m ->
-          if tracking == Tracking btn || (tracking == WaitingForInput && isWithin reg' x y)
-            then Just (Tracking btn, Just $ V.EvMouseDown (x - l) (y - t) btn m)
-            else Just (NotTracking, Nothing)
-        -- vty has mouse buttons override others (seems to be based on ordering of Button) when multiple are pressed.
-        -- So it's possible for child widget to miss out on a 'EvMouseUp' event
-        -- Perhaps a better option is to have both 'pane' and 'drag' report ALL mouse up events?
-        V.EvMouseUp x y mbtn -> case mbtn of
-          Nothing -> case tracking of
-            Tracking _ -> Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
-            _ -> Just (WaitingForInput, Nothing)
-          Just btn -> if tracking == Tracking btn
-            -- only report EvMouseUp for the button we are tracking
-            then Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
-            else Just (WaitingForInput, Nothing)
-        _ -> Just (tracking, Just e)
-  dynInputEvTracking <- foldDynMaybeM trackMouse (WaitingForInput, Nothing) $ inp
+      -> Maybe (MouseTrackingState, Maybe VtyEvent)
+    trackMouse ((reg@(Region l t _ _), focused), e) (tracking, _) = case e of
+      V.EvKey _ _ | not focused -> Nothing
+      V.EvMouseDown x y btn m ->
+        if tracking == Tracking btn || (tracking == WaitingForInput && isWithin reg x y)
+          then Just (Tracking btn, Just $ V.EvMouseDown (x - l) (y - t) btn m)
+          else Just (NotTracking, Nothing)
+      V.EvMouseUp x y mbtn -> case mbtn of
+        Nothing -> case tracking of
+          Tracking _ -> Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
+          _ -> Just (WaitingForInput, Nothing)
+        Just btn -> if tracking == Tracking btn
+          -- NOTE we only report EvMouseUp for the button we are tracking
+          -- vty has mouse buttons override others (seems to be based on ordering of Button) when multiple are pressed.
+          -- so it IS possible for child widget to miss out on a 'EvMouseUp' event with this current implementation
+          then Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
+          else Just (WaitingForInput, Nothing)
+      _ -> Just (tracking, Just e)
+
+  dynInputEvTracking <- foldDynMaybe trackMouse (WaitingForInput, Nothing) $ attachPromptlyDyn (ffor2 regDyn focDyn (,)) inpEv
   return (fmapMaybe snd $ updated dynInputEvTracking)
 
 -- * Getting and setting the display region
@@ -272,6 +263,12 @@ nilRegion = Region 0 0 0 0
 -- | The width and height of a 'Region'
 regionSize :: Region -> (Int, Int)
 regionSize (Region _ _ w h) = (w, h)
+
+isWithin :: Region -> Int -> Int -> Bool
+isWithin (Region l t w h) x y = not . or $ [ x < l
+                                           , y < t
+                                           , x >= l + w
+                                           , y >= t + h ]
 
 -- | Produces an 'Image' that fills a region with space characters
 regionBlankImage :: V.Attr -> Region -> Image
