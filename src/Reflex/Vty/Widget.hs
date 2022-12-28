@@ -216,33 +216,37 @@ inputInFocusedRegion
   :: forall t m. (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasFocusReader t m, HasInput t m)
   => m (Event t VtyEvent)
 inputInFocusedRegion = do
-  inpEv <- input
-  regDyn <- askRegion
-  focDyn <- focus
+  inp <- input
+  reg <- current <$> askRegion
+  foc <- current <$> focus
   let
     trackMouse ::
-      ((Region, Bool), VtyEvent)
+      VtyEvent
       -> (MouseTrackingState, Maybe VtyEvent)
-      -> Maybe (MouseTrackingState, Maybe VtyEvent)
-    trackMouse ((reg@(Region l t _ _), focused), e) (tracking, _) = case e of
-      V.EvKey _ _ | not focused -> Nothing
-      V.EvMouseDown x y btn m ->
-        if tracking == Tracking btn || (tracking == WaitingForInput && isWithin reg x y)
-          then Just (Tracking btn, Just $ V.EvMouseDown (x - l) (y - t) btn m)
-          else Just (NotTracking, Nothing)
-      V.EvMouseUp x y mbtn -> case mbtn of
-        Nothing -> case tracking of
-          Tracking _ -> Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
-          _ -> Just (WaitingForInput, Nothing)
-        Just btn -> if tracking == Tracking btn
-          -- NOTE we only report EvMouseUp for the button we are tracking
-          -- vty has mouse buttons override others (seems to be based on ordering of Button) when multiple are pressed.
-          -- so it IS possible for child widget to miss out on a 'EvMouseUp' event with this current implementation
-          then Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
-          else Just (WaitingForInput, Nothing)
-      _ -> Just (tracking, Just e)
-
-  dynInputEvTracking <- foldDynMaybe trackMouse (WaitingForInput, Nothing) $ attachPromptlyDyn (ffor2 regDyn focDyn (,)) inpEv
+      -> PushM t (Maybe (MouseTrackingState, Maybe VtyEvent))
+    trackMouse e (tracking, _) = do
+      -- sampling (as oppose to using attachPromptlyDyn) is necessary here as the focus may change from the event produced here
+      focused <- sample foc
+      -- strictly speaking the same could also happen here too
+      reg'@(Region l t _ _) <- sample reg
+      return $ case e of
+        V.EvKey _ _ | not focused -> Nothing
+        V.EvMouseDown x y btn m ->
+          if tracking == Tracking btn || (tracking == WaitingForInput && isWithin reg' x y)
+            then Just (Tracking btn, Just $ V.EvMouseDown (x - l) (y - t) btn m)
+            else Just (NotTracking, Nothing)
+        V.EvMouseUp x y mbtn -> case mbtn of
+          Nothing -> case tracking of
+            Tracking _ -> Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
+            _ -> Just (WaitingForInput, Nothing)
+          Just btn -> if tracking == Tracking btn
+            -- NOTE we only report EvMouseUp for the button we are tracking
+            -- vty has mouse buttons override others (seems to be based on ordering of Button) when multiple are pressed.
+            -- so it IS possible for child widget to miss out on a 'EvMouseUp' event with this current implementation
+            then Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
+            else Just (WaitingForInput, Nothing)
+        _ -> Just (tracking, Just e)
+  dynInputEvTracking <- foldDynMaybeM trackMouse (WaitingForInput, Nothing) $ inp
   return (fmapMaybe snd $ updated dynInputEvTracking)
 
 -- * Getting and setting the display region
