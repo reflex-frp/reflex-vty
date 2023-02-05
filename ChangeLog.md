@@ -9,6 +9,10 @@
     * Mouse drag sequences that start ON the region and drag off ARE reported
     * Introduce `MonadHold` constraint to `pane`
   * Added `MonadHold` constraint to several methods that use `pane`
+  
+## 0.3.1.1
+
+* Loosen version bounds and support GHC 9.4
 
 ## 0.3.1.0
 
