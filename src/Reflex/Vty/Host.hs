@@ -49,6 +49,7 @@ data VtyResult t = VtyResult
 type MonadVtyApp t m =
   ( Reflex t
   , MonadHold t m
+  , MonadHold t (Performable m)
   , MonadFix m
   , PrimMonad (HostFrame t)
   , ReflexHost t
