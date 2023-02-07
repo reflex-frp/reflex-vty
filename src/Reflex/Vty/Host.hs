@@ -51,6 +51,7 @@ type MonadVtyApp t m =
   , MonadHold t m
   , MonadHold t (Performable m)
   , MonadFix m
+  , MonadFix (Performable m)
   , PrimMonad (HostFrame t)
   , ReflexHost t
   , MonadIO (HostFrame t)

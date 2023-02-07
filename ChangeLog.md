@@ -3,7 +3,7 @@
 ## 0.3.2.0
 
 * Loosen version bounds and support GHC 9.4.4
-* Add `MonadHold t (Performable m)` instance to `MonadVtyApp`
+* Add `MonadHold t (Performable m)` and `MonadFix (Performable m)` instances to `MonadVtyApp`
 
 ## 0.3.1.1
 
