@@ -148,12 +148,12 @@ textInputTile
   => m (TextInput t)
   -> Dynamic t Int
   -> m (TextInput t)
-textInputTile txt width = do
+textInputTile txt width = mdo
   o <- askOrientation
-  rec t <- tile (Constraint_Fixed <$> sz) txt
-      let sz = join $ ffor o $ \case
-            Orientation_Column -> _textInput_lines t
-            Orientation_Row -> width
+  t <- tile (Constraint_Fixed <$> sz) txt
+  let sz = join $ ffor o $ \case
+        Orientation_Column -> _textInput_lines t
+        Orientation_Row -> width
   return t
 
 -- | Turn a set of display line rows into a list of images (one per line)

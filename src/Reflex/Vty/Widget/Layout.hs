@@ -155,9 +155,9 @@ runFocus
   :: (MonadFix m, MonadHold t m, Reflex t)
   => Focus t m a
   -> m (a, Dynamic t FocusSet)
-runFocus (Focus x) = do
-  rec ((a, focusIds), focusRequests) <- runEventWriterT $ flip runReaderT sel $ runDynamicWriterT x
-      sel <- foldDyn f Nothing $ attach (current focusIds) focusRequests
+runFocus (Focus x) = mdo
+  ((a, focusIds), focusRequests) <- runEventWriterT $ flip runReaderT sel $ runDynamicWriterT x
+  sel <- foldDyn f Nothing $ attach (current focusIds) focusRequests
   pure (a, focusIds)
   where
     f :: (FocusSet, First Refocus) -> Maybe FocusId -> Maybe FocusId
@@ -174,12 +174,12 @@ anyChildFocused
   :: (HasFocus t m, MonadFix m)
   => (Dynamic t Bool -> m a)
   -> m a
-anyChildFocused f = do
+anyChildFocused f = mdo
   fid <- focusedId
-  rec (a, fs) <- subFoci (f b)
-      let b = liftA2 (\foc s -> case foc of
-            Nothing -> False
-            Just f' -> OSet.member f' $ unFocusSet s) fid fs
+  (a, fs) <- subFoci (f b)
+  let b = liftA2 (\foc s -> case foc of
+        Nothing -> False
+        Just f' -> OSet.member f' $ unFocusSet s) fid fs
   pure a
 
 -- ** Focus controls
@@ -467,9 +467,9 @@ runLayout
   -> Dynamic t Region
   -> Layout t m a
   -> m a
-runLayout o r (Layout x) = do
-  rec (result, w) <- runReaderT (runDynamicWriterT x) solutions
-      let solutions = solve <$> o <*> r <*> w
+runLayout o r (Layout x) = mdo
+  (result, w) <- runReaderT (runDynamicWriterT x) solutions
+  let solutions = solve <$> o <*> r <*> w
   return result
 
 -- | Initialize and run the layout monad, using all of the available screen space.
@@ -514,15 +514,15 @@ tile'
   => Dynamic t Constraint
   -> m a
   -> m (FocusId, a)
-tile' c w = do
+tile' c w = mdo
   fid <- makeFocus
   r <- region c
   parentFocused <- isFocused fid
-  rec (click, result, childFocused) <- pane r focused $ anyChildFocused $ \childFoc -> do
-        m <- mouseDown V.BLeft
-        x <- w
-        pure (m, x, childFoc)
-      let focused = (||) <$> parentFocused <*> childFocused
+  (click, result, childFocused) <- pane r focused $ anyChildFocused $ \childFoc -> do
+    m <- mouseDown V.BLeft
+    x <- w
+    pure (m, x, childFoc)
+  let focused = (||) <$> parentFocused <*> childFocused
   requestFocus $ Refocus_Id fid <$ click
   pure (fid, result)
 

@@ -23,7 +23,7 @@ drag
   :: (Reflex t, MonadFix m, MonadHold t m, HasInput t m)
   => V.Button
   -> m (Event t Drag)
-drag btn = do
+drag btn = mdo
   inp <- input
   let f :: Maybe Drag -> V.Event -> Maybe Drag
       f Nothing = \case
@@ -45,8 +45,8 @@ drag btn = do
           | end       -> Nothing
           | otherwise -> Just $ Drag from (x,y) btn mods True
         _ -> Nothing
-  rec let newDrag = attachWithMaybe f (current dragD) inp
-      dragD <- holdDyn Nothing $ Just <$> newDrag
+  let newDrag = attachWithMaybe f (current dragD) inp
+  dragD <- holdDyn Nothing $ Just <$> newDrag
   return (fmapMaybe id $ updated dragD)
 
 -- | Mouse down events for a particular mouse button

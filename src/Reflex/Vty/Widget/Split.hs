@@ -18,31 +18,31 @@ splitVDrag :: (Reflex t, MonadFix m, MonadHold t m, HasDisplayRegion t m, HasInp
   -> m a
   -> m b
   -> m (a,b)
-splitVDrag wS wA wB = do
+splitVDrag wS wA wB = mdo
   dh <- displayHeight
   dw <- displayWidth
   h0 <- sample $ current dh -- TODO
   dragE <- drag V.BLeft
   let splitter0 = h0 `div` 2
-  rec splitterCheckpoint <- holdDyn splitter0 $ leftmost [fst <$> ffilter snd dragSplitter, resizeSplitter]
-      splitterPos <- holdDyn splitter0 $ leftmost [fst <$> dragSplitter, resizeSplitter]
-      splitterFrac <- holdDyn ((1::Double) / 2) $ ffor (attach (current dh) (fst <$> dragSplitter)) $ \(h, x) ->
-        fromIntegral x / max 1 (fromIntegral h)
-      let dragSplitter = fforMaybe (attach (current splitterCheckpoint) dragE) $
-            \(splitterY, Drag (_, fromY) (_, toY) _ _ end) ->
-              if splitterY == fromY then Just (toY, end) else Nothing
-          regA = Region 0 0 <$> dw <*> splitterPos
-          regS = Region 0 <$> splitterPos <*> dw <*> 1
-          regB = Region 0 <$> (splitterPos + 1) <*> dw <*> (dh - splitterPos - 1)
-          resizeSplitter = ffor (attach (current splitterFrac) (updated dh)) $
-            \(frac, h) -> round (frac * fromIntegral h)
-      focA <- holdDyn True $ leftmost
-        [ True <$ mA
-        , False <$ mB
-        ]
-      (mA, rA) <- pane regA focA $ withMouseDown wA
-      pane regS (pure False) wS
-      (mB, rB) <- pane regB (not <$> focA) $ withMouseDown wB
+  splitterCheckpoint <- holdDyn splitter0 $ leftmost [fst <$> ffilter snd dragSplitter, resizeSplitter]
+  splitterPos <- holdDyn splitter0 $ leftmost [fst <$> dragSplitter, resizeSplitter]
+  splitterFrac <- holdDyn ((1::Double) / 2) $ ffor (attach (current dh) (fst <$> dragSplitter)) $ \(h, x) ->
+    fromIntegral x / max 1 (fromIntegral h)
+  let dragSplitter = fforMaybe (attach (current splitterCheckpoint) dragE) $
+        \(splitterY, Drag (_, fromY) (_, toY) _ _ end) ->
+          if splitterY == fromY then Just (toY, end) else Nothing
+      regA = Region 0 0 <$> dw <*> splitterPos
+      regS = Region 0 <$> splitterPos <*> dw <*> 1
+      regB = Region 0 <$> (splitterPos + 1) <*> dw <*> (dh - splitterPos - 1)
+      resizeSplitter = ffor (attach (current splitterFrac) (updated dh)) $
+        \(frac, h) -> round (frac * fromIntegral h)
+  focA <- holdDyn True $ leftmost
+    [ True <$ mA
+    , False <$ mB
+    ]
+  (mA, rA) <- pane regA focA $ withMouseDown wA
+  pane regS (pure False) wS
+  (mB, rB) <- pane regB (not <$> focA) $ withMouseDown wB
   return (rA, rB)
   where
     withMouseDown x = do
