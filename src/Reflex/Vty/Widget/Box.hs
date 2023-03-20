@@ -3,6 +3,7 @@
 -}
 module Reflex.Vty.Widget.Box where
 
+import Control.Monad.Fix (MonadFix)
 import Data.Default
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -54,7 +55,7 @@ roundedBoxStyle :: BoxStyle
 roundedBoxStyle = BoxStyle '╭' '─' '╮' '│' '╯' '─' '╰' '│'
 
 -- | Draws a titled box in the provided style and a child widget inside of that box
-boxTitle :: (Monad m, Reflex t ,HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m, HasTheme t m)
+boxTitle :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m, HasTheme t m)
     => Behavior t BoxStyle
     -> Behavior t Text
     -> m a
@@ -109,7 +110,7 @@ boxTitle boxStyle title child = do
         right = mkHalf delta
 
 -- | A box without a title
-box :: (Monad m, Reflex t, HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m, HasTheme t m)
+box :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m, HasTheme t m)
     => Behavior t BoxStyle
     -> m a
     -> m a
@@ -117,7 +118,7 @@ box boxStyle = boxTitle boxStyle mempty
 
 -- | A box whose style is static
 boxStatic
-  :: (Monad m, Reflex t, HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m, HasTheme t m)
+  :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m, HasTheme t m)
   => BoxStyle
   -> m a
   -> m a

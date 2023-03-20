@@ -510,7 +510,7 @@ initManager_ = fmap fst . initManager
 -- provided constraint. Returns the 'FocusId' allowing for manual focus
 -- management.
 tile'
-  :: (MonadFix m, Reflex t, HasInput t m, HasFocus t m, HasLayout t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
+  :: (MonadFix m, MonadHold t m, HasInput t m, HasFocus t m, HasLayout t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
   => Dynamic t Constraint
   -> m a
   -> m (FocusId, a)
@@ -529,7 +529,7 @@ tile' c w = do
 -- | A widget that is focusable and occupies a layout region based on the
 -- provided constraint.
 tile
-  :: (MonadFix m, Reflex t, HasInput t m, HasFocus t m, HasLayout t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
+  :: (MonadFix m, MonadHold t m, HasInput t m, HasFocus t m, HasLayout t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
   => Dynamic t Constraint
   -> m a
   -> m a
@@ -540,7 +540,7 @@ tile c = fmap snd . tile' c
 -- | A widget that is not focusable and occupies a layout region based on the
 -- provided constraint.
 grout
-  :: (Reflex t, HasLayout t m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
+  :: (MonadFix m, MonadHold t m, HasLayout t m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
   => Dynamic t Constraint
   -> m a
   -> m a

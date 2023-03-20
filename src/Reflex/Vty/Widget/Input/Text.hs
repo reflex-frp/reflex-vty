@@ -144,7 +144,7 @@ multilineTextInput cfg = do
 -- the computed line count to greedily size the tile when vertically
 -- oriented, and uses the fallback width when horizontally oriented.
 textInputTile
-  :: (Monad m, Reflex t, MonadFix m, HasLayout t m, HasInput t m, HasFocus t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m)
+  :: (MonadFix m, MonadHold t m, HasLayout t m, HasInput t m, HasFocus t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m)
   => m (TextInput t)
   -> Dynamic t Int
   -> m (TextInput t)
