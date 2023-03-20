@@ -1,6 +1,6 @@
 # Revision history for reflex-vty
 
-## Unreleased
+## 0.4.0.0
 
 * _Breaking Changes_:
   * Added mouse tracking to the behavior of `pane` such that
