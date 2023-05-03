@@ -12,11 +12,14 @@ module Data.Text.Zipper where
 import           Prelude
 
 import Control.Exception (assert)
-import Control.Monad.State (evalState, forM, get, put)
 import Data.Char (isSpace)
 import Data.Map (Map)
 import Data.Maybe (fromMaybe)
 import Data.String
+import Control.Monad
+import Control.Monad.Fix
+import Control.Monad.State (evalState, get, put)
+
 import Data.Text (Text)
 import Data.Text.Internal (Text(..), text)
 import Data.Text.Internal.Fusion (stream)
