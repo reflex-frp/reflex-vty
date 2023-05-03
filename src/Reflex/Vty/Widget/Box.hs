@@ -79,7 +79,7 @@ boxTitle boxStyle title child = do
           sides =
             [ withinImage (Region (left + 1) top (width - 2) 1) $
                 V.text' attr $
-                  hPadText title' (_boxStyle_n style) (width - 2)
+                  centerText title' (_boxStyle_n style) (width - 2)
             , withinImage (Region right (top + 1) 1 (height - 2)) $
                 V.charFill attr (_boxStyle_e style) 1 (height - 2)
             , withinImage (Region (left + 1) bottom (width - 2) 1) $
@@ -98,16 +98,17 @@ boxTitle boxStyle title child = do
                 V.char attr (_boxStyle_sw style)
             ]
       in sides ++ if width > 1 && height > 1 then corners else []
-    hPadText :: T.Text -> Char -> Int -> T.Text
-    hPadText t c l = if lt >= l
-                     then t
-                     else left <> t <> right
-      where
-        lt = T.length t
-        delta = l - lt
-        mkHalf n = T.replicate (n `div` 2) (T.singleton c)
-        left = mkHalf $ delta + 1
-        right = mkHalf delta
+
+centerText :: T.Text -> Char -> Int -> T.Text
+centerText t c l = if lt >= l
+                 then t
+                 else left <> t <> right
+  where
+    lt = T.length t
+    delta = l - lt
+    mkHalf n = T.replicate (n `div` 2) (T.singleton c)
+    left = mkHalf $ delta + 1
+    right = mkHalf delta
 
 -- | A box without a title
 box :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m, HasTheme t m)
