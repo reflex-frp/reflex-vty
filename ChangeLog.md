@@ -1,5 +1,9 @@
 # Revision history for reflex-vty
 
+## 0.4.1.1
+
+* Support ghc-9.6
+
 ## 0.4.1.0
 
 * Loosen version bounds and support GHC 9.4.4
