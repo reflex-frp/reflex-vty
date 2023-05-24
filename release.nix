@@ -12,8 +12,7 @@ let
       sha256 = "0kcd3ln9xmc62ka0i7habzvjjar8z63mlvl15rdhf8hqmda0b7r7";
     } {};
   };
-in
-  lib.genAttrs supportedSystems (system: let
+  ghcs = lib.genAttrs supportedSystems (system: let
     rp = reflex-platform { inherit system; __useNewerCompiler = true; };
     rpGhc = rp.ghc.override {
       overrides = commonOverrides;
@@ -98,7 +97,10 @@ in
     };
   in
   {
+    recurseForDerivations = true;
     ghc810 = rpGhc.callCabal2nix "reflex-vty" (import ./src.nix) {};
     ghc945 = nixGhc945.callCabal2nix "reflex-vty" (import ./src.nix) {};
     ghc961 = nixGhc961.callCabal2nix "reflex-vty" (import ./src.nix) {};
-  })
+  });
+  in
+    ghcs
