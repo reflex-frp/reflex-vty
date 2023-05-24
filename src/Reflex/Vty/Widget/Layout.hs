@@ -9,6 +9,8 @@ module Reflex.Vty.Widget.Layout where
 import Control.Applicative (liftA2)
 import Control.Monad.Morph
 import Control.Monad.NodeId (MonadNodeId(..), NodeId)
+import Control.Monad
+import Control.Monad.Fix
 import Control.Monad.Reader
 import Data.List (mapAccumL)
 import Data.Map.Ordered (OMap)

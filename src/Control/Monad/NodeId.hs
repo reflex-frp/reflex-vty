@@ -11,6 +11,7 @@ module Control.Monad.NodeId
   ) where
 
 import Control.Monad.Morph
+import Control.Monad.Fix
 import Control.Monad.Reader
 import Control.Monad.Ref
 import Data.IORef
