@@ -23,6 +23,8 @@ import Reflex.Class ()
 import Reflex.Host.Class (MonadReflexCreateTrigger)
 import Reflex.Vty.Host
 
+import Debug.Trace
+
 -- * Running a vty application
 
 -- | Sets up the top-level context for a vty widget and runs it with that context
@@ -239,7 +241,7 @@ inputInFocusedRegion = do
         -- filter scroll wheel input based on mouse position
         x@(V.EvMouseDown _ _ btn _) | btn == V.BScrollUp || btn == V.BScrollDown -> case tracking of
           trck@(Tracking _) -> Just (trck, Nothing)
-          _ -> Just (NotTracking, mouseInRegion reg x)
+          _ -> trace ("meow meow meow" <> show (mouseInRegion reg x)) $ Just (NotTracking, mouseInRegion reg x)
 
         -- only do tracking for l/m/r mouse buttons
         V.EvMouseDown x y btn m ->
