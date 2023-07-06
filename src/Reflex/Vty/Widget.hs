@@ -615,6 +615,19 @@ pane dr foc child = localRegion (const dr) $
     localFocus (const foc) $
       inputInFocusedRegion >>= \e -> localInput (const e) child
 
+-- | Build a pane with a custom event source
+mkPane
+  :: (MonadFix m, MonadHold t m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
+  => m (Event t VtyEvent)
+  -> Dynamic t Region
+  -> Dynamic t Bool -- ^ Whether the widget should be focused when the parent is.
+  -> m a
+  -> m a
+mkPane f dr foc child = localRegion (const dr) $
+  mapImages (imagesInRegion $ current dr) $
+    localFocus (const foc) $
+      f >>= \e -> localInput (const e) child
+
 -- * Misc
 
 -- | A widget that draws nothing

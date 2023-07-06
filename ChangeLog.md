@@ -1,5 +1,12 @@
 # Revision history for reflex-vty
 
+## 0.6.0.0
+
+* *Breaking change:*
+  * Reverted the behavior of `inputInFocusedRegion` to simply filter mouse events to those that occur within the display region of a widget. It no longer attempts to track mouse drag events that occur outside the region that are part of a drag that started inside the region.
+  * To recover the previous behavior, you can use the new `mkPane` function with `inputStartedInFocusedRegion` to construct a pane that does the drag-tracking described above. To use that pane in a tile, use `mkTile (mkPane inputStartedInFocusedRegion)`
+* Added `mkTile` and `mkPane`
+
 ## 0.5.0.0
 
 * *Breaking change*:
