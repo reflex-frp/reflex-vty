@@ -17,7 +17,6 @@ import Data.Map (Map)
 import Data.Maybe (fromMaybe)
 import Data.String
 import Control.Monad
-import Control.Monad.Fix
 import Control.Monad.State (evalState, get, put)
 
 import Data.Text (Text)
