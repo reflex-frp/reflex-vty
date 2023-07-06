@@ -10,6 +10,7 @@
 * Added a new `scrollable` widget in `Reflex.Vty.Widget.Scroll` that allows vertical scrolling when an `Image` is taller than the widget's height.
 * Add `ctrlc`, a convenience function that returns an event that fires when a Ctrl+c keypress is detected
 * Fix several issues with wide chars, cursor position and word wrapping in Zipper.hs
+* Add `centerText` function to Reflex.Vty.Widget.Box
 
 ## 0.4.1.1
 
