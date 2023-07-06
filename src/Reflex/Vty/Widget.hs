@@ -211,8 +211,8 @@ mouseInRegion (Region l t w h) e = case e of
 data MouseTrackingState = Tracking V.Button | NotTracking | WaitingForInput deriving (Show, Eq)
 
 -- | Filter mouse input outside the current display region
--- keyboard input is reported only if the region isfocused
--- scroll wheel input is reported only if the mouse is in the region
+-- keyboard input is reported only if the region is focused
+-- scroll wheel input is reported only if the region is focused
 -- mouse input is reported if the mouse is in the region
 -- EXCEPT mouse drag sequences that start OFF the region are NOT reported
 -- AND mouse drag sequences that start ON the region and drag off ARE reported
