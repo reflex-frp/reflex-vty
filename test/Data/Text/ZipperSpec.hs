@@ -14,8 +14,6 @@ import Control.Monad
 
 import           Data.Text.Zipper
 
-import Debug.Trace
-
 someSentence :: T.Text
 someSentence = "12345 1234 12"
 
