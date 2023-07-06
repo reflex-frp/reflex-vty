@@ -29,6 +29,7 @@ import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Box
 import Reflex.Vty.Widget.Input
 import Reflex.Vty.Widget.Layout
+import Reflex.Vty.Widget.Scroll
 import Reflex.Vty.Widget.Split
 import Reflex.Vty.Widget.Text
 
