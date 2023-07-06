@@ -64,6 +64,7 @@ text t = do
   bt <- theme
   richText (RichTextConfig bt) t
 
+-- | Configuration options for automatic scroll-to-bottom behavior
 data ScrollToBottom
   = ScrollToBottom_Always
   -- ^ Always scroll to the bottom on new output
