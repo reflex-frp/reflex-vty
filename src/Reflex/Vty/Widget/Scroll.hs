@@ -4,7 +4,6 @@ module Reflex.Vty.Widget.Scroll where
 
 import Control.Monad.Fix
 import Data.Default
-import Data.Text (Text)
 import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Vty.Widget
@@ -53,7 +52,6 @@ scrollable
   -> (m (Behavior t V.Image, Event t ()))
   -> m (Scrollable t)
 scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend) mkImg = do
-  dw <- displayWidth
   (img, update) <- mkImg
   let sz = V.imageHeight <$> img
   kup <- key V.KUp

@@ -12,7 +12,6 @@ import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Scroll
-import Reflex.Vty.Widget.Input.Mouse
 
 -- | Fill the background with a particular character.
 fill :: (HasDisplayRegion t m, HasImageWriter t m, HasTheme t m) => Behavior t Char -> m ()
@@ -81,7 +80,6 @@ scrollableText
   -> Dynamic t Text
   -> m (Scrollable t)
 scrollableText cfg t = do
-  pb <- getPostBuild
   scrollable cfg $ do
     ((), images) <- runImageWriter $ text (current t)
     pure $ (V.vertCat <$> images, () <$ updated t)
