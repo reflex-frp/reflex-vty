@@ -202,6 +202,21 @@ mouseInRegion (Region l t w h) e = case e of
       | otherwise =
         Just (con (x - l) (y - t))
 
+-- | Filter mouse input outside the current display region and
+-- all input if the region is not focused
+inputInFocusedRegion
+  :: (HasDisplayRegion t m, HasFocusReader t m, HasInput t m)
+  => m (Event t VtyEvent)
+inputInFocusedRegion = do
+  inp <- input
+  reg <- current <$> askRegion
+  foc <- current <$> focus
+  pure $ fmapMaybe id $ attachWith filterInput ((,) <$> reg <*> foc) inp
+  where
+    filterInput (r, f) = \case
+      V.EvKey {} | not f -> Nothing
+      x -> mouseInRegion r x
+
 -- |
 -- * 'Tracking' state means actively tracking the current stream of mouse events
 -- * 'NotTracking' state means not tracking the current stream of mouse events
@@ -212,10 +227,10 @@ data MouseTrackingState = Tracking V.Button | NotTracking | WaitingForInput deri
 -- all input if the region is not focused
 -- mouse drag sequences that start OFF the region are NOT reported
 -- mouse drag sequences that start ON the region and drag off ARE reported
-inputInFocusedRegion
+inputStartedInFocusedRegion
   :: forall t m. (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasFocusReader t m, HasInput t m)
   => m (Event t VtyEvent)
-inputInFocusedRegion = do
+inputStartedInFocusedRegion = do
   inp <- input
   reg <- current <$> askRegion
   foc <- current <$> focus
@@ -589,8 +604,6 @@ imagesInRegion reg = liftA2 (\r is -> map (withinImage r) is) reg
 -- * unfocused widgets receive no key events
 -- * mouse inputs inside the region have their coordinates translated such
 --   that (0,0) is the top-left corner of the region
--- * mouse drag sequences that start OFF the region are ignored
--- * mouse drag sequences that start ON the region and drag off are NOT ignored
 pane
   :: (MonadFix m, MonadHold t m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
   => Dynamic t Region
