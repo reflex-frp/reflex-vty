@@ -99,7 +99,13 @@ boxTitle boxStyle title child = do
             ]
       in sides ++ if width > 1 && height > 1 then corners else []
 
-centerText :: T.Text -> Char -> Int -> T.Text
+-- | Pad text  on the left and right with the given character so that it is
+-- centered
+centerText
+  :: T.Text -- ^ Text to center
+  -> Char -- ^ Padding character
+  -> Int -- ^ Width
+  -> T.Text -- ^ Padded text
 centerText t c l = if lt >= l
                  then t
                  else left <> t <> right
