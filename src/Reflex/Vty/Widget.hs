@@ -241,7 +241,7 @@ inputInFocusedRegion = do
         -- filter scroll wheel input based on mouse position
         x@(V.EvMouseDown _ _ btn _) | btn == V.BScrollUp || btn == V.BScrollDown -> case tracking of
           trck@(Tracking _) -> Just (trck, Nothing)
-          _ -> trace ("meow meow meow " <> show (reg, x) <> " " <> show (mouseInRegion reg x)) $ Just (NotTracking, mouseInRegion reg x)
+          _ -> trace ("meow meow meow " <> show (reg, x) <> " " <> show (mouseInRegion reg x)) $ Just (NotTracking, if focused then Just x else Nothing)
 
         -- only do tracking for l/m/r mouse buttons
         V.EvMouseDown x y btn m ->
