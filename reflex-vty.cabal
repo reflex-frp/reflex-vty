@@ -33,6 +33,7 @@ library
                  , Reflex.Vty.Widget.Input.Mouse
                  , Reflex.Vty.Widget.Input.Text
                  , Reflex.Vty.Widget.Layout
+                 , Reflex.Vty.Widget.Scroll
                  , Reflex.Vty.Widget.Split
                  , Reflex.Vty.Widget.Text
                  , Data.Text.Zipper

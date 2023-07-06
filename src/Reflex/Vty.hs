@@ -17,6 +17,7 @@ module Reflex.Vty
   , module Reflex.Vty.Widget.Box
   , module Reflex.Vty.Widget.Input
   , module Reflex.Vty.Widget.Layout
+  , module Reflex.Vty.Widget.Scroll
   , module Reflex.Vty.Widget.Split
   , module Reflex.Vty.Widget.Text
   , module Control.Monad.NodeId

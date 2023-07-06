@@ -579,9 +579,9 @@ imagesInRegion reg = liftA2 (\r is -> map (withinImage r) is) reg
 -- that the child widget receives such that:
 -- * unfocused widgets receive no key events
 -- * mouse inputs inside the region have their coordinates translated such
+--   that (0,0) is the top-left corner of the region
 -- * mouse drag sequences that start OFF the region are ignored
 -- * mouse drag sequences that start ON the region and drag off are NOT ignored
---   that (0,0) is the top-left corner of the region
 pane
   :: (MonadFix m, MonadHold t m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
   => Dynamic t Region

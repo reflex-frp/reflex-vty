@@ -161,3 +161,11 @@ checkbox cfg v0 = do
   where
     combineStyles :: V.Attr -> [V.Style] -> V.Attr
     combineStyles x xs = foldl' V.withStyle x xs
+
+-- | The ctrl-c keypress event
+ctrlc :: (Monad m, HasInput t m, Reflex t) => m (Event t ())
+ctrlc = do
+  inp <- input
+  return $ fforMaybe inp $ \case
+    V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
+    _ -> Nothing

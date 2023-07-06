@@ -3,10 +3,12 @@
 ## 0.5.0.0
 
 * *Breaking change*:
-  * `scrollableText` now takes a `ScrollableTextConfiguration` instead of just an `Event t Int` of lines to scroll by. Replacing a `scrollableText myEvent` invocation with `scrollableText (def { _scrollableTextConfig_scrollBy = myEvent })` should recover the old behavior.
-  * `scrollableText` now returns a `ScrollableText t` instead of a `Behavior (Int, Int)`. The second `Int`, representing the total number of lines, is part of the `ScrollableText` record. The first `Int`, representing the current scroll position is replaced by the `ScrollPos` in the `ScrollableText` output. `ScrollPos` is a new type that captures whether a `scrollableText` is scrolled to the very top, very bottom, or somewhere in between.
+  * `scrollableText` now takes a `ScrollableConfiguration` instead of just an `Event t Int` of lines to scroll by. Replacing a `scrollableText myEvent` invocation with `scrollableText (def { _scrollableConfig_scrollBy = myEvent })` should recover the old behavior.
+  * `scrollableText` now returns a `Scrollable t` instead of a `Behavior (Int, Int)`. The second `Int`, representing the total number of lines, is part of the `Scrollable` record. The first `Int`, representing the current scroll position is replaced by the `ScrollPos` in the `Scrollable` output. `ScrollPos` is a new type that captures whether a `scrollableText` is scrolled to the very top, very bottom, or somewhere in between.
 * `scrollableText` can now be given a starting scroll position and an event that scrolls it to a particular position.
 * `scrollableText` can be configured to remain scrolled to the bottom on new output, either always or whenever the user is scrolled to the bottom and new output appears.
+* Added a new `scrollable` widget in `Reflex.Vty.Widget.Scroll` that allows vertical scrolling when an `Image` is taller than the widget's height.
+* Add `ctrlc`, a convenience function that returns an event that fires when a Ctrl+c keypress is detected
 
 ## 0.4.1.1
 
