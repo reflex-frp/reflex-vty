@@ -9,6 +9,7 @@
 * `scrollableText` can be configured to remain scrolled to the bottom on new output, either always or whenever the user is scrolled to the bottom and new output appears.
 * Added a new `scrollable` widget in `Reflex.Vty.Widget.Scroll` that allows vertical scrolling when an `Image` is taller than the widget's height.
 * Add `ctrlc`, a convenience function that returns an event that fires when a Ctrl+c keypress is detected
+* Fix several issues with wide chars, cursor position and word wrapping in Zipper.hs
 
 ## 0.4.1.1
 
@@ -28,7 +29,7 @@
     * Mouse drag sequences that start ON the region and drag off ARE reported
     * Introduce `MonadHold` constraint to `pane`
   * Added `MonadHold` constraint to several methods that use `pane`
-  
+
 ## 0.3.1.1
 
 * Loosen version bounds and support GHC 9.4

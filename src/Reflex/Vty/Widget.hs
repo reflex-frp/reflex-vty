@@ -232,7 +232,7 @@ inputInFocusedRegion = do
       return $ case e of
         V.EvKey _ _ | not focused -> Nothing
         V.EvMouseDown x y btn m ->
-          if tracking == Tracking btn || (tracking == WaitingForInput && isWithin reg' x y)
+          if tracking == Tracking btn || (tracking == WaitingForInput && withinRegion reg' x y)
             then Just (Tracking btn, Just $ V.EvMouseDown (x - l) (y - t) btn m)
             else Just (NotTracking, Nothing)
         V.EvMouseUp x y mbtn -> case mbtn of
@@ -268,11 +268,20 @@ nilRegion = Region 0 0 0 0
 regionSize :: Region -> (Int, Int)
 regionSize (Region _ _ w h) = (w, h)
 
-isWithin :: Region -> Int -> Int -> Bool
-isWithin (Region l t w h) x y = not . or $ [ x < l
-                                           , y < t
-                                           , x >= l + w
-                                           , y >= t + h ]
+-- | Check whether the x,y coordinates are within the specified region
+withinRegion
+  :: Region
+  -> Int
+  -- ^ x-coordinate
+  -> Int
+  -- ^ y-coordinate
+  -> Bool
+withinRegion (Region l t w h) x y = not . or $
+  [ x < l
+  , y < t
+  , x >= l + w
+  , y >= t + h
+  ]
 
 -- | Produces an 'Image' that fills a region with space characters
 regionBlankImage :: V.Attr -> Region -> Image
