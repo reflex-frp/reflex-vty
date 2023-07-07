@@ -9,6 +9,7 @@
 * `scrollableText` can be configured to remain scrolled to the bottom on new output, either always or whenever the user is scrolled to the bottom and new output appears.
 * Added a new `scrollable` widget in `Reflex.Vty.Widget.Scroll` that allows vertical scrolling when an `Image` is taller than the widget's height.
 * Add `ctrlc`, a convenience function that returns an event that fires when a Ctrl+c keypress is detected
+* Change `inputInFocusedRegion` to filter mouse scroll wheel input based on if the region is in focus rather than mouse drag tracking
 * Fix several issues with wide chars, cursor position and word wrapping in Zipper.hs
 * Add `centerText` function to Reflex.Vty.Widget.Box
 

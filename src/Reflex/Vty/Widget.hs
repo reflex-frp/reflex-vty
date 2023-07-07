@@ -23,6 +23,8 @@ import Reflex.Class ()
 import Reflex.Host.Class (MonadReflexCreateTrigger)
 import Reflex.Vty.Host
 
+import Debug.Trace
+
 -- * Running a vty application
 
 -- | Sets up the top-level context for a vty widget and runs it with that context
@@ -208,16 +210,18 @@ mouseInRegion (Region l t w h) e = case e of
 -- * 'WaitingForInput' means state will be set on next 'EvMouseDown' event
 data MouseTrackingState = Tracking V.Button | NotTracking | WaitingForInput deriving (Show, Eq)
 
--- | Filter mouse input outside the current display region and
--- all input if the region is not focused
--- mouse drag sequences that start OFF the region are NOT reported
--- mouse drag sequences that start ON the region and drag off ARE reported
+-- | Filter mouse input outside the current display region
+-- keyboard input is reported only if the region is focused
+-- scroll wheel input is reported only if the region is focused
+-- mouse input is reported if the mouse is in the region
+-- EXCEPT mouse drag sequences that start OFF the region are NOT reported
+-- AND mouse drag sequences that start ON the region and drag off ARE reported
 inputInFocusedRegion
   :: forall t m. (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasFocusReader t m, HasInput t m)
   => m (Event t VtyEvent)
 inputInFocusedRegion = do
   inp <- input
-  reg <- current <$> askRegion
+  regBeh <- current <$> askRegion
   foc <- current <$> focus
   let
     trackMouse ::
@@ -228,11 +232,20 @@ inputInFocusedRegion = do
       -- sampling (as oppose to using attachPromptlyDyn) is necessary here as the focus may change from the event produced here
       focused <- sample foc
       -- strictly speaking the same could also happen here too
-      reg'@(Region l t _ _) <- sample reg
+      reg@(Region l t _ _) <- sample regBeh
       return $ case e of
+
+        -- filter keyboard input if region is not focused
         V.EvKey _ _ | not focused -> Nothing
+
+        -- filter scroll wheel input based on mouse position
+        x@(V.EvMouseDown _ _ btn _) | btn == V.BScrollUp || btn == V.BScrollDown -> case tracking of
+          trck@(Tracking _) -> Just (trck, Nothing)
+          _ -> Just (WaitingForInput, if focused then Just x else Nothing)
+
+        -- only do tracking for l/m/r mouse buttons
         V.EvMouseDown x y btn m ->
-          if tracking == Tracking btn || (tracking == WaitingForInput && withinRegion reg' x y)
+          if tracking == Tracking btn || (tracking == WaitingForInput && withinRegion reg x y)
             then Just (Tracking btn, Just $ V.EvMouseDown (x - l) (y - t) btn m)
             else Just (NotTracking, Nothing)
         V.EvMouseUp x y mbtn -> case mbtn of
