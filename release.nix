@@ -44,17 +44,15 @@ let
     };
     nixGhc961 = (import ./dep/nixpkgs { inherit system; }).haskell.packages.ghc961.override {
       overrides = self: super: {
+
+        reflex = self.callCabal2nix "reflex" (rp.hackGet ./dep/reflex) {};
+
         patch = self.callHackageDirect {
           pkg = "patch";
           ver = "0.0.8.2";
           sha256 = "160zqqhjg48fr3a33gffd82qm3728c8hwf8sn37pbpv82fw71rzg";
         } {};
 
-        reflex = self.callHackageDirect {
-          pkg = "reflex";
-          ver = "0.9.0.1";
-          sha256 = "1yrcashxxclvlvv3cs5gv75rvlsg1gb0m36kssnk2zvhbh94240y";
-        } {};
         these-lens = self.callHackageDirect {
           pkg = "these-lens";
           ver = "1.0.1.3";
