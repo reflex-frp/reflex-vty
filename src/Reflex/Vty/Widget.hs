@@ -23,8 +23,6 @@ import Reflex.Class ()
 import Reflex.Host.Class (MonadReflexCreateTrigger)
 import Reflex.Vty.Host
 
-import Debug.Trace
-
 -- * Running a vty application
 
 -- | Sets up the top-level context for a vty widget and runs it with that context
