@@ -1,5 +1,13 @@
 # Revision history for reflex-vty
 
+## 0.6.0.0
+
+* *Breaking change:*
+  * Reverted the behavior of `inputInFocusedRegion` to simply filter mouse events to those that occur within the display region of a widget. It no longer attempts to track mouse drag events that occur outside the region that are part of a drag that started inside the region.
+  * To recover the previous behavior, you can use the new `mkPane` function with `inputStartedInFocusedRegion` to construct a pane that does the drag-tracking described above. To use that pane in a tile, use `mkTile (mkPane inputStartedInFocusedRegion)`
+  * Change `inputStartedInFocusedRegion` to filter mouse scroll wheel input based on if the region is in focus rather than mouse drag tracking
+* Added `mkTile` and `mkPane`
+
 ## 0.5.0.0
 
 * *Breaking change*:
@@ -9,7 +17,6 @@
 * `scrollableText` can be configured to remain scrolled to the bottom on new output, either always or whenever the user is scrolled to the bottom and new output appears.
 * Added a new `scrollable` widget in `Reflex.Vty.Widget.Scroll` that allows vertical scrolling when an `Image` is taller than the widget's height.
 * Add `ctrlc`, a convenience function that returns an event that fires when a Ctrl+c keypress is detected
-* Change `inputInFocusedRegion` to filter mouse scroll wheel input based on if the region is in focus rather than mouse drag tracking
 * Fix several issues with wide chars, cursor position and word wrapping in Zipper.hs
 * Add `centerText` function to Reflex.Vty.Widget.Box
 

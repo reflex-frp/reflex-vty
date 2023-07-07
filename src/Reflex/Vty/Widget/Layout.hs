@@ -507,6 +507,25 @@ initManager_ = fmap fst . initManager
 
 -- *** Focusable
 
+-- |
+mkTile
+  :: (MonadFix m, MonadHold t m, HasInput t m, HasFocus t m, HasLayout t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
+  => (forall a. Dynamic t Region -> Dynamic t Bool -> m a -> m a)
+  -> Dynamic t Constraint
+  -> m a
+  -> m (FocusId, a)
+mkTile customPane c w = do
+  fid <- makeFocus
+  r <- region c
+  parentFocused <- isFocused fid
+  rec (click, result, childFocused) <- customPane r focused $ anyChildFocused $ \childFoc -> do
+        m <- mouseDown V.BLeft
+        x <- w
+        pure (m, x, childFoc)
+      let focused = (||) <$> parentFocused <*> childFocused
+  requestFocus $ Refocus_Id fid <$ click
+  pure (fid, result)
+
 -- | A widget that is focusable and occupies a layout region based on the
 -- provided constraint. Returns the 'FocusId' allowing for manual focus
 -- management.
@@ -515,17 +534,7 @@ tile'
   => Dynamic t Constraint
   -> m a
   -> m (FocusId, a)
-tile' c w = do
-  fid <- makeFocus
-  r <- region c
-  parentFocused <- isFocused fid
-  rec (click, result, childFocused) <- pane r focused $ anyChildFocused $ \childFoc -> do
-        m <- mouseDown V.BLeft
-        x <- w
-        pure (m, x, childFoc)
-      let focused = (||) <$> parentFocused <*> childFocused
-  requestFocus $ Refocus_Id fid <$ click
-  pure (fid, result)
+tile' = mkTile pane
 
 -- | A widget that is focusable and occupies a layout region based on the
 -- provided constraint.

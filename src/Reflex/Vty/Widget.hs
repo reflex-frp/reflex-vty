@@ -202,6 +202,21 @@ mouseInRegion (Region l t w h) e = case e of
       | otherwise =
         Just (con (x - l) (y - t))
 
+-- | Filter mouse input outside the current display region and
+-- all input if the region is not focused
+inputInFocusedRegion
+  :: (HasDisplayRegion t m, HasFocusReader t m, HasInput t m)
+  => m (Event t VtyEvent)
+inputInFocusedRegion = do
+  inp <- input
+  reg <- current <$> askRegion
+  foc <- current <$> focus
+  pure $ fmapMaybe id $ attachWith filterInput ((,) <$> reg <*> foc) inp
+  where
+    filterInput (r, f) = \case
+      V.EvKey {} | not f -> Nothing
+      x -> mouseInRegion r x
+
 -- |
 -- * 'Tracking' state means actively tracking the current stream of mouse events
 -- * 'NotTracking' state means not tracking the current stream of mouse events
@@ -214,10 +229,10 @@ data MouseTrackingState = Tracking V.Button | NotTracking | WaitingForInput deri
 -- mouse input is reported if the mouse is in the region
 -- EXCEPT mouse drag sequences that start OFF the region are NOT reported
 -- AND mouse drag sequences that start ON the region and drag off ARE reported
-inputInFocusedRegion
+inputStartedInFocusedRegion
   :: forall t m. (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasFocusReader t m, HasInput t m)
   => m (Event t VtyEvent)
-inputInFocusedRegion = do
+inputStartedInFocusedRegion = do
   inp <- input
   regBeh <- current <$> askRegion
   foc <- current <$> focus
@@ -237,9 +252,9 @@ inputInFocusedRegion = do
         V.EvKey _ _ | not focused -> Nothing
 
         -- filter scroll wheel input based on mouse position
-        x@(V.EvMouseDown _ _ btn _) | btn == V.BScrollUp || btn == V.BScrollDown -> case tracking of
+        e@(V.EvMouseDown x y btn _) | btn == V.BScrollUp || btn == V.BScrollDown -> case tracking of
           trck@(Tracking _) -> Just (trck, Nothing)
-          _ -> Just (WaitingForInput, if focused then Just x else Nothing)
+          _ -> Just (WaitingForInput, if withinRegion reg x y then Just e else Nothing)
 
         -- only do tracking for l/m/r mouse buttons
         V.EvMouseDown x y btn m ->
@@ -600,8 +615,6 @@ imagesInRegion reg = liftA2 (\r is -> map (withinImage r) is) reg
 -- * unfocused widgets receive no key events
 -- * mouse inputs inside the region have their coordinates translated such
 --   that (0,0) is the top-left corner of the region
--- * mouse drag sequences that start OFF the region are ignored
--- * mouse drag sequences that start ON the region and drag off are NOT ignored
 pane
   :: (MonadFix m, MonadHold t m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
   => Dynamic t Region
@@ -612,6 +625,19 @@ pane dr foc child = localRegion (const dr) $
   mapImages (imagesInRegion $ current dr) $
     localFocus (const foc) $
       inputInFocusedRegion >>= \e -> localInput (const e) child
+
+-- | Build a pane with a custom event source
+mkPane
+  :: (MonadFix m, MonadHold t m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
+  => m (Event t VtyEvent)
+  -> Dynamic t Region
+  -> Dynamic t Bool -- ^ Whether the widget should be focused when the parent is.
+  -> m a
+  -> m a
+mkPane f dr foc child = localRegion (const dr) $
+  mapImages (imagesInRegion $ current dr) $
+    localFocus (const foc) $
+      f >>= \e -> localInput (const e) child
 
 -- * Misc
 
