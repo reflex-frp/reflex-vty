@@ -237,7 +237,7 @@ inputInFocusedRegion = do
         V.EvKey _ _ | not focused -> Nothing
 
         -- filter scroll wheel input based on mouse position
-        x@(V.EvMouseDown x y btn m) | btn == V.BScrollUp || btn == V.BScrollDown -> case tracking of
+        V.EvMouseDown x y btn m | btn == V.BScrollUp || btn == V.BScrollDown -> case tracking of
           trck@(Tracking _) -> Just (trck, Nothing)
           _ -> Just (WaitingForInput, if focused then Just (V.EvMouseDown (x - l) (y - t) btn m) else Nothing)
 
