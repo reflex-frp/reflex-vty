@@ -10,6 +10,7 @@ module Control.Monad.NodeId
   , runNodeIdT
   ) where
 
+import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
 import Control.Monad.Morph
 import Control.Monad.Fix
 import Control.Monad.Reader
@@ -49,6 +50,9 @@ newtype NodeIdT m a = NodeIdT { unNodeIdT :: ReaderT (IORef NodeId) m a }
     , PerformEvent t
     , PostBuild t
     , TriggerEvent t
+    , MonadCatch
+    , MonadThrow
+    , MonadMask
     )
 
 instance MonadNodeId m => MonadNodeId (ReaderT x m)

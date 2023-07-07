@@ -7,6 +7,7 @@
   * To recover the previous behavior, you can use the new `mkPane` function with `inputStartedInFocusedRegion` to construct a pane that does the drag-tracking described above. To use that pane in a tile, use `mkTile (mkPane inputStartedInFocusedRegion)`
   * Change `inputStartedInFocusedRegion` to filter mouse scroll wheel input based on if the region is in focus rather than mouse drag tracking
 * Added `mkTile` and `mkPane`
+* Add MonadCatch, MonadThrow, and MonadMask instances (relies on reflex-0.9.2.0 or greater)
 
 ## 0.5.0.0
 
