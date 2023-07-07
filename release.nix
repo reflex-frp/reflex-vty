@@ -35,11 +35,6 @@ let
           sha256 = "160zqqhjg48fr3a33gffd82qm3728c8hwf8sn37pbpv82fw71rzg";
         } {};
 
-        reflex = self.callHackageDirect {
-          pkg = "reflex";
-          ver = "0.9.0.1";
-          sha256 = "1yrcashxxclvlvv3cs5gv75rvlsg1gb0m36kssnk2zvhbh94240y";
-        } {};
       };
     };
     nixGhc961 = (import ./dep/nixpkgs { inherit system; }).haskell.packages.ghc961.override {
