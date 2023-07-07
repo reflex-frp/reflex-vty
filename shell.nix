@@ -2,7 +2,7 @@
 # or nixpkgs (which provides ghc943)
 { compiler ? "ghc810" # or "ghc943"
 }:
-let pkgs = (import ./reflex-platform { }).nixpkgs;
+let pkgs = (import ./dep/reflex-platform { }).nixpkgs;
 in
   pkgs.mkShell {
     name = "shell-${compiler}";

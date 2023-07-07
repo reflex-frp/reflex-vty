@@ -3,6 +3,7 @@
 ## Unreleased
 
 * Change `inputInFocusedRegion` to filter mouse scroll wheel input based on if the region under than the mouse rather than using mouse drag tracking
+* Add MonadCatch, MonadThrow, and MonadMask instances (relies on reflex-0.9.2.0 or greater)
 
 ## 0.5.0.0
 

@@ -7,6 +7,7 @@ Description: Monad transformer and tools for arranging widgets and building scre
 module Reflex.Vty.Widget.Layout where
 
 import Control.Applicative (liftA2)
+import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
 import Control.Monad.Morph
 import Control.Monad.NodeId (MonadNodeId(..), NodeId)
 import Control.Monad.Fix
@@ -111,6 +112,9 @@ newtype Focus t m a = Focus
     , PostBuild t
     , MonadNodeId
     , MonadIO
+    , MonadCatch
+    , MonadThrow
+    , MonadMask
     )
 
 
@@ -395,6 +399,9 @@ newtype Layout t m a = Layout
     , PerformEvent t
     , PostBuild t
     , TriggerEvent t
+    , MonadCatch
+    , MonadThrow
+    , MonadMask
     )
 
 instance MonadTrans (Layout t) where
