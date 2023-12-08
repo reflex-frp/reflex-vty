@@ -1,5 +1,9 @@
 # Revision history for reflex-vty
 
+## Unreleased
+
+* Fix an issue where the cursor tag is not used for an empty string in `displayLineWithAlignment`
+
 ## 0.5.0.0
 
 * *Breaking change*:
