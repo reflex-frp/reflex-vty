@@ -3,6 +3,12 @@
 ## Unreleased
 
 * Fix an issue where the cursor tag is not used for an empty string in `displayLineWithAlignment`
+  
+## 0.5.1.0
+
+* Change `inputInFocusedRegion` to filter mouse scroll wheel input based on if the region under than the mouse rather than using mouse drag tracking
+* Add MonadCatch, MonadThrow, and MonadMask instances (relies on reflex-0.9.2.0 or greater)
+
 
 ## 0.5.0.0
 
@@ -13,7 +19,6 @@
 * `scrollableText` can be configured to remain scrolled to the bottom on new output, either always or whenever the user is scrolled to the bottom and new output appears.
 * Added a new `scrollable` widget in `Reflex.Vty.Widget.Scroll` that allows vertical scrolling when an `Image` is taller than the widget's height.
 * Add `ctrlc`, a convenience function that returns an event that fires when a Ctrl+c keypress is detected
-* Change `inputInFocusedRegion` to filter mouse scroll wheel input based on if the region is in focus rather than mouse drag tracking
 * Fix several issues with wide chars, cursor position and word wrapping in Zipper.hs
 * Add `centerText` function to Reflex.Vty.Widget.Box
 

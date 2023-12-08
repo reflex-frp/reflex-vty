@@ -1,7 +1,8 @@
-{ reflex-platform ? import ./reflex-platform
+{ reflex-platform ? import ./dep/reflex-platform
 }:
 let
-  pkgs = (reflex-platform {}).nixpkgs;
+  rp = reflex-platform {};
+  pkgs = rp.nixpkgs;
   supportedSystems = [ "x86_64-linux" "x86_64-darwin" ];
   inherit (pkgs) lib;
   haskellLib = pkgs.haskell.lib;
@@ -11,13 +12,14 @@ let
       ver = "5.38";
       sha256 = "0kcd3ln9xmc62ka0i7habzvjjar8z63mlvl15rdhf8hqmda0b7r7";
     } {};
+    reflex = self.callCabal2nix "reflex" (rp.hackGet ./dep/reflex) {};
   };
   ghcs = lib.genAttrs supportedSystems (system: let
     rp = reflex-platform { inherit system; __useNewerCompiler = true; };
     rpGhc = rp.ghc.override {
       overrides = commonOverrides;
     };
-    nixGhc945 = (import ./nixpkgs { inherit system; }).haskell.packages.ghc945.override {
+    nixGhc945 = (import ./dep/nixpkgs { inherit system; }).haskell.packages.ghc945.override {
       overrides = self: super: commonOverrides self super // {
         hlint = self.callHackageDirect {
           pkg = "hlint";
@@ -33,26 +35,19 @@ let
           sha256 = "160zqqhjg48fr3a33gffd82qm3728c8hwf8sn37pbpv82fw71rzg";
         } {};
 
-        reflex = self.callHackageDirect {
-          pkg = "reflex";
-          ver = "0.9.0.1";
-          sha256 = "1yrcashxxclvlvv3cs5gv75rvlsg1gb0m36kssnk2zvhbh94240y";
-        } {};
       };
     };
-    nixGhc961 = (import ./nixpkgs { inherit system; }).haskell.packages.ghc961.override {
+    nixGhc961 = (import ./dep/nixpkgs { inherit system; }).haskell.packages.ghc961.override {
       overrides = self: super: {
+
+        reflex = self.callCabal2nix "reflex" (rp.hackGet ./dep/reflex) {};
+
         patch = self.callHackageDirect {
           pkg = "patch";
           ver = "0.0.8.2";
           sha256 = "160zqqhjg48fr3a33gffd82qm3728c8hwf8sn37pbpv82fw71rzg";
         } {};
 
-        reflex = self.callHackageDirect {
-          pkg = "reflex";
-          ver = "0.9.0.1";
-          sha256 = "1yrcashxxclvlvv3cs5gv75rvlsg1gb0m36kssnk2zvhbh94240y";
-        } {};
         these-lens = self.callHackageDirect {
           pkg = "these-lens";
           ver = "1.0.1.3";

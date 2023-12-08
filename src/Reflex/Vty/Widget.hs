@@ -7,6 +7,7 @@ Description: Basic set of widgets and building blocks for reflex-vty application
 module Reflex.Vty.Widget where
 
 import Control.Applicative (liftA2)
+import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Morph (MFunctor(..))
@@ -109,6 +110,9 @@ newtype Input t m a = Input
     , MonadFix
     , MonadIO
     , MonadRef
+    , MonadCatch
+    , MonadThrow
+    , MonadMask
     )
 
 instance (Adjustable t m, MonadHold t m, Reflex t) => Adjustable t (Input t m) where
@@ -237,9 +241,9 @@ inputInFocusedRegion = do
         V.EvKey _ _ | not focused -> Nothing
 
         -- filter scroll wheel input based on mouse position
-        x@(V.EvMouseDown _ _ btn _) | btn == V.BScrollUp || btn == V.BScrollDown -> case tracking of
+        ev@(V.EvMouseDown x y btn m) | btn == V.BScrollUp || btn == V.BScrollDown -> case tracking of
           trck@(Tracking _) -> Just (trck, Nothing)
-          _ -> Just (WaitingForInput, if focused then Just x else Nothing)
+          _ -> Just (WaitingForInput, if withinRegion reg x y then Just (V.EvMouseDown (x - l) (y - t) btn m) else Nothing)
 
         -- only do tracking for l/m/r mouse buttons
         V.EvMouseDown x y btn m ->
@@ -336,6 +340,9 @@ newtype DisplayRegion t m a = DisplayRegion
     , MonadIO
     , MonadRef
     , MonadSample t
+    , MonadCatch
+    , MonadThrow
+    , MonadMask
     )
 
 instance (Monad m, Reflex t) => HasDisplayRegion t (DisplayRegion t m) where
@@ -401,6 +408,9 @@ newtype FocusReader t m a = FocusReader
     , MonadIO
     , MonadRef
     , MonadSample t
+    , MonadCatch
+    , MonadThrow
+    , MonadMask
     )
 
 instance (Monad m, Reflex t) => HasFocusReader t (FocusReader t m) where
@@ -466,6 +476,9 @@ newtype ImageWriter t m a = ImageWriter
     , PerformEvent t
     , PostBuild t
     , TriggerEvent t
+    , MonadCatch
+    , MonadThrow
+    , MonadMask
     )
 
 instance MonadTrans (ImageWriter t) where
@@ -536,6 +549,9 @@ newtype ThemeReader t m a = ThemeReader
     , MonadIO
     , MonadRef
     , MonadSample t
+    , MonadCatch
+    , MonadThrow
+    , MonadMask
     )
 
 instance (Monad m, Reflex t) => HasTheme t (ThemeReader t m) where
