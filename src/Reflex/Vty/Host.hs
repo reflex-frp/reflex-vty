@@ -30,7 +30,6 @@ import Reflex
 import Reflex.Host.Class
 import Reflex.Spider.Orphans ()
 import qualified Graphics.Vty as V
-import qualified Graphics.Vty.Platform.Unix as V 
 import Graphics.Vty (DisplayRegion)
 
 -- | A synonym for the underlying vty event type from 'Graphics.Vty'. This should
