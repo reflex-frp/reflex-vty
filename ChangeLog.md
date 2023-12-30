@@ -1,5 +1,8 @@
 # Revision history for reflex-vty
 
+## Unreleased
+* bump max version for vty to latest (6.1)
+
 ## 0.2.0.0
 
 * _Module Reorganization_: The following modules have been added (and are all re-exported by Reflex.Vty):
