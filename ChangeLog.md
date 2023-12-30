@@ -2,6 +2,7 @@
 
 ## Unreleased
 * bump max version for vty to latest (6.1)
+* bump max version for base to latest (4.19)
 
 ## 0.2.0.0
 

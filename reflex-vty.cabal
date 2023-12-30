@@ -39,7 +39,7 @@ library
                  , Reflex.Spider.Orphans
                  , Control.Monad.NodeId
   build-depends:
-    base >= 4.10.0 && < 4.15,
+    base >= 4.10.0 && < 4.20,
     bimap >= 0.3.3 && < 0.5,
     containers >= 0.5.0 && < 0.7,
     mtl >= 2.2.2 && < 2.3,
