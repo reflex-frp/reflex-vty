@@ -10,12 +10,10 @@ let
     vty = self.callHackageDirect {
       pkg = "vty";
       ver = "6.2";
-      sha256 = "0kcd3ln9xmc62ka0i7habzvjjar8z63mlvl15rdhf8hqmda0b7r7";
     } {};
     vty-crossplatform = self.callHackageDirect {
       pkg = "vty-crossplatform";
       ver = "0.4";
-      sha256 = "0kcd3ln9xmc62ka0i7habzvjjar8z63mlvl15rdhf8hqmda0b7r7";
     } {};
     reflex = self.callCabal2nix "reflex" (rp.hackGet ./dep/reflex) {};
   };
