@@ -43,7 +43,7 @@ let
       };
     };
     nixGhc961 = (import ./dep/nixpkgs { inherit system; }).haskell.packages.ghc961.override {
-      overrides = self: super: {
+      overrides = self: super: commonOverrides self super // {
 
         reflex = self.callCabal2nix "reflex" (rp.hackGet ./dep/reflex) {};
 
