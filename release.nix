@@ -15,7 +15,7 @@ let
     vty-crossplatform = self.callHackageDirect {
       pkg = "vty-crossplatform";
       ver = "0.4.0.0";
-      sha256 = "0000000000000000000000000000000000000000000000000000";
+      sha256 = "7b72e71b7a2e1a947f825a44a1fdea2e3e147944410c4286390aa4124a56358b";
     } {};
     reflex = self.callCabal2nix "reflex" (rp.hackGet ./dep/reflex) {};
   };
