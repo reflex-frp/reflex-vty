@@ -10,7 +10,7 @@ let
     vty = self.callHackageDirect {
       pkg = "vty";
       ver = "6.1";
-      sha256 = "0000000000000000000000000000000000000000000000000000";
+      sha256 = "2cefcb5764f6b662440ba9e56c30282da37071b599a7def7fc8e5679f2602bf8";
     } {};
     vty-crossplatform = self.callHackageDirect {
       pkg = "vty-crossplatform";
