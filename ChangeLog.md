@@ -1,8 +1,7 @@
 # Revision history for reflex-vty
 
 ## Unreleased
-* bump max version for vty to latest (6.1)
-* bump max version for base to latest (4.19)
+* update to use latest version of vty (for cross-platform support)
   
 ## 0.5.1.0
 * Change `inputInFocusedRegion` to filter mouse scroll wheel input based on if the region under than the mouse rather than using mouse drag tracking
