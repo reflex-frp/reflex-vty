@@ -9,12 +9,12 @@ let
   commonOverrides = self: super: {
     vty = self.callHackageDirect {
       pkg = "vty";
-      ver = "6.2";
+      ver = "6.1";
       sha256 = "0000000000000000000000000000000000000000000000000000";
     } {};
     vty-crossplatform = self.callHackageDirect {
       pkg = "vty-crossplatform";
-      ver = "0.4";
+      ver = "0.4.0.0";
       sha256 = "0000000000000000000000000000000000000000000000000000";
     } {};
     reflex = self.callCabal2nix "reflex" (rp.hackGet ./dep/reflex) {};
