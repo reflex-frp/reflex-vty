@@ -17,11 +17,6 @@ let
       ver = "0.4.0.0";
       sha256 = "7b72e71b7a2e1a947f825a44a1fdea2e3e147944410c4286390aa4124a56358b";
     } {};
-    vty-windows = self.callHackageDirect {
-      pkg = "vty-windows";
-      ver = "0.2.0.1";
-      sha256 = "0000000000000000000000000000000000000000000000000000";
-    } {};
     vty-unix = self.callHackageDirect {
       pkg = "vty-unix";
       ver = "0.2.0.0";
