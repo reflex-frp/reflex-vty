@@ -25,7 +25,7 @@ let
     vty-unix = self.callHackageDirect {
       pkg = "vty-unix";
       ver = "0.2.0.0";
-      sha256 = "0000000000000000000000000000000000000000000000000000";
+      sha256 = "b03a315f1aa8f70e5e3aab36b88ed2e49cd646c56b1e34c195dae13c929ca926";
     } {};
     reflex = self.callCabal2nix "reflex" (rp.hackGet ./dep/reflex) {};
   };
