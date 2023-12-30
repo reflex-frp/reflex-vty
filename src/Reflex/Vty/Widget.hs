@@ -7,9 +7,10 @@ Description: Basic set of widgets and building blocks for reflex-vty application
 module Reflex.Vty.Widget where
 
 import Control.Applicative (liftA2)
+import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Morph
+import Control.Monad.Morph (MFunctor(..))
 import Control.Monad.NodeId
 import Control.Monad.Reader (ReaderT, ask, local, runReaderT)
 import Control.Monad.Ref
@@ -109,6 +110,9 @@ newtype Input t m a = Input
     , MonadFix
     , MonadIO
     , MonadRef
+    , MonadCatch
+    , MonadThrow
+    , MonadMask
     )
 
 instance (Adjustable t m, MonadHold t m, Reflex t) => Adjustable t (Input t m) where
@@ -202,20 +206,63 @@ mouseInRegion (Region l t w h) e = case e of
       | otherwise =
         Just (con (x - l) (y - t))
 
--- | Filter mouse input outside the current display region and
--- all input if the region is not focused
+-- |
+-- * 'Tracking' state means actively tracking the current stream of mouse events
+-- * 'NotTracking' state means not tracking the current stream of mouse events
+-- * 'WaitingForInput' means state will be set on next 'EvMouseDown' event
+data MouseTrackingState = Tracking V.Button | NotTracking | WaitingForInput deriving (Show, Eq)
+
+-- | Filter mouse input outside the current display region
+-- keyboard input is reported only if the region is focused
+-- scroll wheel input is reported only if the region is focused
+-- mouse input is reported if the mouse is in the region
+-- EXCEPT mouse drag sequences that start OFF the region are NOT reported
+-- AND mouse drag sequences that start ON the region and drag off ARE reported
 inputInFocusedRegion
-  :: (HasDisplayRegion t m, HasFocusReader t m, HasInput t m)
+  :: forall t m. (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasFocusReader t m, HasInput t m)
   => m (Event t VtyEvent)
 inputInFocusedRegion = do
   inp <- input
-  reg <- current <$> askRegion
+  regBeh <- current <$> askRegion
   foc <- current <$> focus
-  pure $ fmapMaybe id $ attachWith filterInput ((,) <$> reg <*> foc) inp
-  where
-    filterInput (r, f) = \case
-      V.EvKey {} | not f -> Nothing
-      x -> mouseInRegion r x
+  let
+    trackMouse ::
+      VtyEvent
+      -> (MouseTrackingState, Maybe VtyEvent)
+      -> PushM t (Maybe (MouseTrackingState, Maybe VtyEvent))
+    trackMouse e (tracking, _) = do
+      -- sampling (as oppose to using attachPromptlyDyn) is necessary here as the focus may change from the event produced here
+      focused <- sample foc
+      -- strictly speaking the same could also happen here too
+      reg@(Region l t _ _) <- sample regBeh
+      return $ case e of
+
+        -- filter keyboard input if region is not focused
+        V.EvKey _ _ | not focused -> Nothing
+
+        -- filter scroll wheel input based on mouse position
+        ev@(V.EvMouseDown x y btn m) | btn == V.BScrollUp || btn == V.BScrollDown -> case tracking of
+          trck@(Tracking _) -> Just (trck, Nothing)
+          _ -> Just (WaitingForInput, if withinRegion reg x y then Just (V.EvMouseDown (x - l) (y - t) btn m) else Nothing)
+
+        -- only do tracking for l/m/r mouse buttons
+        V.EvMouseDown x y btn m ->
+          if tracking == Tracking btn || (tracking == WaitingForInput && withinRegion reg x y)
+            then Just (Tracking btn, Just $ V.EvMouseDown (x - l) (y - t) btn m)
+            else Just (NotTracking, Nothing)
+        V.EvMouseUp x y mbtn -> case mbtn of
+          Nothing -> case tracking of
+            Tracking _ -> Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
+            _ -> Just (WaitingForInput, Nothing)
+          Just btn -> if tracking == Tracking btn
+            -- NOTE we only report EvMouseUp for the button we are tracking
+            -- vty has mouse buttons override others (seems to be based on ordering of Button) when multiple are pressed.
+            -- so it IS possible for child widget to miss out on a 'EvMouseUp' event with this current implementation
+            then Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
+            else Just (WaitingForInput, Nothing)
+        _ -> Just (tracking, Just e)
+  dynInputEvTracking <- foldDynMaybeM trackMouse (WaitingForInput, Nothing) $ inp
+  return (fmapMaybe snd $ updated dynInputEvTracking)
 
 -- * Getting and setting the display region
 
@@ -235,6 +282,21 @@ nilRegion = Region 0 0 0 0
 -- | The width and height of a 'Region'
 regionSize :: Region -> (Int, Int)
 regionSize (Region _ _ w h) = (w, h)
+
+-- | Check whether the x,y coordinates are within the specified region
+withinRegion
+  :: Region
+  -> Int
+  -- ^ x-coordinate
+  -> Int
+  -- ^ y-coordinate
+  -> Bool
+withinRegion (Region l t w h) x y = not . or $
+  [ x < l
+  , y < t
+  , x >= l + w
+  , y >= t + h
+  ]
 
 -- | Produces an 'Image' that fills a region with space characters
 regionBlankImage :: V.Attr -> Region -> Image
@@ -278,6 +340,9 @@ newtype DisplayRegion t m a = DisplayRegion
     , MonadIO
     , MonadRef
     , MonadSample t
+    , MonadCatch
+    , MonadThrow
+    , MonadMask
     )
 
 instance (Monad m, Reflex t) => HasDisplayRegion t (DisplayRegion t m) where
@@ -343,6 +408,9 @@ newtype FocusReader t m a = FocusReader
     , MonadIO
     , MonadRef
     , MonadSample t
+    , MonadCatch
+    , MonadThrow
+    , MonadMask
     )
 
 instance (Monad m, Reflex t) => HasFocusReader t (FocusReader t m) where
@@ -408,6 +476,9 @@ newtype ImageWriter t m a = ImageWriter
     , PerformEvent t
     , PostBuild t
     , TriggerEvent t
+    , MonadCatch
+    , MonadThrow
+    , MonadMask
     )
 
 instance MonadTrans (ImageWriter t) where
@@ -478,6 +549,9 @@ newtype ThemeReader t m a = ThemeReader
     , MonadIO
     , MonadRef
     , MonadSample t
+    , MonadCatch
+    , MonadThrow
+    , MonadMask
     )
 
 instance (Monad m, Reflex t) => HasTheme t (ThemeReader t m) where
@@ -540,11 +614,12 @@ imagesInRegion reg = liftA2 (\r is -> map (withinImage r) is) reg
 -- a given region and context. This widget filters and modifies the input
 -- that the child widget receives such that:
 -- * unfocused widgets receive no key events
--- * mouse inputs outside the region are ignored
 -- * mouse inputs inside the region have their coordinates translated such
 --   that (0,0) is the top-left corner of the region
+-- * mouse drag sequences that start OFF the region are ignored
+-- * mouse drag sequences that start ON the region and drag off are NOT ignored
 pane
-  :: (Reflex t, Monad m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
+  :: (MonadFix m, MonadHold t m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
   => Dynamic t Region
   -> Dynamic t Bool -- ^ Whether the widget should be focused when the parent is.
   -> m a

@@ -1,6 +1,8 @@
 import Control.Applicative
+import Control.Concurrent
 import Control.Monad
 import Control.Monad.Fix
+import Control.Monad.IO.Class
 import Data.Functor
 import Data.Functor.Misc
 import Data.Map (Map)
@@ -9,6 +11,7 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Zipper as TZ
+import Data.Time (getCurrentTime)
 import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Network
@@ -18,12 +21,14 @@ import Example.CPU
 
 type VtyExample t m =
   ( MonadFix m
+  , MonadHold t m
   , Reflex t
   , HasInput t m
   , HasImageWriter t m
   , HasDisplayRegion t m
   , HasFocus t m
-  , HasFocusReader t m, HasTheme t m
+  , HasFocusReader t m
+  , HasTheme t m
   )
 
 type Manager t m =
@@ -230,13 +235,46 @@ todos todos0 newTodo = do
 
 -- * Scrollable text example
 
-scrolling :: (VtyExample t m, MonadHold t m, Manager t m, PostBuild t m) => m ()
+scrolling
+  :: ( VtyExample t m
+     , MonadHold t m
+     , Manager t m
+     , PostBuild t m
+     , MonadIO (Performable m)
+     , TriggerEvent t m
+     , PerformEvent t m
+     )
+  => m ()
 scrolling = col $ do
   grout (fixed 2) $ text "Use your mouse wheel or up and down arrows to scroll:"
-  (fid, out) <- tile' (fixed 5) $ boxStatic def $ scrollableText never $ "Gallia est omnis divisa in partes tres, quarum unam incolunt Belgae, aliam Aquitani, tertiam qui ipsorum lingua Celtae, nostra Galli appellantur. Hi omnes lingua, institutis, legibus inter se differunt. Gallos ab Aquitanis Garumna flumen, a Belgis Matrona et Sequana dividit. Horum omnium fortissimi sunt Belgae, propterea quod a cultu atque humanitate provinciae longissime absunt, minimeque ad eos mercatores saepe commeant atque ea quae ad effeminandos animos pertinent important, proximique sunt Germanis, qui trans Rhenum incolunt, quibuscum continenter bellum gerunt. Qua de causa Helvetii quoque reliquos Gallos virtute praecedunt, quod fere cotidianis proeliis cum Germanis contendunt, cum aut suis finibus eos prohibent aut ipsi in eorum finibus bellum gerunt. Eorum una pars, quam Gallos obtinere dictum est, initium capit a flumine Rhodano, continetur Garumna flumine, Oceano, finibus Belgarum, attingit etiam ab Sequanis et Helvetiis flumen Rhenum, vergit ad septentriones. Belgae ab extremis Galliae finibus oriuntur, pertinent ad inferiorem partem fluminis Rheni, spectant in septentrionem et orientem solem. Aquitania a Garumna flumine ad Pyrenaeos montes et eam partem Oceani quae est ad Hispaniam pertinet; spectat inter occasum solis et septentriones.\nApud Helvetios longe nobilissimus fuit et ditissimus Orgetorix. Is M. Messala, [et P.] M. Pisone consulibus regni cupiditate inductus coniurationem nobilitatis fecit et civitati persuasit ut de finibus suis cum omnibus copiis exirent: perfacile esse, cum virtute omnibus praestarent, totius Galliae imperio potiri. Id hoc facilius iis persuasit, quod undique loci natura Helvetii continentur: una ex parte flumine Rheno latissimo atque altissimo, qui agrum Helvetium a Germanis dividit; altera ex parte monte Iura altissimo, qui est inter Sequanos et Helvetios; tertia lacu Lemanno et flumine Rhodano, qui provinciam nostram ab Helvetiis dividit. His rebus fiebat ut et minus late vagarentur et minus facile finitimis bellum inferre possent; qua ex parte homines bellandi cupidi magno dolore adficiebantur. Pro multitudine autem hominum et pro gloria belli atque fortitudinis angustos se fines habere arbitrabantur, qui in longitudinem milia passuum CCXL, in latitudinem CLXXX patebant."
+  (fid, out) <- tile' (fixed 5) $ boxStatic def $ scrollableText def $ "Gallia est omnis divisa in partes tres, quarum unam incolunt Belgae, aliam Aquitani, tertiam qui ipsorum lingua Celtae, nostra Galli appellantur. Hi omnes lingua, institutis, legibus inter se differunt. Gallos ab Aquitanis Garumna flumen, a Belgis Matrona et Sequana dividit. Horum omnium fortissimi sunt Belgae, propterea quod a cultu atque humanitate provinciae longissime absunt, minimeque ad eos mercatores saepe commeant atque ea quae ad effeminandos animos pertinent important, proximique sunt Germanis, qui trans Rhenum incolunt, quibuscum continenter bellum gerunt. Qua de causa Helvetii quoque reliquos Gallos virtute praecedunt, quod fere cotidianis proeliis cum Germanis contendunt, cum aut suis finibus eos prohibent aut ipsi in eorum finibus bellum gerunt. Eorum una pars, quam Gallos obtinere dictum est, initium capit a flumine Rhodano, continetur Garumna flumine, Oceano, finibus Belgarum, attingit etiam ab Sequanis et Helvetiis flumen Rhenum, vergit ad septentriones. Belgae ab extremis Galliae finibus oriuntur, pertinent ad inferiorem partem fluminis Rheni, spectant in septentrionem et orientem solem. Aquitania a Garumna flumine ad Pyrenaeos montes et eam partem Oceani quae est ad Hispaniam pertinet; spectat inter occasum solis et septentriones.\nApud Helvetios longe nobilissimus fuit et ditissimus Orgetorix. Is M. Messala, [et P.] M. Pisone consulibus regni cupiditate inductus coniurationem nobilitatis fecit et civitati persuasit ut de finibus suis cum omnibus copiis exirent: perfacile esse, cum virtute omnibus praestarent, totius Galliae imperio potiri. Id hoc facilius iis persuasit, quod undique loci natura Helvetii continentur: una ex parte flumine Rheno latissimo atque altissimo, qui agrum Helvetium a Germanis dividit; altera ex parte monte Iura altissimo, qui est inter Sequanos et Helvetios; tertia lacu Lemanno et flumine Rhodano, qui provinciam nostram ab Helvetiis dividit. His rebus fiebat ut et minus late vagarentur et minus facile finitimis bellum inferre possent; qua ex parte homines bellandi cupidi magno dolore adficiebantur. Pro multitudine autem hominum et pro gloria belli atque fortitudinis angustos se fines habere arbitrabantur, qui in longitudinem milia passuum CCXL, in latitudinem CLXXX patebant."
   pb <- getPostBuild
   requestFocus $ Refocus_Id fid <$ pb
-  grout (fixed 1) $ text $ ffor out $ \(ix, total) -> "Scrolled to line " <> T.pack (show ix) <> " of " <> T.pack (show total)
+  grout (fixed 1) $ text $ ffor (_scrollable_scrollPosition out) $ \p -> "Scrolled to " <> case p of
+    ScrollPos_Top -> "top"
+    ScrollPos_Bottom -> "bottom"
+    ScrollPos_Line n -> "line " <> T.pack (show n)
+  e <- performEventAsync $ ffor pb $ \_ cb -> liftIO $ void $ forkIO $ forever $ do
+    threadDelay 1000000
+    t <- getCurrentTime
+    cb $ [T.pack $ show t]
+  xs <- foldDyn (flip (<>)) [] e
+  grout (fixed 3) blank
+  tile (fixed 10) $ col $ do
+    grout (fixed 1) $ text "This one scrolls automatically as the output grows:"
+    Scrollable pos total h <- tile flex $
+      scrollableText (ScrollableConfig never never ScrollPos_Bottom (pure $ Just ScrollToBottom_Maintain)) $
+        T.unlines <$> xs
+    grout (fixed 5) $ boxStatic def $ do
+      grout (fixed 1) $ row $ do
+        grout (fixed 8) (text "Height:")
+        grout flex $ display h
+      grout (fixed 1) $ row $ do
+        grout (fixed 8) $ text "Scroll:"
+        grout flex $ display pos
+      grout (fixed 1) $ row $ do
+        grout (fixed 8) $ text "Length:"
+        grout flex $ display total
 
 --  * Text editor example with resizable boxes
 

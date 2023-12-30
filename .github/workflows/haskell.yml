@@ -6,18 +6,19 @@ jobs:
   build:
     strategy:
       matrix:
-        ghc: ['8.4.4', '8.6.5', '8.8.4', '8.10.2']
+        ghc: ['8.4.4', '8.6.5', '8.8.4', '8.10.7', '9.4.5', '9.6.1']
         os: ['ubuntu-latest', 'macos-latest']
     runs-on: ${{ matrix.os }}
 
     name: GHC ${{ matrix.ghc }} on ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-haskell@v1
+    - uses: actions/checkout@v3
+    - uses: haskell/actions/setup@v2
       with:
         ghc-version: ${{ matrix.ghc }}
+        cabal-version: '3.10.1.0'
     - name: Cache
-      uses: actions/cache@v1
+      uses: actions/cache@v3
       env:
         cache-name: cache-cabal
       with:
@@ -30,12 +31,12 @@ jobs:
           ${{ runner.os }}
 
     - name: Install dependencies
-      run: |
-        cabal update
-        cabal build --only-dependencies --enable-tests --enable-benchmarks
+      run: cabal build --only-dependencies --enable-tests --enable-benchmarks
     - name: Build
       run: cabal build --enable-tests --enable-benchmarks all
     - name: Run tests
       run: cabal test all
-    - name: Build Docs
+    - if: matrix.ghc != '8.4.4'
+      # disable doc builds on older ghcs because some dependency docs aren't compatible
+      name: Build Docs
       run: cabal haddock

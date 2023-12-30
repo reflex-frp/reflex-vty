@@ -11,7 +11,7 @@ import Data.Text.Zipper as TZ
 import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Vty.Widget
-import Reflex.Vty.Widget.Input.Mouse
+import Reflex.Vty.Widget.Scroll
 
 -- | Fill the background with a particular character.
 fill :: (HasDisplayRegion t m, HasImageWriter t m, HasTheme t m) => Behavior t Char -> m ()
@@ -64,39 +64,6 @@ text t = do
   bt <- theme
   richText (RichTextConfig bt) t
 
--- | Scrollable text widget. The output pair exposes the current scroll position and total number of lines (including those
--- that are hidden)
-scrollableText
-  :: forall t m. (Reflex t, MonadHold t m, MonadFix m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasTheme t m)
-  => Event t Int
-  -- ^ Number of lines to scroll by
-  -> Behavior t Text
-  -> m (Behavior t (Int, Int))
-  -- ^ (Current scroll position, total number of lines)
-scrollableText scrollBy t = do
-  dw <- displayWidth
-  bt <- theme
-  let imgs = wrap <$> bt <*> current dw <*> t
-  kup <- key V.KUp
-  kdown <- key V.KDown
-  m <- mouseScroll
-  let requestedScroll :: Event t Int
-      requestedScroll = leftmost
-        [ 1 <$ kdown
-        , (-1) <$ kup
-        , ffor m $ \case
-            ScrollDirection_Up -> (-1)
-            ScrollDirection_Down -> 1
-        , scrollBy
-        ]
-      updateLine maxN delta ix = min (max 0 (ix + delta)) maxN
-  lineIndex :: Dynamic t Int <- foldDyn (\(maxN, delta) ix -> updateLine (maxN - 1) delta ix) 0 $
-    attach (length <$> imgs) requestedScroll
-  tellImages $ fmap ((:[]) . V.vertCat) $ drop <$> current lineIndex <*> imgs
-  return $ (,) <$> ((+) <$> current lineIndex <*> pure 1) <*> (length <$> imgs)
-  where
-    wrap attr maxWidth = concatMap (fmap (V.string attr . T.unpack) . TZ.wrapWithOffset maxWidth 0) . T.split (=='\n')
-
 -- | Renders any behavior whose value can be converted to
 -- 'String' as text
 display
@@ -104,3 +71,15 @@ display
   => Behavior t a
   -> m ()
 display a = text $ T.pack . show <$> a
+
+-- | Scrollable text widget. The output exposes the current scroll position and
+-- total number of lines (including those that are hidden)
+scrollableText
+  :: forall t m. (Reflex t, MonadHold t m, MonadFix m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasTheme t m, PostBuild t m)
+  => ScrollableConfig t
+  -> Dynamic t Text
+  -> m (Scrollable t)
+scrollableText cfg t = do
+  scrollable cfg $ do
+    ((), images) <- runImageWriter $ text (current t)
+    pure $ (V.vertCat <$> images, () <$ updated t)

@@ -10,6 +10,7 @@ module Reflex.Vty.Widget.Input.Text
 import Control.Monad (join)
 import Control.Monad.Fix (MonadFix)
 import Data.Default (Default(..))
+import Data.Function ((&))
 import Data.Text (Text)
 import Data.Text.Zipper
 import qualified Graphics.Vty as V
@@ -23,7 +24,29 @@ import Reflex.Vty.Widget.Input.Mouse
 -- 'TextZipper', see 'Data.Text.Zipper'.
 data TextInputConfig t = TextInputConfig
   { _textInputConfig_initialValue :: TextZipper
+  -- ^ Initial value. This is a 'TextZipper' because it is more flexible
+  -- than plain 'Text'. For example, this allows to set the Cursor position,
+  -- by choosing appropriate values for '_textZipper_before' and '_textZipper_after'.
   , _textInputConfig_modify :: Event t (TextZipper -> TextZipper)
+  -- ^ Event to update the value of the 'textInput'.
+  --
+  -- Event is applied after other Input sources have been applied to the 'TextZipper',
+  -- thus you may modify the final value that is displayed to the user.
+  --
+  -- You may set the value of the displayed text in 'textInput' by ignoring the input parameter.
+  --
+  -- Additionally, you can modify the updated value before displaying it to the user.
+  -- For example, the following 'TextInputConfig' inserts an additional 'a'
+  -- when the letter 'b' is entered into 'textInput':
+  --
+  -- @
+  --   i <- input
+  --   textInput def
+  --     { _textInputConfig_modify = fforMaybe i $ \case
+  --         V.EvKey (V.KChar 'b') _ -> Just (insert "a")
+  --         _ -> Nothing
+  --     }
+  -- @
   , _textInputConfig_tabWidth :: Int
   , _textInputConfig_display :: Dynamic t (Char -> Char)
   -- ^ Transform the characters in a text input before displaying them. This is useful, e.g., for
@@ -38,6 +61,11 @@ instance Reflex t => Default (TextInputConfig t) where
 -- display lines may not be visible due to scrolling.
 data TextInput t = TextInput
   { _textInput_value :: Dynamic t Text
+  -- ^ The current value of the textInput as Text.
+  , _textInput_userInput :: Event t TextZipper
+  -- ^ UI Event updates with the current 'TextZipper'.
+  -- This does not include Events added by '_textInputConfig_setValue', but
+  -- it does include '_textInputConfig_modify' Events.
   , _textInput_lines :: Dynamic t Int
   }
 
@@ -53,12 +81,19 @@ textInput cfg = do
   dw <- displayWidth
   bt <- theme
   attr0 <- sample bt
-  rec v <- foldDyn ($) (_textInputConfig_initialValue cfg) $ mergeWith (.)
-        [ uncurry (updateTextZipper (_textInputConfig_tabWidth cfg)) <$> attach (current dh) i
-        , _textInputConfig_modify cfg
-        , let displayInfo = (,) <$> current rows <*> scrollTop
-          in ffor (attach displayInfo click) $ \((dl, st), MouseDown _ (mx, my) _) ->
-            goToDisplayLinePosition mx (st + my) dl
+  rec
+      -- we split up the events from vty and the one users provide to avoid cyclical
+      -- update dependencies. This way, users may subscribe only to UI updates.
+      let valueChangedByCaller = _textInputConfig_modify cfg
+      let valueChangedByUI = mergeWith (.)
+            [ uncurry (updateTextZipper (_textInputConfig_tabWidth cfg)) <$> attach (current dh) i
+            , let displayInfo = (,) <$> current rows <*> scrollTop
+              in ffor (attach displayInfo click) $ \((dl, st), MouseDown _ (mx, my) _) ->
+                goToDisplayLinePosition mx (st + my) dl
+            ]
+      v <- foldDyn ($) (_textInputConfig_initialValue cfg) $ mergeWith (.)
+        [ valueChangedByCaller
+        , valueChangedByUI
         ]
       click <- mouseDown V.BLeft
 
@@ -85,6 +120,7 @@ textInput cfg = do
       tellImages $ (\imgs st -> (:[]) . V.vertCat $ drop st imgs) <$> current img <*> scrollTop
   return $ TextInput
     { _textInput_value = value <$> v
+    , _textInput_userInput = attachWith (&) (current v) valueChangedByUI
     , _textInput_lines = length . _displayLines_spans <$> rows
     }
 
@@ -108,7 +144,7 @@ multilineTextInput cfg = do
 -- the computed line count to greedily size the tile when vertically
 -- oriented, and uses the fallback width when horizontally oriented.
 textInputTile
-  :: (Monad m, Reflex t, MonadFix m, HasLayout t m, HasInput t m, HasFocus t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m)
+  :: (MonadFix m, MonadHold t m, HasLayout t m, HasInput t m, HasFocus t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m)
   => m (TextInput t)
   -> Dynamic t Int
   -> m (TextInput t)

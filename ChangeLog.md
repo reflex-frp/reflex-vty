@@ -3,6 +3,61 @@
 ## Unreleased
 * bump max version for vty to latest (6.1)
 * bump max version for base to latest (4.19)
+  
+## 0.5.1.0
+* Change `inputInFocusedRegion` to filter mouse scroll wheel input based on if the region under than the mouse rather than using mouse drag tracking
+* Add MonadCatch, MonadThrow, and MonadMask instances (relies on reflex-0.9.2.0 or greater)
+
+## 0.5.0.0
+
+* *Breaking change*:
+  * `scrollableText` now takes a `ScrollableConfiguration` instead of just an `Event t Int` of lines to scroll by. Replacing a `scrollableText myEvent` invocation with `scrollableText (def { _scrollableConfig_scrollBy = myEvent })` should recover the old behavior.
+  * `scrollableText` now returns a `Scrollable t` instead of a `Behavior (Int, Int)`. The second `Int`, representing the total number of lines, is part of the `Scrollable` record. The first `Int`, representing the current scroll position is replaced by the `ScrollPos` in the `Scrollable` output. `ScrollPos` is a new type that captures whether a `scrollableText` is scrolled to the very top, very bottom, or somewhere in between.
+* `scrollableText` can now be given a starting scroll position and an event that scrolls it to a particular position.
+* `scrollableText` can be configured to remain scrolled to the bottom on new output, either always or whenever the user is scrolled to the bottom and new output appears.
+* Added a new `scrollable` widget in `Reflex.Vty.Widget.Scroll` that allows vertical scrolling when an `Image` is taller than the widget's height.
+* Add `ctrlc`, a convenience function that returns an event that fires when a Ctrl+c keypress is detected
+* Fix several issues with wide chars, cursor position and word wrapping in Zipper.hs
+* Add `centerText` function to Reflex.Vty.Widget.Box
+
+## 0.4.1.1
+
+* Support ghc-9.6
+
+## 0.4.1.0
+
+* Loosen version bounds and support GHC 9.4.4
+* Add `MonadHold t (Performable m)` and `MonadFix (Performable m)` instances to `MonadVtyApp`
+
+## 0.4.0.0
+
+* _Breaking Changes_:
+  * Added mouse tracking to the behavior of `pane` such that
+    * Mouse actions that start outside of the region are not tracked
+    * Mouse drag sequences that start OFF the region are NOT reported
+    * Mouse drag sequences that start ON the region and drag off ARE reported
+    * Introduce `MonadHold` constraint to `pane`
+  * Added `MonadHold` constraint to several methods that use `pane`
+
+## 0.3.1.1
+
+* Loosen version bounds and support GHC 9.4
+
+## 0.3.1.0
+
+* Replace `mempty` with `defAttr` for Attr from Graphics.Vty to make it compatible with vty-5.34
+
+## 0.3.0.0
+
+* Re-design `textInput`, `TextInput` and `TextInputConfig`.
+  * Allows users to implement more complex behavior.
+  * `_textInputConfig_modify` is now applied to the text-value of `textInput`
+    after user input events such as mouse clicks and keyboard input.
+    This may change the observable behavior.
+
+## 0.2.0.1
+
+* Loosen version bounds on ref-tf and vty
 
 ## 0.2.0.0
 

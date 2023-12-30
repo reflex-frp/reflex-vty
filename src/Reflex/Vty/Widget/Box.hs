@@ -3,6 +3,7 @@
 -}
 module Reflex.Vty.Widget.Box where
 
+import Control.Monad.Fix (MonadFix)
 import Data.Default
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -54,7 +55,7 @@ roundedBoxStyle :: BoxStyle
 roundedBoxStyle = BoxStyle '╭' '─' '╮' '│' '╯' '─' '╰' '│'
 
 -- | Draws a titled box in the provided style and a child widget inside of that box
-boxTitle :: (Monad m, Reflex t ,HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m, HasTheme t m)
+boxTitle :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m, HasTheme t m)
     => Behavior t BoxStyle
     -> Behavior t Text
     -> m a
@@ -78,7 +79,7 @@ boxTitle boxStyle title child = do
           sides =
             [ withinImage (Region (left + 1) top (width - 2) 1) $
                 V.text' attr $
-                  hPadText title' (_boxStyle_n style) (width - 2)
+                  centerText title' (_boxStyle_n style) (width - 2)
             , withinImage (Region right (top + 1) 1 (height - 2)) $
                 V.charFill attr (_boxStyle_e style) 1 (height - 2)
             , withinImage (Region (left + 1) bottom (width - 2) 1) $
@@ -97,19 +98,26 @@ boxTitle boxStyle title child = do
                 V.char attr (_boxStyle_sw style)
             ]
       in sides ++ if width > 1 && height > 1 then corners else []
-    hPadText :: T.Text -> Char -> Int -> T.Text
-    hPadText t c l = if lt >= l
-                     then t
-                     else left <> t <> right
-      where
-        lt = T.length t
-        delta = l - lt
-        mkHalf n = T.replicate (n `div` 2) (T.singleton c)
-        left = mkHalf $ delta + 1
-        right = mkHalf delta
+
+-- | Pad text  on the left and right with the given character so that it is
+-- centered
+centerText
+  :: T.Text -- ^ Text to center
+  -> Char -- ^ Padding character
+  -> Int -- ^ Width
+  -> T.Text -- ^ Padded text
+centerText t c l = if lt >= l
+                 then t
+                 else left <> t <> right
+  where
+    lt = T.length t
+    delta = l - lt
+    mkHalf n = T.replicate (n `div` 2) (T.singleton c)
+    left = mkHalf $ delta + 1
+    right = mkHalf delta
 
 -- | A box without a title
-box :: (Monad m, Reflex t, HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m, HasTheme t m)
+box :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m, HasTheme t m)
     => Behavior t BoxStyle
     -> m a
     -> m a
@@ -117,7 +125,7 @@ box boxStyle = boxTitle boxStyle mempty
 
 -- | A box whose style is static
 boxStatic
-  :: (Monad m, Reflex t, HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m, HasTheme t m)
+  :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m, HasTheme t m)
   => BoxStyle
   -> m a
   -> m a

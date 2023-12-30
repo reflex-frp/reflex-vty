@@ -1,6 +1,6 @@
 # reflex-vty
 
-[![Haskell](https://img.shields.io/badge/language-Haskell-orange.svg)](https://haskell.org) [![Hackage](https://img.shields.io/hackage/v/reflex-vty.svg)](https://hackage.haskell.org/package/reflex-vty) [![Hackage CI](https://matrix.hackage.haskell.org/api/v2/packages/reflex-vty/badge)](https://matrix.hackage.haskell.org/#/package/reflex-vty) [![Travis CI](https://api.travis-ci.org/reflex-frp/reflex-vty.svg?branch=develop)](https://travis-ci.org/reflex-frp/reflex-vty) [![BSD3 License](https://img.shields.io/badge/license-BSD3-blue.svg)](https://github.com/reflex-frp/reflex-vty/blob/master/LICENSE)
+[![Haskell](https://img.shields.io/badge/language-Haskell-orange.svg)](https://haskell.org) [![Hackage](https://img.shields.io/hackage/v/reflex-vty.svg)](https://hackage.haskell.org/package/reflex-vty) [![BSD3 License](https://img.shields.io/badge/license-BSD3-blue.svg)](https://github.com/reflex-frp/reflex-vty/blob/master/LICENSE)
 
 Build terminal applications using functional reactive programming (FRP) with [Reflex FRP](https://reflex-frp.org).
 
@@ -26,6 +26,17 @@ From within the nix-shell you can:
 * Build the docs: `cabal haddock`
 * Run ghcid for immediate compiler feedback when you save a .hs file: `ghcid -c "cabal repl reflex-vty --ghc-options=-Wall"`
 * etc.
+
+##### Selecting a compiler
+
+When entering the nix-shell, you can select from the following compilers: ghc-8.10.7 and ghc-9.4.3. By default, ghc-8.10.7 is selected. To enter a shell with ghc-9.4.3, run:
+
+```bash
+nix-shell --argstr compiler ghc943
+```
+
+You may need to run `cabal clean` and `cabal configure -w ghc-9.4.3` if you were previously working on the project with a different compiler.
+
 
 #### With cabal
 

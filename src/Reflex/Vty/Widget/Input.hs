@@ -14,6 +14,7 @@ import Reflex.Vty.Widget.Input.Text as Export
 import Control.Monad (join)
 import Control.Monad.Fix (MonadFix)
 import Data.Default (Default(..))
+import Data.List (foldl')
 import Data.Text (Text)
 import qualified Graphics.Vty as V
 import Reflex
@@ -34,7 +35,7 @@ instance Reflex t => Default (ButtonConfig t) where
 
 -- | A button widget that contains a sub-widget
 button
-  :: (Reflex t, Monad m, HasFocusReader t m, HasTheme t m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m)
+  :: (MonadFix m, MonadHold t m, HasFocusReader t m, HasTheme t m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m)
   => ButtonConfig t
   -> m ()
   -> m (Event t ())
@@ -52,7 +53,7 @@ button cfg child = do
 
 -- | A button widget that displays text that can change
 textButton
-  :: (Reflex t, Monad m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m, HasImageWriter t m, HasInput t m)
+  :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m, HasImageWriter t m, HasInput t m)
   => ButtonConfig t
   -> Behavior t Text
   -> m (Event t ())
@@ -60,7 +61,7 @@ textButton cfg = button cfg . text -- TODO Centering etc.
 
 -- | A button widget that displays a static bit of text
 textButtonStatic
-  :: (Reflex t, Monad m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m, HasImageWriter t m, HasInput t m)
+  :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m, HasImageWriter t m, HasInput t m)
   => ButtonConfig t
   -> Text
   -> m (Event t ())
@@ -144,15 +145,27 @@ checkbox cfg v0 = do
     , not <$ space
     , const <$> _checkboxConfig_setValue cfg
     ]
-  let bold = V.withStyle mempty V.bold
-  depressed <- hold mempty $ leftmost
-    [ bold <$ md
-    , mempty <$ mu
+  depressed <- hold V.defaultStyleMask $ leftmost
+    [ V.bold <$ md
+    , V.defaultStyleMask <$ mu
     ]
-  let focused = ffor (current f) $ \x -> if x then bold else mempty
-  let attrs = mconcat <$> sequence [_checkboxConfig_attributes cfg, depressed, focused]
+  let focused = ffor (current f) $ \x -> if x then V.bold else V.defaultStyleMask
+  let attrs = combineStyles
+        <$> _checkboxConfig_attributes cfg
+        <*> sequence [depressed, focused]
   richText (RichTextConfig attrs) $ join . current $ ffor v $ \checked ->
     if checked
       then _checkboxStyle_checked <$> _checkboxConfig_checkboxStyle cfg
       else _checkboxStyle_unchecked <$> _checkboxConfig_checkboxStyle cfg
   return v
+  where
+    combineStyles :: V.Attr -> [V.Style] -> V.Attr
+    combineStyles x xs = foldl' V.withStyle x xs
+
+-- | The ctrl-c keypress event
+ctrlc :: (Monad m, HasInput t m, Reflex t) => m (Event t ())
+ctrlc = do
+  inp <- input
+  return $ fforMaybe inp $ \case
+    V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
+    _ -> Nothing

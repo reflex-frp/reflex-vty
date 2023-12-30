@@ -16,6 +16,7 @@ import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.Chan (newChan, readChan, writeChan)
 import Control.Exception (onException)
 import Control.Monad (forM, forM_, forever)
+import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
 import Control.Monad.Fix (MonadFix, fix)
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Control.Monad.Identity (Identity(..))
@@ -48,21 +49,26 @@ data VtyResult t = VtyResult
 -- on why each of these are necessary and how they can be fulfilled.
 type MonadVtyApp t m =
   ( Reflex t
-  , MonadHold t m
-  , MonadFix m
-  , PrimMonad (HostFrame t)
-  , ReflexHost t
-  , MonadIO (HostFrame t)
-  , Ref m ~ IORef
-  , Ref (HostFrame t) ~ IORef
-  , MonadRef (HostFrame t)
-  , NotReady t m
-  , TriggerEvent t m
-  , PostBuild t m
-  , PerformEvent t m
-  , MonadIO m
-  , MonadIO (Performable m)
   , Adjustable t m
+  , MonadCatch m
+  , MonadFix (Performable m)
+  , MonadFix m
+  , MonadHold t (Performable m)
+  , MonadHold t m
+  , MonadIO (HostFrame t)
+  , MonadIO (Performable m)
+  , MonadIO m
+  , MonadMask m
+  , MonadRef (HostFrame t)
+  , MonadThrow m
+  , NotReady t m
+  , PerformEvent t m
+  , PostBuild t m
+  , PrimMonad (HostFrame t)
+  , Ref (HostFrame t) ~ IORef
+  , Ref m ~ IORef
+  , ReflexHost t
+  , TriggerEvent t m
   )
 
 -- | A functional reactive vty application.

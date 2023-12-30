@@ -117,6 +117,7 @@ cpuStats = do
 
 chart
   :: ( MonadFix m
+     , MonadHold t m
      , HasFocus t m
      , HasLayout t m
      , HasImageWriter t m
