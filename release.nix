@@ -9,7 +9,12 @@ let
   commonOverrides = self: super: {
     vty = self.callHackageDirect {
       pkg = "vty";
-      ver = "5.38";
+      ver = "6.2";
+      sha256 = "0kcd3ln9xmc62ka0i7habzvjjar8z63mlvl15rdhf8hqmda0b7r7";
+    } {};
+    vty-crossplatform = self.callHackageDirect {
+      pkg = "vty-crossplatform";
+      ver = "0.4";
       sha256 = "0kcd3ln9xmc62ka0i7habzvjjar8z63mlvl15rdhf8hqmda0b7r7";
     } {};
     reflex = self.callCabal2nix "reflex" (rp.hackGet ./dep/reflex) {};
@@ -74,16 +79,6 @@ let
           pkg = "strict";
           ver = "0.5";
           sha256 = "02iyvrr7nd7fnivz78lzdchy8zw1cghqj1qx2yzbbb9869h1mny7";
-        } {};
-        vty = self.callHackageDirect {
-          pkg = "vty";
-          ver = "6.2";
-          sha256 = "0kcd3ln9xmc62ka0i7habzvjjar8z63mlvl15rdhf8hqmda0b7r7";
-        } {};
-        vty-crossplatform = self.callHackageDirect {
-          pkg = "vty-crossplatform";
-          ver = "0.4";
-          sha256 = "0kcd3ln9xmc62ka0i7habzvjjar8z63mlvl15rdhf8hqmda0b7r7";
         } {};
 
 
