@@ -22,6 +22,11 @@ let
       ver = "0.2.0.0";
       sha256 = "b03a315f1aa8f70e5e3aab36b88ed2e49cd646c56b1e34c195dae13c929ca926";
     } {};
+    bimap = self.callHackageDirect {
+      pkg = "bimap";
+      ver = "0.4.0";
+      sha256 = "160zqqhjg48fr3a33gffd82qm3728c8hwf8sn37pbpv82fw71rzg";
+    } {};
     reflex = self.callCabal2nix "reflex" (rp.hackGet ./dep/reflex) {};
   };
   ghcs = lib.genAttrs supportedSystems (system: let
