@@ -41,7 +41,6 @@ library
                  , Control.Monad.NodeId
   build-depends:
     base >= 4.10.0 && < 4.20,
-    bimap >= 0.3.3 && < 0.5,
     bimap >= 0.3.3 && < 0.6,
     containers >= 0.5.0 && < 0.7,
     mtl >= 2.2.2 && < 2.4,
