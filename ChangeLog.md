@@ -1,9 +1,14 @@
 # Revision history for reflex-vty
 
+## Unreleased 0.5.1.1
+
+* Fix an issue where the cursor tag is not used for an empty string in `displayLineWithAlignment`
+  
 ## 0.5.1.0
 
 * Change `inputInFocusedRegion` to filter mouse scroll wheel input based on if the region under than the mouse rather than using mouse drag tracking
 * Add MonadCatch, MonadThrow, and MonadMask instances (relies on reflex-0.9.2.0 or greater)
+
 
 ## 0.5.0.0
 
