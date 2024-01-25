@@ -404,9 +404,11 @@ wrapWithOffsetAndAlignment alignment maxWidth n txt = assert (n <= maxWidth) r w
 
 -- | converts deleted eol spaces into logical lines
 eolSpacesToLogicalLines :: [[WrappedLine]] -> [[(Text, Int)]]
-eolSpacesToLogicalLines = fmap (fmap (\(WrappedLine a _ c) -> (a,c))) . ((L.groupBy (\(WrappedLine _ b _) _ -> not b)) =<<)
+eolSpacesToLogicalLines = fmap (fmap (\(WrappedLine a _ c) -> (a,c))) .  concatMap (L.groupBy (\(WrappedLine _ b _) _ -> not b))
 
--- | Convert logical lines to a map of displayed rows of aligned text
+offsetMapWithAlignmentInternal :: [[WrappedLine]] -> OffsetMapWithAlignment
+offsetMapWithAlignmentInternal = offsetMapWithAlignment . eolSpacesToLogicalLines
+
 offsetMapWithAlignment
   :: [[(Text, Int)]] -- ^ The outer list represents logical lines, inner list represents wrapped lines
   -> OffsetMapWithAlignment
@@ -423,9 +425,6 @@ offsetMapWithAlignment ts = evalState (offsetMap' ts) (0, 0)
       -- add additional offset to last line in wrapped lines (for newline char)
       return $ Map.adjust (\(align,_)->(align,o+1)) dl $ Map.unions maps
 
--- | Convert logical lines to a map of displayed rows of aligned text
-offsetMapWithAlignmentInternal :: [[WrappedLine]] -> OffsetMapWithAlignment
-offsetMapWithAlignmentInternal = offsetMapWithAlignment . eolSpacesToLogicalLines
 
 -- | Given a width and a 'TextZipper', produce a list of display lines
 -- (i.e., lines of wrapped text) with special attributes applied to
@@ -469,7 +468,7 @@ displayLinesWithAlignment alignment width tag cursorTag (TextZipper lb b a la) =
       -- map to spans and highlight the cursor
       -- accumulator type (accumulated text length, Either (current y position) (cursor y and x position))
       --mapaccumlfn :: (Int, Either Int (Int, Int)) -> WrappedLine -> ((Int, Either Int (Int, Int)), [Span tag])
-      mapaccumlfn (acclength, ecpos') (WrappedLine t dwseol xoff) = r where
+      mapaccumlfn (acclength, ecpos) (WrappedLine t dwseol xoff) = r where
         tlength = T.length t
         -- how many words we've gone through
         nextacclength = acclength + tlength + if dwseol then 1 else 0
@@ -478,7 +477,7 @@ displayLinesWithAlignment alignment width tag cursorTag (TextZipper lb b a la) =
         charsbeforecursor = blength-acclength
         ctlength = textWidth $ T.take charsbeforecursor t
         cursorx = xoff + ctlength
-        nextecpos = case ecpos' of
+        nextecpos = case ecpos of
           Left y -> if cursoroncurspan
             then if ctlength == width
               -- cursor wraps to next line case
@@ -496,15 +495,15 @@ displayLinesWithAlignment alignment width tag cursorTag (TextZipper lb b a la) =
         r = if cursoroncurspan
           then (nextacc, cursorspans)
           else (nextacc, [Span tag t])
-      ((_, ecpos), curlinespans) = if T.null curlinetext
+      ((_, ecpos_out), curlinespans) = if T.null curlinetext
         -- manually handle empty case because mapaccumlfn doesn't handle it
-        then ((0, Right (0, alignmentOffset alignment width "")), [[Span tag ""]])
+        then ((0, Right (0, alignmentOffset alignment width "")), [[Span cursorTag ""]])
         else L.mapAccumL mapaccumlfn (0, Left 0) curwrappedlines
 
-      (cursorY', cursorX) = case ecpos of
+      (cursorY', cursorX) = case ecpos_out of
         Right (y,x) -> (y,x)
         -- if we never hit the cursor position, this means it's at the beginning of the next line
-        Left y -> (y+1, alignmentOffset alignment width "")
+        Left y      -> (y+1, alignmentOffset alignment width "")
       cursorY = cursorY' + length spansBefore
 
   in  DisplayLines
