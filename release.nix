@@ -1,9 +1,9 @@
 { reflex-platform ? import ./dep/reflex-platform
+, supportedSystems ? [ "x86_64-linux" "x86_64-darwin" ]
 }:
 let
   rp = reflex-platform {};
   pkgs = rp.nixpkgs;
-  supportedSystems = [ "x86_64-linux" "x86_64-darwin" ];
   inherit (pkgs) lib;
   haskellLib = pkgs.haskell.lib;
   commonOverrides = self: super: {
@@ -21,11 +21,6 @@ let
       pkg = "vty-unix";
       ver = "0.2.0.0";
       sha256 = "b03a315f1aa8f70e5e3aab36b88ed2e49cd646c56b1e34c195dae13c929ca926";
-    } {};
-    bimap = self.callHackageDirect {
-      pkg = "bimap";
-      ver = "0.4.0";
-      sha256 = "160zqqhjg48fr3a33gffd82qm3728c8hwf8sn37pbpv82fw71rzg";
     } {};
     reflex = self.callCabal2nix "reflex" (rp.hackGet ./dep/reflex) {};
   };
@@ -95,7 +90,6 @@ let
         # Jailbroken until https://github.com/audreyt/string-qq/pull/3
         string-qq = haskellLib.dontCheck super.string-qq;
         # Tests aren't compatible with transformers-0.6
-        bimap = haskellLib.dontCheck super.bimap;
         exception-transformers = haskellLib.doJailbreak (haskellLib.dontCheck super.exception-transformers);
 
       };
