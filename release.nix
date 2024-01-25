@@ -1,16 +1,26 @@
 { reflex-platform ? import ./dep/reflex-platform
+, supportedSystems ? [ "x86_64-linux" "x86_64-darwin" ]
 }:
 let
   rp = reflex-platform {};
   pkgs = rp.nixpkgs;
-  supportedSystems = [ "x86_64-linux" "x86_64-darwin" ];
   inherit (pkgs) lib;
   haskellLib = pkgs.haskell.lib;
   commonOverrides = self: super: {
     vty = self.callHackageDirect {
       pkg = "vty";
-      ver = "5.38";
-      sha256 = "0kcd3ln9xmc62ka0i7habzvjjar8z63mlvl15rdhf8hqmda0b7r7";
+      ver = "6.1";
+      sha256 = "2cefcb5764f6b662440ba9e56c30282da37071b599a7def7fc8e5679f2602bf8";
+    } {};
+    vty-crossplatform = self.callHackageDirect {
+      pkg = "vty-crossplatform";
+      ver = "0.4.0.0";
+      sha256 = "7b72e71b7a2e1a947f825a44a1fdea2e3e147944410c4286390aa4124a56358b";
+    } {};
+    vty-unix = self.callHackageDirect {
+      pkg = "vty-unix";
+      ver = "0.2.0.0";
+      sha256 = "b03a315f1aa8f70e5e3aab36b88ed2e49cd646c56b1e34c195dae13c929ca926";
     } {};
     reflex = self.callCabal2nix "reflex" (rp.hackGet ./dep/reflex) {};
   };
@@ -38,7 +48,7 @@ let
       };
     };
     nixGhc961 = (import ./dep/nixpkgs { inherit system; }).haskell.packages.ghc961.override {
-      overrides = self: super: {
+      overrides = self: super: commonOverrides self super // {
 
         reflex = self.callCabal2nix "reflex" (rp.hackGet ./dep/reflex) {};
 
@@ -75,17 +85,11 @@ let
           ver = "0.5";
           sha256 = "02iyvrr7nd7fnivz78lzdchy8zw1cghqj1qx2yzbbb9869h1mny7";
         } {};
-        vty = self.callHackageDirect {
-          pkg = "vty";
-          ver = "5.38";
-          sha256 = "0kcd3ln9xmc62ka0i7habzvjjar8z63mlvl15rdhf8hqmda0b7r7";
-        } {};
 
 
         # Jailbroken until https://github.com/audreyt/string-qq/pull/3
         string-qq = haskellLib.dontCheck super.string-qq;
         # Tests aren't compatible with transformers-0.6
-        bimap = haskellLib.dontCheck super.bimap;
         exception-transformers = haskellLib.doJailbreak (haskellLib.dontCheck super.exception-transformers);
 
       };
