@@ -154,5 +154,5 @@ test-suite reflex-vty-test
     reflex-vty,
     text,
     extra,
-    hspec >= 2.7 && < 2.11
+    hspec >= 2.7 && < 2.12
   default-language: Haskell2010
