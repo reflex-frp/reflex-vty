@@ -9,8 +9,8 @@ let
   commonOverrides = self: super: {
     vty = self.callHackageDirect {
       pkg = "vty";
-      ver = "6.1";
-      sha256 = "2cefcb5764f6b662440ba9e56c30282da37071b599a7def7fc8e5679f2602bf8";
+      ver = "6.2";
+      sha256 = "sha256-7NePMONSoKJ/DQa4FSsFBy8ScGwWHU0nL7DomJCh+9Y=";
     } {};
     vty-crossplatform = self.callHackageDirect {
       pkg = "vty-crossplatform";
