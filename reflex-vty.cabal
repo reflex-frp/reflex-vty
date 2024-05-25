@@ -1,5 +1,5 @@
 name: reflex-vty
-version: 0.5.2.0
+version: 0.5.2.1
 synopsis: Reflex FRP host and widgets for VTY applications
 description:
   Build terminal applications using functional reactive programming (FRP) with Reflex FRP (<https://reflex-frp.org>).
