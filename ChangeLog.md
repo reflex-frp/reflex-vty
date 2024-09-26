@@ -1,5 +1,13 @@
 # Revision history for reflex-vty
 
+## Unreleased
+
+* Extend `textInput`, `TextInput` and `TextInputConfig`.
+  * Expose the current input position.
+  * Give the user control over input event interpretation.
+  * Allow the now-exposed input interpreter signal input errors.
+  * Provide means for input completion by the now-exposed interpreter.
+
 ## 0.5.2.1
 * Extend version bounds
 

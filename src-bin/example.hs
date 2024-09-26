@@ -185,10 +185,10 @@ todo t0 = row $ do
             i <- input
             v <- textInput $ def
               { _textInputConfig_initialValue = TZ.fromText $ _todo_label t0 }
-            let deleteSelf = attachWithMaybe backspaceOnEmpty (current $ _textInput_value v) i
+            let deleteSelf = attachWithMaybe backspaceOnEmpty (fmap snd . current $ _textInput_value v) i
             return (v, deleteSelf)
       return $ TodoOutput
-        { _todoOutput_todo = Todo <$> _textInput_value ti <*> value
+        { _todoOutput_todo = Todo <$> fmap snd (_textInput_value ti) <*> value
         , _todoOutput_delete = d
         , _todoOutput_height = _textInput_lines ti
         , _todoOutput_focusId = fid
