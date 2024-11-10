@@ -4,6 +4,7 @@ module Reflex.Vty.Widget.Scroll where
 
 import Control.Monad.Fix
 import Data.Default
+import Data.List (foldl')
 import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Vty.Widget
@@ -55,8 +56,7 @@ scrollable
   -> m (Scrollable t, a)
 scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend) mkImg = do
   ((update, a), imgs) <- captureImages mkImg
-  let img = V.vertCat <$> imgs
-  let sz = V.imageHeight <$> img
+  let sz = foldl' max 0 . fmap V.imageHeight <$> imgs
   kup <- key V.KUp
   kdown <- key V.KDown
   m <- mouseScroll
@@ -84,15 +84,19 @@ scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend) mkImg = do
         _ -> Nothing) <$> tag onAppend update
     ]
   let imgsToTell height scrollPos totalLines images = case scrollPos of
-        ScrollPos_Bottom -> V.translateY ((-1) * max 0 (totalLines - height)) images
+        ScrollPos_Bottom -> cropFromTop ((1) * max 0 (totalLines - height)) <$> images
         ScrollPos_Top -> images -- take height images
-        ScrollPos_Line n -> V.translateY ((-1) * n) images
-  tellImages $ fmap (:[]) $ imgsToTell <$> current dh <*> current lineIndex <*> sz <*> img
+        ScrollPos_Line n -> cropFromTop ((1) * max 0 n) <$> images
+  tellImages $ imgsToTell <$> current dh <*> current lineIndex <*> sz <*> imgs
   return $ (,a) $ Scrollable
     { _scrollable_scrollPosition = current lineIndex
     , _scrollable_totalLines = sz
     , _scrollable_scrollHeight = current dh
     }
+  where
+    cropFromTop :: Int -> V.Image -> V.Image
+    cropFromTop rows i =
+      V.cropTop (max 0 $ V.imageHeight i - rows) i
 
 -- | Modify the scroll position by the given number of lines
 scrollByLines :: ScrollPos -> Int -> Int -> Int -> ScrollPos

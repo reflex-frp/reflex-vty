@@ -65,7 +65,7 @@ main = mainWidget $ withCtrlC $ do
   initManager_ $ do
     tabNavigation
     let gf = grout . fixed
-        t = tile flex
+        t = tile (fixed 3)
         buttons = col $ do
           gf 3 $ col $ do
             gf 1 $ text "Select an example."
@@ -113,13 +113,19 @@ scrollingWithLayout
      , PerformEvent t m
      ) => m ()
 scrollingWithLayout = col $ do
-  scrollable def $ do
-    result <- boxTitle (constant def) (constant "Tracks") $ do
-      col $ forM [0..10] $ \n -> do
-        grout (fixed 1) $ do
-          textButtonStatic def $ T.pack (show n)
-        pure n
-    pure $ (never, result)
+  (s, x) <- tile flex $ boxTitle (constant def) (constant "Tracks") $ scrollable def $ do
+    result <- do
+      forM_ [(0::Int)..10] $ \n -> do
+        tile (fixed 5) $ do
+          tile (fixed 4) $ textButtonStatic def $ T.pack (show n)
+      askRegion
+    pure (never, result)
+  grout (fixed 1) $
+    text $ ("Total Lines: "<>) . T.pack . show <$> _scrollable_totalLines s
+  grout (fixed 1) $
+    text $ ("Scroll Pos: "<>) . T.pack . show <$> _scrollable_scrollPosition s
+  grout (fixed 1) $
+    text $ ("Scroll Height: "<>) . T.pack . show <$> _scrollable_scrollHeight s
   pure ()
 
 
