@@ -51,10 +51,11 @@ scrollable
   ( Reflex t, MonadHold t m, MonadFix m
   , HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasTheme t m)
   => ScrollableConfig t
-  -> (m (Behavior t V.Image, Event t (), a))
+  -> (m (Event t (), a))
   -> m (Scrollable t, a)
 scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend) mkImg = do
-  (img, update, a) <- mkImg
+  ((update, a), imgs) <- captureImages mkImg
+  let img = V.vertCat <$> imgs
   let sz = V.imageHeight <$> img
   kup <- key V.KUp
   kdown <- key V.KDown

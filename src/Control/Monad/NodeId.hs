@@ -6,7 +6,7 @@ Description: Monad providing a supply of unique identifiers
 module Control.Monad.NodeId
   ( NodeId
   , MonadNodeId (..)
-  , NodeIdT
+  , NodeIdT (..)
   , runNodeIdT
   ) where
 

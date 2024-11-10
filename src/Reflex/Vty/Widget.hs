@@ -2,19 +2,23 @@
 Module: Reflex.Vty.Widget
 Description: Basic set of widgets and building blocks for reflex-vty applications
 -}
+{-# Language ScopedTypeVariables #-}
 {-# Language UndecidableInstances #-}
+{-# Language PolyKinds #-}
+{-# Language RankNTypes #-}
 
 module Reflex.Vty.Widget where
 
 import Control.Applicative (liftA2)
-import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
+import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Morph (MFunctor(..))
 import Control.Monad.NodeId
-import Control.Monad.Reader (ReaderT, ask, local, runReaderT)
+import Control.Monad.Reader (ReaderT(..), ask, local, runReaderT)
 import Control.Monad.Ref
 import Control.Monad.Trans (MonadTrans, lift)
+import Control.Monad.Trans.State.Strict
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Graphics.Vty (Image)
@@ -129,7 +133,10 @@ deriving instance NotReady t m => NotReady t (Input t m)
 deriving instance PerformEvent t m => PerformEvent t (Input t m)
 deriving instance PostBuild t m => PostBuild t (Input t m)
 deriving instance TriggerEvent t m => TriggerEvent t (Input t m)
-instance HasImageWriter t m => HasImageWriter t (Input t m)
+instance HasImageWriter t m => HasImageWriter t (Input t m) where
+  captureImages x = do
+    a <- input
+    lift $ captureImages $ runInput a x
 instance HasDisplayRegion t m => HasDisplayRegion t (Input t m)
 instance HasFocusReader t m => HasFocusReader t (Input t m)
 
@@ -354,7 +361,10 @@ deriving instance NotReady t m => NotReady t (DisplayRegion t m)
 deriving instance PerformEvent t m => PerformEvent t (DisplayRegion t m)
 deriving instance PostBuild t m => PostBuild t (DisplayRegion t m)
 deriving instance TriggerEvent t m => TriggerEvent t (DisplayRegion t m)
-instance HasImageWriter t m => HasImageWriter t (DisplayRegion t m)
+instance HasImageWriter t m => HasImageWriter t (DisplayRegion t m) where
+  captureImages x = do
+    reg <- askRegion
+    lift $ captureImages $ runDisplayRegion reg x
 instance HasFocusReader t m => HasFocusReader t (DisplayRegion t m)
 
 instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (DisplayRegion t m) where
@@ -422,7 +432,10 @@ deriving instance NotReady t m => NotReady t (FocusReader t m)
 deriving instance PerformEvent t m => PerformEvent t (FocusReader t m)
 deriving instance PostBuild t m => PostBuild t (FocusReader t m)
 deriving instance TriggerEvent t m => TriggerEvent t (FocusReader t m)
-instance HasImageWriter t m => HasImageWriter t (FocusReader t m)
+instance HasImageWriter t m => HasImageWriter t (FocusReader t m) where
+  captureImages x = do
+    a <- focus
+    lift $ captureImages $ runFocusReader a x
 
 instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (FocusReader t m) where
   runWithReplace (FocusReader a) e = FocusReader $ runWithReplace a $ fmap unFocusReader e
@@ -449,7 +462,7 @@ runFocusReader b = flip runReaderT b . unFocusReader
 -- * "Image" output
 
 -- | A class for widgets that can produce images to draw to the display
-class (Reflex t, Monad m) => HasImageWriter t m | m -> t where
+class (Reflex t, Monad m) => HasImageWriter (t :: *) m | m -> t where
   -- | Send images upstream for rendering
   tellImages :: Behavior t [Image] -> m ()
   default tellImages :: (f m' ~ m, Monad m', MonadTrans f, HasImageWriter t m') => Behavior t [Image] -> m ()
@@ -458,6 +471,8 @@ class (Reflex t, Monad m) => HasImageWriter t m | m -> t where
   mapImages :: (Behavior t [Image] -> Behavior t [Image]) -> m a -> m a
   default mapImages :: (f m' ~ m, Monad m', MFunctor f, HasImageWriter t m') => (Behavior t [Image] -> Behavior t [Image]) -> m a -> m a
   mapImages f = hoist (mapImages f)
+  -- | Capture images, preventing them from being drawn
+  captureImages :: m a -> m (a, Behavior t [Image])
 
 -- | A widget that can produce images to draw onto the display
 newtype ImageWriter t m a = ImageWriter
@@ -493,11 +508,34 @@ instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (ImageWrite
   traverseDMapWithKeyWithAdjust f m e = ImageWriter $ traverseDMapWithKeyWithAdjust (\k v -> unImageWriter $ f k v) m e
   traverseDMapWithKeyWithAdjustWithMove f m e = ImageWriter $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unImageWriter $ f k v) m e
 
-instance HasImageWriter t m => HasImageWriter t (ReaderT x m)
-instance HasImageWriter t m => HasImageWriter t (BehaviorWriterT t x m)
-instance HasImageWriter t m => HasImageWriter t (DynamicWriterT t x m)
-instance HasImageWriter t m => HasImageWriter t (EventWriterT t x m)
-instance HasImageWriter t m => HasImageWriter t (NodeIdT m)
+instance HasImageWriter t m => HasImageWriter t (ReaderT x m) where
+  captureImages x = do
+    a <- ask
+    lift $ captureImages $ runReaderT x a
+instance HasImageWriter t m => HasImageWriter t (BehaviorWriterT t x m) where
+  captureImages (BehaviorWriterT x) = BehaviorWriterT $ do
+    s <- get
+    ((result, s'), images) <- lift $ captureImages $ runStateT x s
+    put s'
+    return (result, images)
+instance HasImageWriter t m => HasImageWriter t (DynamicWriterT t x m) where
+  captureImages (DynamicWriterT x) = DynamicWriterT $ do
+    s <- get
+    ((result, s'), images) <- lift $ captureImages $ runStateT x s
+    put s'
+    return (result, images)
+
+instance HasImageWriter t m => HasImageWriter t (EventWriterT t x m) where
+  captureImages (EventWriterT x) = EventWriterT $ do
+    s <- get
+    ((result, s'), images) <- lift $ captureImages $ runStateT x s
+    put s'
+    return (result, images)
+
+instance HasImageWriter t m => HasImageWriter t (NodeIdT m) where
+  captureImages x = NodeIdT $ do
+    ref <- ask
+    lift $ captureImages $ flip runReaderT ref . unNodeIdT  $ x
 
 instance (Monad m, Reflex t) => HasImageWriter t (ImageWriter t m) where
   tellImages = ImageWriter . tellBehavior
@@ -505,6 +543,9 @@ instance (Monad m, Reflex t) => HasImageWriter t (ImageWriter t m) where
     (a, images) <- lift $ runBehaviorWriterT x
     tellBehavior $ f images
     pure a
+  captureImages (ImageWriter x) = ImageWriter $ do
+    lift $ runBehaviorWriterT x
+
 
 instance HasDisplayRegion t m => HasDisplayRegion t (ImageWriter t m)
 instance HasFocusReader t m => HasFocusReader t (ImageWriter t m)
@@ -563,7 +604,10 @@ deriving instance NotReady t m => NotReady t (ThemeReader t m)
 deriving instance PerformEvent t m => PerformEvent t (ThemeReader t m)
 deriving instance PostBuild t m => PostBuild t (ThemeReader t m)
 deriving instance TriggerEvent t m => TriggerEvent t (ThemeReader t m)
-instance HasImageWriter t m => HasImageWriter t (ThemeReader t m)
+instance HasImageWriter t m => HasImageWriter t (ThemeReader t m) where
+  captureImages x = ThemeReader $ do
+    a <- ask
+    lift $ captureImages $ flip runReaderT a $ unThemeReader x
 
 instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (ThemeReader t m) where
   runWithReplace (ThemeReader a) e = ThemeReader $ runWithReplace a $ fmap unThemeReader e
