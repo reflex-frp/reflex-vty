@@ -47,12 +47,14 @@ data Scrollable t = Scrollable
 -- | Scrollable widget. The output exposes the current scroll position and
 -- total number of lines (including those that are hidden)
 scrollable
-  :: forall t m. (Reflex t, MonadHold t m, MonadFix m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasTheme t m)
+  :: forall t m a.
+  ( Reflex t, MonadHold t m, MonadFix m
+  , HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasTheme t m)
   => ScrollableConfig t
-  -> (m (Behavior t V.Image, Event t ()))
-  -> m (Scrollable t)
+  -> (m (Behavior t V.Image, Event t (), a))
+  -> m (Scrollable t, a)
 scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend) mkImg = do
-  (img, update) <- mkImg
+  (img, update, a) <- mkImg
   let sz = V.imageHeight <$> img
   kup <- key V.KUp
   kdown <- key V.KDown
@@ -85,7 +87,7 @@ scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend) mkImg = do
         ScrollPos_Top -> images -- take height images
         ScrollPos_Line n -> V.translateY ((-1) * n) images
   tellImages $ fmap (:[]) $ imgsToTell <$> current dh <*> current lineIndex <*> sz <*> img
-  return $ Scrollable
+  return $ (,a) $ Scrollable
     { _scrollable_scrollPosition = current lineIndex
     , _scrollable_totalLines = sz
     , _scrollable_scrollHeight = current dh

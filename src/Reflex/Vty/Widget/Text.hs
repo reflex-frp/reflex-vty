@@ -79,7 +79,6 @@ scrollableText
   => ScrollableConfig t
   -> Dynamic t Text
   -> m (Scrollable t)
-scrollableText cfg t = do
-  scrollable cfg $ do
-    ((), images) <- runImageWriter $ text (current t)
-    pure $ (V.vertCat <$> images, () <$ updated t)
+scrollableText cfg t = fmap fst $ scrollable cfg $ do
+  ((), images) <- runImageWriter $ text (current t)
+  pure $ (V.vertCat <$> images, () <$ updated t, ())

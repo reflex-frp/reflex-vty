@@ -1,5 +1,9 @@
 # Revision history for reflex-vty
 
+## Unreleased
+
+* *Breaking Change*: `Reflex.Vty.Widget.Scroll.scrollable` now require child widgets to return a value in addition to their images and update events. Specifically, the child widget type has gone from `m (Behavior t Image, Event t ())` to `m (Behavior t Image, Event t (), a)`.
+
 ## 0.5.2.1
 * Extend version bounds
 
