@@ -135,6 +135,10 @@ instance (Reflex t, MonadFix m, HasInput t m) => HasInput t (Focus t m) where
 
 instance (HasImageWriter t m, MonadFix m) => HasImageWriter t (Focus t m) where
   mapImages f = hoist (mapImages f)
+  captureImages (Focus x) = Focus $ do
+    ((a, fs), images) <- lift $ captureImages $ runDynamicWriterT x
+    tellDyn fs
+    return (a, images)
 
 instance (HasFocusReader t m, Monad m) => HasFocusReader t (Focus t m)
 
@@ -437,6 +441,11 @@ instance (HasInput t m, HasDisplayRegion t m, MonadFix m, Reflex t) => HasInput 
 
 instance (HasDisplayRegion t m, HasImageWriter t m, MonadFix m) => HasImageWriter t (Layout t m) where
   mapImages f = hoistRunLayout (mapImages f)
+  captureImages (Layout x) = Layout $ do
+    y <- ask
+    ((a, w), images) <- lift $ lift $ captureImages $ flip runReaderT y $ runDynamicWriterT x
+    tellDyn w
+    pure (a, images)
 
 instance (HasFocusReader t m, Monad m) => HasFocusReader t (Layout t m)
 

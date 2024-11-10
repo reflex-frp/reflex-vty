@@ -41,6 +41,7 @@ data Example = Example_TextEditor
              | Example_ScrollableTextDisplay
              | Example_ClickButtonsGetEmojis
              | Example_CPUStat
+             | Example_Scrollable
   deriving (Show, Read, Eq, Ord, Enum, Bounded)
 
 withCtrlC :: (Monad m, HasInput t m, Reflex t) => m () -> m (Event t ())
@@ -64,7 +65,7 @@ main = mainWidget $ withCtrlC $ do
   initManager_ $ do
     tabNavigation
     let gf = grout . fixed
-        t = tile flex
+        t = tile (fixed 3)
         buttons = col $ do
           gf 3 $ col $ do
             gf 1 $ text "Select an example."
@@ -75,12 +76,14 @@ main = mainWidget $ withCtrlC $ do
           c <- t $ textButtonStatic def "Scrollable text display"
           d <- t $ textButtonStatic def "Clickable buttons"
           e <- t $ textButtonStatic def "CPU Usage"
+          f <- t $ textButtonStatic def "Scrollable"
           return $ leftmost
             [ Left Example_Todo <$ a
             , Left Example_TextEditor <$ b
             , Left Example_ScrollableTextDisplay <$ c
             , Left Example_ClickButtonsGetEmojis <$ d
             , Left Example_CPUStat <$ e
+            , Left Example_Scrollable <$ f
             ]
     let escapable w = do
           void w
@@ -94,8 +97,37 @@ main = mainWidget $ withCtrlC $ do
           Left Example_ScrollableTextDisplay -> escapable scrolling
           Left Example_ClickButtonsGetEmojis -> escapable easyExample
           Left Example_CPUStat -> escapable cpuStats
+          Left Example_Scrollable -> escapable scrollingWithLayout
           Right () -> buttons
     return ()
+
+scrollingWithLayout
+  :: forall t m.
+     ( VtyExample t m
+     , HasInput t m
+     , MonadHold t m
+     , Manager t m
+     , PostBuild t m
+     , MonadIO (Performable m)
+     , TriggerEvent t m
+     , PerformEvent t m
+     ) => m ()
+scrollingWithLayout = col $ do
+  (s, x) <- tile flex $ boxTitle (constant def) (constant "Tracks") $ scrollable def $ do
+    result <- do
+      forM_ [(0::Int)..10] $ \n -> do
+        tile (fixed 5) $ do
+          tile (fixed 4) $ textButtonStatic def $ T.pack (show n)
+      askRegion
+    pure (never, result)
+  grout (fixed 1) $
+    text $ ("Total Lines: "<>) . T.pack . show <$> _scrollable_totalLines s
+  grout (fixed 1) $
+    text $ ("Scroll Pos: "<>) . T.pack . show <$> _scrollable_scrollPosition s
+  grout (fixed 1) $
+    text $ ("Scroll Height: "<>) . T.pack . show <$> _scrollable_scrollHeight s
+  pure ()
+
 
 -- * Mouse button and emojis example
 easyExample :: (VtyExample t m, Manager t m, MonadHold t m) => m (Event t ())

@@ -1,8 +1,9 @@
 # Revision history for reflex-vty
 
-## Unreleased
+## 0.6.0.0
 
-* *Breaking Change*: `Reflex.Vty.Widget.Scroll.scrollable` now require child widgets to return a value in addition to their images and update events. Specifically, the child widget type has gone from `m (Behavior t Image, Event t ())` to `m (Behavior t Image, Event t (), a)`.
+* *Breaking Change*: `Reflex.Vty.Widget.Scroll.scrollable`'s type has changed. The child widget no longer has to return images (see `captureImages` below), but can return a value. Specifically, the child widget type has gone from `m (Behavior t Image, Event t ())` to `m (Event t (), a)`.
+* *Breaking Change*: Instance of `HasImageWriter` must now implement `captureImages`, a function that allows the `Image`s produced by a widget to be intercepted and not rendered. This is used to implement `scrollable`.
 
 ## 0.5.2.1
 * Extend version bounds
