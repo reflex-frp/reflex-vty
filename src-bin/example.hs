@@ -56,7 +56,7 @@ darkTheme :: V.Attr
 darkTheme = V.Attr {
   V.attrStyle = V.SetTo V.standout
   , V.attrForeColor = V.SetTo V.black
-  , V.attrBackColor = V.Default
+  , V.attrBackColor = V.SetTo V.green
   , V.attrURL = V.Default
 }
 
