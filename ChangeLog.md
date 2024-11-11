@@ -1,5 +1,9 @@
 # Revision history for reflex-vty
 
+## 0.6.1.0
+
+* Fix mouse input translation in scrollable elements
+
 ## 0.6.0.0
 
 * *Breaking Change*: `Reflex.Vty.Widget.Scroll.scrollable`'s type has changed. The child widget no longer has to return images (see `captureImages` below), but can return a value. Specifically, the child widget type has gone from `m (Behavior t Image, Event t ())` to `m (Event t (), a)`.

@@ -55,8 +55,7 @@ scrollable
   -> (m (Event t (), a))
   -> m (Scrollable t, a)
 scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend) mkImg = do
-  ((update, a), imgs) <- captureImages mkImg
-  let sz = foldl' max 0 . fmap V.imageHeight <$> imgs
+  dh <- displayHeight
   kup <- key V.KUp
   kdown <- key V.KDown
   m <- mouseScroll
@@ -69,25 +68,28 @@ scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend) mkImg = do
             ScrollDirection_Down -> 1
         , scrollBy
         ]
-  dh <- displayHeight
-  lineIndex <- foldDynMaybe ($) startingPos $ leftmost
-    [ (\((totalLines, h), d) sp -> Just $ scrollByLines sp totalLines h d) <$> attach ((,) <$> sz <*> current dh) requestedScroll
-    , (\((totalLines, h), newScrollPosition) _ -> Just $ case newScrollPosition of
-        ScrollPos_Line n -> scrollToLine totalLines h n
-        ScrollPos_Top -> ScrollPos_Top
-        ScrollPos_Bottom -> ScrollPos_Bottom
-      ) <$> attach ((,) <$> sz <*> current dh) scrollTo
-    , (\cfg sp -> case cfg of
-        Just ScrollToBottom_Always -> case sp of
-          ScrollPos_Bottom -> Nothing
-          _ -> Just ScrollPos_Bottom
-        _ -> Nothing) <$> tag onAppend update
-    ]
-  let imgsToTell height scrollPos totalLines images = case scrollPos of
-        ScrollPos_Bottom -> cropFromTop ((1) * max 0 (totalLines - height)) <$> images
-        ScrollPos_Top -> images -- take height images
-        ScrollPos_Line n -> cropFromTop ((1) * max 0 n) <$> images
-  tellImages $ imgsToTell <$> current dh <*> current lineIndex <*> sz <*> imgs
+  rec
+    ((update, a), imgs) <- captureImages $ localInput (translateMouseEvents translation) $ mkImg
+    let sz = foldl' max 0 . fmap V.imageHeight <$> imgs
+    lineIndex <- foldDynMaybe ($) startingPos $ leftmost
+      [ (\((totalLines, h), d) sp -> Just $ scrollByLines sp totalLines h d) <$> attach ((,) <$> sz <*> current dh) requestedScroll
+      , (\((totalLines, h), newScrollPosition) _ -> Just $ case newScrollPosition of
+          ScrollPos_Line n -> scrollToLine totalLines h n
+          ScrollPos_Top -> ScrollPos_Top
+          ScrollPos_Bottom -> ScrollPos_Bottom
+        ) <$> attach ((,) <$> sz <*> current dh) scrollTo
+      , (\cfg sp -> case cfg of
+          Just ScrollToBottom_Always -> case sp of
+            ScrollPos_Bottom -> Nothing
+            _ -> Just ScrollPos_Bottom
+          _ -> Nothing) <$> tag onAppend update
+      ]
+    let translation = calculateTranslation
+          <$> current dh
+          <*> current lineIndex
+          <*> sz
+  let cropImages dy images = cropFromTop dy <$> images
+  tellImages $ cropImages <$> translation <*> imgs
   return $ (,a) $ Scrollable
     { _scrollable_scrollPosition = current lineIndex
     , _scrollable_totalLines = sz
@@ -97,6 +99,16 @@ scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend) mkImg = do
     cropFromTop :: Int -> V.Image -> V.Image
     cropFromTop rows i =
       V.cropTop (max 0 $ V.imageHeight i - rows) i
+    calculateTranslation height scrollPos totalLines = case scrollPos of
+      ScrollPos_Bottom -> max 0 (totalLines - height)
+      ScrollPos_Top -> 0
+      ScrollPos_Line n -> max 0 n
+    translateMouseEvents translation vtyEvent =
+          let e = attach translation vtyEvent
+          in ffor e $ \case
+                (dy, V.EvMouseDown x y btn mods) -> V.EvMouseDown x (y + dy) btn mods
+                (dy, V.EvMouseUp x y btn) -> V.EvMouseUp x (y + dy) btn
+                (_, otherEvent) -> otherEvent
 
 -- | Modify the scroll position by the given number of lines
 scrollByLines :: ScrollPos -> Int -> Int -> Int -> ScrollPos
