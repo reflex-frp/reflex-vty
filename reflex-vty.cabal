@@ -49,7 +49,7 @@ library
     data-default >= 0.7.1 && < 0.8,
     dependent-map >= 0.4 && < 0.5,
     exceptions >= 0.10 && < 0.11,
-    text >= 1.2.3, && < 2.2,
+    text >= 1.2.3 && < 2.2,
     dependent-sum >= 0.7 && < 0.8,
     exception-transformers >= 0.4.0 && < 0.5,
     mmorph >= 1.1 && < 1.3,
