@@ -1,5 +1,10 @@
 # Revision history for reflex-vty
 
+## 0.6.1.1
+
+* Extend version bounds
+* Add support for GHC 9.8.4
+
 ## 0.6.1.0
 
 * Fix mouse input translation in scrollable elements
