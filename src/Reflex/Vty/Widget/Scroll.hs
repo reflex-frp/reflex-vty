@@ -72,12 +72,12 @@ scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend) mkImg = do
     ((update, a), imgs) <- captureImages $ localInput (translateMouseEvents translation) $ mkImg
     let sz = foldl' max 0 . fmap V.imageHeight <$> imgs
     lineIndex <- foldDynMaybe ($) startingPos $ leftmost
-      [ (\((totalLines, h), d) sp -> Just $ scrollByLines sp totalLines h d) <$> attach ((,) <$> sz <*> current dh) requestedScroll
-      , (\((totalLines, h), newScrollPosition) _ -> Just $ case newScrollPosition of
+      [ (\(totalLines, (h, d)) sp -> Just $ scrollByLines sp totalLines h d) <$> attach sz (attachPromptlyDyn dh requestedScroll)
+      , (\(totalLines, (h, newScrollPosition)) _ -> Just $ case newScrollPosition of
           ScrollPos_Line n -> scrollToLine totalLines h n
           ScrollPos_Top -> ScrollPos_Top
           ScrollPos_Bottom -> ScrollPos_Bottom
-        ) <$> attach ((,) <$> sz <*> current dh) scrollTo
+        ) <$> attach sz (attachPromptlyDyn dh scrollTo)
       , (\cfg sp -> case cfg of
           Just ScrollToBottom_Always -> case sp of
             ScrollPos_Bottom -> Nothing
