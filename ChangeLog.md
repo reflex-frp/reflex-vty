@@ -1,5 +1,10 @@
 # Revision history for reflex-vty
 
+## 0.6.2.0
+
+* Relax bounds for GHC 9.12.2 by @plt-amy in https://github.com/reflex-frp/reflex-vty/pull/97
+* scrollable: promptly use `displayHight` on scroll by @Rosuavio in https://github.com/reflex-frp/reflex-vty/pull/94
+
 ## 0.6.1.1
 
 * Extend version bounds
