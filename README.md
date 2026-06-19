@@ -1,13 +1,19 @@
+<div align="center">
+
 # reflex-vty
 
-[![Haskell](https://img.shields.io/badge/language-Haskell-orange.svg)](https://haskell.org) [![Hackage](https://img.shields.io/hackage/v/reflex-vty.svg)](https://hackage.haskell.org/package/reflex-vty) [![BSD3 License](https://img.shields.io/badge/license-BSD3-blue.svg)](https://github.com/reflex-frp/reflex-vty/blob/master/LICENSE)
+**Build terminal user interfaces with functional reactive programming.**
 
-Build terminal applications using functional reactive programming (FRP) with [Reflex FRP](https://reflex-frp.org).
+reflex-vty provides a [Reflex FRP](https://reflex-frp.org) host and a library of reactive widgets for [Vty](https://hackage.haskell.org/package/vty) terminal applications: layout, text input and editing, boxes, scrolling, mouse support, focus management, and theming.
 
-![Example Animation](https://i.imgur.com/FULQNtu.gif)
+[![Haskell](https://img.shields.io/badge/language-Haskell-orange.svg)](https://haskell.org) [![Hackage](https://img.shields.io/hackage/v/reflex-vty.svg)](https://hackage.haskell.org/package/reflex-vty) [![Github CI](https://github.com/reflex-frp/reflex-vty/actions/workflows/haskell.yml/badge.svg)](https://github.com/reflex-frp/reflex-vty/actions) [![Obsidian](https://img.shields.io/badge/Obsidian-Systems-white)](https://obsidian.systems) [![BSD3 License](https://img.shields.io/badge/license-BSD3-blue.svg)](LICENSE)
 
-Feature requests, pull requests, and other feedback are welcome and appreciated (see the [contribution guide](CONTRIBUTING.md)). This library
-is still experimental, so big changes are possible!
+<img src="https://i.imgur.com/FULQNtu.gif" alt="reflex-vty example animation" width="80%">
+
+</div>
+
+Feature requests, pull requests, and other feedback are welcome and appreciated (see the [contribution guide](CONTRIBUTING.md)). This library is still experimental, so big changes are possible.
+
 ### How to Build
 
 #### With reflex-platform
@@ -20,7 +26,7 @@ nix-shell
 ```
 
 From within the nix-shell you can:
-* Run the example: `cabal repl example`
+* Run the example: `cabal run example`
 * Load the library in the repl: `cabal repl reflex-vty`
 * Build the example executable: `cabal build example`
 * Build the docs: `cabal haddock`
@@ -29,13 +35,13 @@ From within the nix-shell you can:
 
 ##### Selecting a compiler
 
-When entering the nix-shell, you can select from the following compilers: ghc-8.10.7 and ghc-9.4.3. By default, ghc-8.10.7 is selected. To enter a shell with ghc-9.4.3, run:
+`nix-shell` defaults to GHC 9.8. The other compilers defined in `release.nix` are `ghc810`, `ghc94`, and `ghc96`. To enter a shell with one of them, pass it as the `compiler` argument:
 
 ```bash
-nix-shell --argstr compiler ghc943
+nix-shell --argstr compiler ghc810
 ```
 
-You may need to run `cabal clean` and `cabal configure -w ghc-9.4.3` if you were previously working on the project with a different compiler.
+If you were previously building with a different compiler, you may need to run `cabal clean` first.
 
 
 #### With cabal
@@ -51,3 +57,17 @@ cabal new-build # to build the library and example
 cabal new-repl # to enter a repl for the library
 cabal new-repl example # to enter a repl for the example executable
 ```
+
+## About Obsidian Systems
+
+reflex-vty is built and maintained by **[Obsidian Systems](https://obsidian.systems)**. We provide frontier engineering for high-assurance systems: we build production software in Haskell and Nix, and we're long-time stewards of open-source tooling like [Obelisk](https://github.com/obsidiansystems/obelisk), [Reflex](https://reflex-frp.org/), and [nix-thunk](https://github.com/obsidiansystems/nix-thunk).
+
+If you're working with Reflex, terminal or web UIs in Haskell, or Nix and want a partner to help design, build, or ship it, we'd love to hear from you.
+
+- Website: <https://obsidian.systems>
+- Blog: <https://blog.obsidian.systems>
+- GitHub: <https://github.com/obsidiansystems>
+
+## License
+
+reflex-vty is released under the [BSD-3-Clause License](LICENSE), © 2018 Obsidian Systems LLC.
