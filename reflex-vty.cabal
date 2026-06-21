@@ -151,6 +151,8 @@ test-suite reflex-vty-test
     Data.Text.ZipperSpec
     Reflex.Vty.ColorProfileSpec
     Reflex.Vty.StyleSpec
+    Reflex.Vty.Test.Snapshot
+    Reflex.Vty.Test.SnapshotSpec
   build-depends:
     base,
     reflex,
