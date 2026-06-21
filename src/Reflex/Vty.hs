@@ -2,7 +2,7 @@
 Module: Reflex.Vty
 Description: A library for building vty apps with reflex
 Copyright   : (c) Obsidian Systems LLC
-License     : GPL-3
+License     : BSD-3
 Maintainer  : maintainer@obsidian.systems
 Stability   : experimental
 Portability : POSIX
