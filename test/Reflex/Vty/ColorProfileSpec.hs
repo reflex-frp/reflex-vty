@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+
 module Reflex.Vty.ColorProfileSpec (spec) where
 
 import Test.Hspec
@@ -31,7 +32,7 @@ spec = describe "Reflex.Vty.ColorProfile" $ do
       convertColor ColorProfile_Ansi256 (V.Color.RGBColor 10 20 30)
         `shouldSatisfy` \case
           V.Color.Color240{} -> True
-          _                  -> False
+          _ -> False
     it "is identity for ISOColor under Ansi16" $
       convertColor ColorProfile_Ansi16 V.Color.red `shouldBe` V.Color.red
     it "maps pure black RGB to the black ISO color under Ansi16" $
@@ -54,7 +55,7 @@ spec = describe "Reflex.Vty.ColorProfile" $ do
           applied = applyProfile ColorProfile_NoTTY attr
       V.attrForeColor applied `shouldBe` V.Default
       V.attrBackColor applied `shouldBe` V.Default
-      V.attrStyle  applied `shouldBe` V.Default
+      V.attrStyle applied `shouldBe` V.Default
     it "preserves the URL field under NoTTY" $ do
       let attr = V.withURL V.defAttr "https://example.com"
       V.attrURL (applyProfile ColorProfile_NoTTY attr)

@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+
 module Reflex.Vty.StyleSpec (spec) where
 
 import Test.Hspec
@@ -63,14 +64,30 @@ spec = describe "Reflex.Vty.Style" $ do
 
   describe "border style presets" $ do
     it "singleBorder has all sides and corners" $ do
-      all (isJust . ($ singleBorder))
-        [ _border_top, _border_bottom, _border_left, _border_right
-        , _border_topLeft, _border_topRight, _border_bottomLeft, _border_bottomRight ]
+      all
+        (isJust . ($ singleBorder))
+        [ _border_top
+        , _border_bottom
+        , _border_left
+        , _border_right
+        , _border_topLeft
+        , _border_topRight
+        , _border_bottomLeft
+        , _border_bottomRight
+        ]
         `shouldBe` True
     it "noBorder has no sides or corners" $ do
-      any (isJust . ($ noBorder))
-        [ _border_top, _border_bottom, _border_left, _border_right
-        , _border_topLeft, _border_topRight, _border_bottomLeft, _border_bottomRight ]
+      any
+        (isJust . ($ noBorder))
+        [ _border_top
+        , _border_bottom
+        , _border_left
+        , _border_right
+        , _border_topLeft
+        , _border_topRight
+        , _border_bottomLeft
+        , _border_bottomRight
+        ]
         `shouldBe` False
     it "markdownBorder has sides but no corners" $ do
       let b = markdownBorder
@@ -126,4 +143,4 @@ spec = describe "Reflex.Vty.Style" $ do
 
 isJust :: Maybe a -> Bool
 isJust (Just _) = True
-isJust Nothing  = False
+isJust Nothing = False
