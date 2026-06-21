@@ -126,6 +126,15 @@ spec = describe "Reflex.Vty.Style" $ do
           img = render s "hi"
       V.Image.imageWidth img `shouldBe` 4
       V.Image.imageHeight img `shouldBe` 3
+    it "renders multi-line text with correct height" $ do
+      let img = render def "hello\nworld"
+      V.Image.imageHeight img `shouldBe` 2
+    it "renders multi-line text width as longest line" $ do
+      let img = render def "hello\nhi"
+      V.Image.imageWidth img `shouldBe` 5
+    it "renders wide characters at correct width" $ do
+      let img = render def "文"
+      V.Image.imageWidth img `shouldBe` 2
 
   describe "measure" $ do
     it "matches render's width for plain text" $ do
@@ -140,6 +149,22 @@ spec = describe "Reflex.Vty.Style" $ do
     it "accounts for margin" $ do
       let s = withMargin 1 1 1 1 def
       fst (measure s "hi") `shouldBe` 2 + 2
+    it "measures multi-line text with correct height" $ do
+      snd (measure def "hello\nworld") `shouldBe` 2
+    it "measures multi-line text with correct width" $ do
+      fst (measure def "hello\nhi") `shouldBe` 5
+    it "measures multi-line text with matching render dimensions" $ do
+      let s = withBorder singleBorder def
+          (w, h) = measure s "hello\nworld"
+          img = render s "hello\nworld"
+      w `shouldBe` V.Image.imageWidth img
+      h `shouldBe` V.Image.imageHeight img
+    it "measures wide characters at display width" $ do
+      fst (measure def "文") `shouldBe` 2
+    it "measures mixed wide and narrow characters" $ do
+      fst (measure def "a文b") `shouldBe` 4
+    it "measures empty content as zero width, one line" $ do
+      measure def "" `shouldBe` (0, 1)
 
 isJust :: Maybe a -> Bool
 isJust (Just _) = True
