@@ -6,6 +6,7 @@ import Data.Default
 import Data.List (foldl')
 import qualified Graphics.Vty as V
 import Reflex
+
 import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Input.Mouse
 
@@ -13,9 +14,8 @@ import Reflex.Vty.Widget.Input.Mouse
 data ScrollToBottom
   = -- | Always scroll to the bottom on new output
     ScrollToBottom_Always
-  | {- | Scroll down with new output only when, prior to the new output being
-    added, the widget was scrolled all the way to the bottom.
-    -}
+  | -- | Scroll down with new output only when, prior to the new output being
+    --     added, the widget was scrolled all the way to the bottom.
     ScrollToBottom_Maintain
   deriving (Eq, Ord, Show)
 
@@ -31,12 +31,12 @@ data ScrollableConfig t = ScrollableConfig
   -- ^ How the scroll position should be adjusted as new content is added
   }
 
-instance (Reflex t) => Default (ScrollableConfig t) where
+instance Reflex t => Default (ScrollableConfig t) where
   def = ScrollableConfig never never ScrollPos_Top (pure Nothing)
 
 -- | The scroll position
 data ScrollPos = ScrollPos_Top | ScrollPos_Line Int | ScrollPos_Bottom
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 -- | The output of a 'scrollable', indicating its current scroll position.
 data Scrollable t = Scrollable
@@ -45,22 +45,21 @@ data Scrollable t = Scrollable
   , _scrollable_scrollHeight :: Behavior t Int
   }
 
-{- | Scrollable widget. The output exposes the current scroll position and
-total number of lines (including those that are hidden)
--}
-scrollable ::
-  forall t m a.
-  ( Reflex t
-  , MonadHold t m
-  , MonadFix m
-  , HasDisplayRegion t m
-  , HasInput t m
-  , HasImageWriter t m
-  , HasTheme t m
-  ) =>
-  ScrollableConfig t ->
-  (m (Event t (), a)) ->
-  m (Scrollable t, a)
+-- | Scrollable widget. The output exposes the current scroll position and
+-- total number of lines (including those that are hidden)
+scrollable
+  :: forall t m a
+   . ( Reflex t
+     , MonadHold t m
+     , MonadFix m
+     , HasDisplayRegion t m
+     , HasInput t m
+     , HasImageWriter t m
+     , HasTheme t m
+     )
+  => ScrollableConfig t
+  -> (m (Event t (), a))
+  -> m (Scrollable t, a)
 scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend) mkImg = do
   dh <- displayHeight
   kup <- key V.KUp
@@ -110,30 +109,30 @@ scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend) mkImg = do
         , _scrollable_totalLines = sz
         , _scrollable_scrollHeight = current dh
         }
- where
-  cropFromTop :: Int -> V.Image -> V.Image
-  cropFromTop rows i =
-    V.cropTop (max 0 $ V.imageHeight i - rows) i
-  calculateTranslation height scrollPos totalLines = case scrollPos of
-    ScrollPos_Bottom -> max 0 (totalLines - height)
-    ScrollPos_Top -> 0
-    ScrollPos_Line n -> max 0 n
-  translateMouseEvents translation vtyEvent =
-    let e = attach translation vtyEvent
-     in ffor e $ \case
-          (dy, V.EvMouseDown x y btn mods) -> V.EvMouseDown x (y + dy) btn mods
-          (dy, V.EvMouseUp x y btn) -> V.EvMouseUp x (y + dy) btn
-          (_, otherEvent) -> otherEvent
+  where
+    cropFromTop :: Int -> V.Image -> V.Image
+    cropFromTop rows i =
+      V.cropTop (max 0 $ V.imageHeight i - rows) i
+    calculateTranslation height scrollPos totalLines = case scrollPos of
+      ScrollPos_Bottom -> max 0 (totalLines - height)
+      ScrollPos_Top -> 0
+      ScrollPos_Line n -> max 0 n
+    translateMouseEvents translation vtyEvent =
+      let e = attach translation vtyEvent
+      in ffor e $ \case
+           (dy, V.EvMouseDown x y btn mods) -> V.EvMouseDown x (y + dy) btn mods
+           (dy, V.EvMouseUp x y btn) -> V.EvMouseUp x (y + dy) btn
+           (_, otherEvent) -> otherEvent
 
 -- | Modify the scroll position by the given number of lines
 scrollByLines :: ScrollPos -> Int -> Int -> Int -> ScrollPos
 scrollByLines sp totalLines height delta =
   let newPos = min (max 0 (start sp + delta)) totalLines
-   in scrollToLine totalLines height newPos
- where
-  start ScrollPos_Top = 0
-  start ScrollPos_Bottom = totalLines - height
-  start (ScrollPos_Line n) = n
+  in scrollToLine totalLines height newPos
+  where
+    start ScrollPos_Top = 0
+    start ScrollPos_Bottom = totalLines - height
+    start (ScrollPos_Line n) = n
 
 -- | Scroll to a particular line
 scrollToLine :: Int -> Int -> Int -> ScrollPos
