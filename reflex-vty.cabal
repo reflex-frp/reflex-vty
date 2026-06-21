@@ -28,6 +28,7 @@ library
   exposed-modules: Reflex.Vty
                  , Reflex.Vty.ColorProfile
                  , Reflex.Vty.Host
+                 , Reflex.Vty.Style
                  , Reflex.Vty.Widget
                  , Reflex.Vty.Widget.Box
                  , Reflex.Vty.Widget.Input
@@ -148,6 +149,7 @@ test-suite reflex-vty-test
   other-modules:
     Data.Text.ZipperSpec
     Reflex.Vty.ColorProfileSpec
+    Reflex.Vty.StyleSpec
   build-depends:
     base,
     reflex,

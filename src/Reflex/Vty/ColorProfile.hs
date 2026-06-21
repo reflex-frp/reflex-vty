@@ -2,16 +2,16 @@
 Module: Reflex.Vty.ColorProfile
 Description: Terminal color-capability detection and downsampling
 
-A 'ColorProfile' describes how many colors the terminal can display. 'detectColorProfile'
-reads the capability from a vty 'Graphics.Vty.Output.Output' handle, and 'applyProfile'
-downsamples an 'Graphics.Vty.Attr' so that colors and styles the terminal cannot render are
-replaced with the closest approximation (or dropped entirely for 'ColorProfile_Ascii' and
-'ColorProfile_NoTTY').
+A 'ColorProfile' describes how many colors the terminal can display.
+'detectColorProfile' reads the capability from a vty
+'Graphics.Vty.Output.Output' handle, and 'applyProfile' downsamples an
+'Graphics.Vty.Attr' so that colors and styles the terminal cannot render are
+replaced with the closest approximation (or dropped entirely for
+'ColorProfile_Ascii' and 'ColorProfile_NoTTY').
 
-This is the reflex-vty analogue of @charmbracelet/colorprofile@. Widgets build with
-'Graphics.Vty.Attributes.Color.RGBColor' (true color) and the host downsamples once per frame
-at the 'Graphics.Vty.Picture' boundary, so widget code never needs to branch on terminal
-capability.
+Widgets build with 'Graphics.Vty.Attributes.Color.RGBColor' (which is true
+color) and the host downsamples once per frame at the 'Graphics.Vty.Picture'
+boundary, so widget code never needs to worry about terminal capability.
 -}
 module Reflex.Vty.ColorProfile
   ( ColorProfile(..)
