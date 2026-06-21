@@ -114,6 +114,7 @@ module Reflex.Vty.Style (
   render,
   renderB,
   applyAttr,
+  mergeAttr,
   measure,
 ) where
 
@@ -610,6 +611,24 @@ applyAttr s attr0 =
     Just _ -> V.withStyle a V.underline
   applyHyperlink a = maybe a (V.withURL a) (_style_hyperlink s)
 
+{- | Overlay one 'V.Attr' on top of another. Fields in the overlay that
+are 'V.SetTo' take precedence; 'V.Default' and 'V.KeepCurrent' fall
+through to the base. Used by 'Reflex.Vty.Widget.Text.richText' to layer
+custom attributes on top of the ambient theme attr, so that unset fields
+inherit the theme rather than falling back to terminal defaults.
+-}
+mergeAttr :: V.Attr -> V.Attr -> V.Attr
+mergeAttr base overlay =
+  V.Attr
+    { V.attrStyle = pick (V.attrStyle base) (V.attrStyle overlay)
+    , V.attrForeColor = pick (V.attrForeColor base) (V.attrForeColor overlay)
+    , V.attrBackColor = pick (V.attrBackColor base) (V.attrBackColor overlay)
+    , V.attrURL = pick (V.attrURL base) (V.attrURL overlay)
+    }
+ where
+  pick _ (V.SetTo v) = V.SetTo v
+  pick b _ = b
+
 {- | Render some 'Text' with a 'Style' to a vty 'V.Image'. Applies text
 transforms and colors (via 'applyAttr'), pads and aligns the content,
 draws the border, applies margin, and finally enforces width/height
@@ -617,7 +636,7 @@ minimums and max-width/max-height clipping.
 -}
 render :: Style -> Text -> V.Image
 render s content =
-  applyMaxSize $ applySize $ applyMargin $ applyBorder $ applyPadding $ applyAlign $ contentImage
+  applyMaxSize $ applySize $ applyMargin $ applyBorder $ applyPadding $ contentImage
  where
   ws = fromMaybe ' ' (_style_whitespaceChar s)
   -- Use KeepCurrent for all unset attrs so underlying layers (e.g. the
@@ -680,8 +699,6 @@ render s content =
             then placeV baseAttr h img'
             else img'
      in img''
-  -- Alignment within the (possibly widened) box.
-  applyAlign img = img
   -- Padding.
   applyPadding img =
     let p = _style_padding s
