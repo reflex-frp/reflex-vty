@@ -9,6 +9,11 @@ module Reflex.Vty.Theme
   ( Theme(..)
   , defTheme
   , darkTheme
+  , charmTheme
+  , draculaTheme
+  , nordTheme
+  , zenburnTheme
+  , gruvboxTheme
   , themeToAttr
   ) where
 
@@ -51,6 +56,66 @@ defTheme = Theme
 darkTheme :: Theme
 darkTheme = defTheme
   { _theme_default = withForeground black . withBackground green . withReverse $ def
+  }
+
+-- | The Charm theme: magenta/purple accents on a dark background.
+charmTheme :: Theme
+charmTheme = defTheme
+  { _theme_default         = withForeground white . withBackground (rgbColor 22 18 30) $ def
+  , _theme_border          = withForeground magenta def
+  , _theme_title           = withForeground magenta . withBold $ def
+  , _theme_link            = withForeground magenta . withUnderline UnderlineSingle $ def
+  , _theme_buttonFocused   = withForeground magenta . withBold $ def
+  , _theme_buttonUnfocused = withForeground white def
+  , _theme_textInputCursor = withReverse def
+  }
+
+-- | The Dracula theme: pink/cyan/green on a dark background.
+draculaTheme :: Theme
+draculaTheme = defTheme
+  { _theme_default         = withForeground white . withBackground (rgbColor 40 42 54) $ def
+  , _theme_border          = withForeground (rgbColor 98 114 164) def
+  , _theme_title           = withForeground (rgbColor 255 184 108) . withBold $ def
+  , _theme_link            = withForeground (rgbColor 139 233 253) . withUnderline UnderlineSingle $ def
+  , _theme_buttonFocused   = withForeground (rgbColor 189 147 249) . withBold $ def
+  , _theme_buttonUnfocused = withForeground white def
+  , _theme_textInputCursor = withReverse def
+  }
+
+-- | The Nord theme: blues and cool greys on a dark slate background.
+nordTheme :: Theme
+nordTheme = defTheme
+  { _theme_default         = withForeground (rgbColor 216 222 233) . withBackground (rgbColor 46 52 64) $ def
+  , _theme_border          = withForeground (rgbColor 76 86 106) def
+  , _theme_title           = withForeground (rgbColor 136 192 208) . withBold $ def
+  , _theme_link            = withForeground (rgbColor 143 188 187) . withUnderline UnderlineSingle $ def
+  , _theme_buttonFocused   = withForeground (rgbColor 136 192 208) . withBold $ def
+  , _theme_buttonUnfocused = withForeground (rgbColor 216 222 233) def
+  , _theme_textInputCursor = withReverse def
+  }
+
+-- | The Zenburn theme: muted greens and warm browns on a dark background.
+zenburnTheme :: Theme
+zenburnTheme = defTheme
+  { _theme_default         = withForeground (rgbColor 220 220 204) . withBackground (rgbColor 64 64 64) $ def
+  , _theme_border          = withForeground (rgbColor 102 153 153) def
+  , _theme_title           = withForeground (rgbColor 233 233 191) . withBold $ def
+  , _theme_link            = withForeground (rgbColor 159 159 95) . withUnderline UnderlineSingle $ def
+  , _theme_buttonFocused   = withForeground (rgbColor 159 159 95) . withBold $ def
+  , _theme_buttonUnfocused = withForeground (rgbColor 220 220 204) def
+  , _theme_textInputCursor = withReverse def
+  }
+
+-- | The Gruvbox theme: warm earthy tones on a dark background.
+gruvboxTheme :: Theme
+gruvboxTheme = defTheme
+  { _theme_default         = withForeground (rgbColor 235 219 178) . withBackground (rgbColor 40 40 40) $ def
+  , _theme_border          = withForeground (rgbColor 152 151 26) def
+  , _theme_title           = withForeground (rgbColor 250 189 47) . withBold $ def
+  , _theme_link            = withForeground (rgbColor 131 165 152) . withUnderline UnderlineSingle $ def
+  , _theme_buttonFocused   = withForeground (rgbColor 214 93 14) . withBold $ def
+  , _theme_buttonUnfocused = withForeground (rgbColor 235 219 178) def
+  , _theme_textInputCursor = withReverse def
   }
 
 -- | Convenience: extract the ambient 'V.Attr' from the theme's

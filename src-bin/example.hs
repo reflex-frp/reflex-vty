@@ -45,6 +45,7 @@ data Example = Example_TextEditor
              | Example_Scrollable
              | Example_Styles
              | Example_ColorProfile
+             | Example_Themes
   deriving (Show, Read, Eq, Ord, Enum, Bounded)
 
 withCtrlC :: (Monad m, HasInput t m, Reflex t) => m () -> m (Event t ())
@@ -74,6 +75,7 @@ main = mainWidget $ withCtrlC $ do
           f <- t $ textButtonStatic def "Scrollable"
           g <- t $ textButtonStatic def "Styles"
           h <- t $ textButtonStatic def "Color Profile"
+          i <- t $ textButtonStatic def "Themes"
           return $ leftmost
             [ Left Example_Todo <$ a
             , Left Example_TextEditor <$ b
@@ -83,6 +85,7 @@ main = mainWidget $ withCtrlC $ do
             , Left Example_Scrollable <$ f
             , Left Example_Styles <$ g
             , Left Example_ColorProfile <$ h
+            , Left Example_Themes <$ i
             ]
     let escapable w = do
           void w
@@ -99,6 +102,7 @@ main = mainWidget $ withCtrlC $ do
           Left Example_Scrollable -> escapable scrollingWithLayout
           Left Example_Styles -> escapable stylesDemo
           Left Example_ColorProfile -> escapable colorProfileDemo
+          Left Example_Themes -> escapable themesDemo
           Right () -> buttons
     return ()
 
@@ -417,3 +421,34 @@ colorProfileDemo = col $ do
     profileSwatch label prof =
       tellImages . pure . pure $
         V.text' (applyProfile prof (V.withForeColor V.defAttr orange)) (label <> " ")
+
+-- * Themes demo: cycles through the predefined themes, each applied to a
+-- small panel of buttons, a checkbox, a link, and a text input.
+themesDemo :: (VtyExample t m, MonadHold t m, HasLayout t m, Adjustable t m, PostBuild t m, NotReady t m)
+           => m ()
+themesDemo = col $ do
+  grout (fixed 1) $ text "Tab cycles themes. Esc to go back."
+  let themes = cycle
+        [ ("default", defTheme)
+        , ("dark",    darkTheme)
+        , ("charm",   charmTheme)
+        , ("dracula", draculaTheme)
+        , ("nord",    nordTheme)
+        , ("zenburn", zenburnTheme)
+        , ("gruvbox", gruvboxTheme)
+        ]
+      pick n = drop (n `mod` 7) themes
+  tab <- key (V.KChar '\t')
+  nDyn <- foldDyn (\_ n -> n + 1) 0 tab
+  let themedPanel = ffor nDyn $ \n ->
+        case pick n of
+          (label, th) : _ -> localTheme (const (constant th)) $ panel label
+          [] -> pure ()
+  void $ networkView themedPanel
+  where
+    panel label = grout flex $ boxTitle (constant singleBoxStyle) (constant ("Theme: " <> label)) $ col $ do
+      void $ tile (fixed 3) $ textButtonStatic def "A button"
+      void $ tile (fixed 3) $ checkbox def False
+      void $ tile (fixed 3) $ linkStatic "A link"
+      void $ tile (fixed 3) $ textInput def
+      pure ()

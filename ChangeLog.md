@@ -13,6 +13,7 @@
 * Fix `textInput` cursor: uses `_theme_textInputCursor` instead of hardcoded `reverseVideo`.
 * Fix `textButton` centering: now uses `textWithAlignment TextAlignment_Center`.
 * Add `Reflex.Vty.Theme.darkTheme`
+* Add `Reflex.Vty.Theme` presets: `charmTheme`, `draculaTheme`, `nordTheme`, `zenburnTheme`, `gruvboxTheme`.
 
 ## 0.6.2.1
 

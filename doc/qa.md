@@ -65,6 +65,12 @@ Once it's done you can test the following:
     * Make sure the row of swatches shows the same RGB orange (200,100,50) rendered through each profile: TrueColor shows the exact orange, Ansi256 shows a close approximation, Ansi16 shows the nearest ANSI color, Ascii and NoTTY show plain text with no color.
     * Type <kbd>Esc</kbd>.
 
+  * Click on `Themes`.
+    * Make sure you see a titled panel showing a button, a checkbox, a link, and a text input, all rendered in the currently selected theme.
+    * Make sure pressing <kbd>Tab</kbd> cycles through the seven predefined themes (`default`, `dark`, `charm`, `dracula`, `nord`, `zenburn`, `gruvbox`), updating the panel's title and the colors of every element each time.
+    * Make sure the checkbox still toggles, the link is underlined, and the text input accepts typing in every theme.
+    * Type <kbd>Esc</kbd>.
+
   * Type <kbd>Ctrl</kbd>+<kbd>C</kbd> to quit.
 
-There should be 8 examples to cover. If there are more or less than this then this QA guide is out of date and QA should fail.
+There should be 9 examples to cover. If there are more or less than this then this QA guide is out of date and QA should fail.
