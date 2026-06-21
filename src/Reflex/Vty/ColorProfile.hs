@@ -107,7 +107,8 @@ applyProfile profile attr = case profile of
 
 -- | Perceptual nearest-neighbor mapping from any 'V.Color' to the closest of
 -- the 16 ANSI 'V.Color.ISOColor' values. Uses the standard xterm 16-color
--- RGB table and squared-Euclidean distance in RGB space.
+-- RGB table and the redmean weighted distance, which approximates human
+-- color perception better than naive Euclidean RGB distance.
 nearestIso :: V.Color.Color -> V.Color.Color
 nearestIso c = case c of
   V.Color.ISOColor{}  -> c
@@ -117,7 +118,6 @@ nearestIso c = case c of
   V.Color.RGBColor r g b -> nearestIsoRGB (fromIntegral r, fromIntegral g, fromIntegral b)
 
 -- | The 16 ANSI colors paired with their standard xterm RGB coordinates.
--- Indices 0-7 are the normal colors; 8-15 are the bright variants.
 isoRgbTable :: [(V.Color.Color, (Int, Int, Int))]
 isoRgbTable =
   [ (V.Color.black,         (0,0,0))
@@ -138,10 +138,15 @@ isoRgbTable =
   , (V.Color.brightWhite,   (255,255,255))
   ]
 
--- | Squared Euclidean distance between two RGB triples.
+-- | Redmean weighted distance between two RGB triples. Approximates
+-- human color perception: green matters most, then red, then blue.
 rgbDistanceSq :: (Int, Int, Int) -> (Int, Int, Int) -> Int
-rgbDistanceSq (r1,g1,b1) (r2,g2,b2) = dr*dr + dg*dg + db*db
+rgbDistanceSq (r1,g1,b1) (r2,g2,b2) =
+  ((512 + rmean) * dr * dr) `div` 256
+  + 4 * dg * dg
+  + ((512 + 255 - rmean) * db * db) `div` 256
   where
+    rmean = (r1 + r2) `div` 2
     dr = r1 - r2
     dg = g1 - g2
     db = b1 - b2

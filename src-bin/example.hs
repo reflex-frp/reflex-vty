@@ -424,31 +424,35 @@ colorProfileDemo = col $ do
 
 -- * Themes demo: cycles through the predefined themes, each applied to a
 -- small panel of buttons, a checkbox, a link, and a text input.
-themesDemo :: (VtyExample t m, MonadHold t m, HasLayout t m, Adjustable t m, PostBuild t m, NotReady t m)
-           => m ()
-themesDemo = col $ do
-  grout (fixed 1) $ text "Tab cycles themes. Esc to go back."
+themesDemo :: (VtyExample t m, MonadHold t m, HasLayout t m) => m ()
+themesDemo = do
+  tab <- key (V.KChar '\t')
+  nDyn <- foldDyn (\_ n -> n + 1) 0 tab
   let themes = cycle
         [ ("default", defTheme)
-        , ("dark",    darkTheme)
-        , ("charm",   charmTheme)
+        , ("dark", darkTheme)
+        , ("charm", charmTheme)
         , ("dracula", draculaTheme)
-        , ("nord",    nordTheme)
+        , ("nord", nordTheme)
         , ("zenburn", zenburnTheme)
         , ("gruvbox", gruvboxTheme)
         ]
       pick n = drop (n `mod` 7) themes
-  tab <- key (V.KChar '\t')
-  nDyn <- foldDyn (\_ n -> n + 1) 0 tab
-  let themedPanel = ffor nDyn $ \n ->
-        case pick n of
-          (label, th) : _ -> localTheme (const (constant th)) $ panel label
-          [] -> pure ()
-  void $ networkView themedPanel
-  where
-    panel label = grout flex $ boxTitle (constant singleBoxStyle) (constant ("Theme: " <> label)) $ col $ do
-      void $ tile (fixed 3) $ textButtonStatic def "A button"
-      void $ tile (fixed 3) $ checkbox def False
-      void $ tile (fixed 3) $ linkStatic "A link"
-      void $ tile (fixed 3) $ textInput def
-      pure ()
+      curTheme n = case pick n of
+        (_, th) : _ -> th
+        [] -> defTheme
+      curLabel n = case pick n of
+        (label, _) : _ -> label
+        [] -> ""
+      themeBeh = curTheme <$> current nDyn
+      labelBeh = T.pack . ("Theme: " <>) . curLabel <$> current nDyn
+  localTheme (const themeBeh) $ do
+    fill (pure ' ')
+    col $ do
+      grout (fixed 1) $ text "Tab cycles themes. Esc to go back."
+      grout flex $ boxTitle (constant singleBoxStyle) labelBeh $ col $ do
+        void $ tile (fixed 3) $ textButtonStatic def "A button"
+        void $ tile (fixed 3) $ checkbox def False
+        void $ tile (fixed 3) $ linkStatic "A link"
+        void $ tile (fixed 3) $ textInput def
+        pure ()

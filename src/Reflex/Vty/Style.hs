@@ -275,9 +275,13 @@ brightMagenta = V.Color.brightMagenta
 brightCyan    = V.Color.brightCyan
 brightWhite   = V.Color.brightWhite
 
--- | Construct a true-color 'Color' from RGB components.
+-- | Construct a true-color 'Color' from sRGB components. Unlike vty's
+-- 'V.Color.rgbColor' (which downsamples to the 256-color cube at
+-- construction), this preserves the full 24-bit 'V.Color.RGBColor' so the
+-- host can downsample once per frame based on the detected
+-- 'Reflex.Vty.ColorProfile.ColorProfile'.
 rgbColor :: Int -> Int -> Int -> Color
-rgbColor = V.Color.rgbColor
+rgbColor = V.Color.srgbColor
 
 ----------------------------------------------------------------------------
 -- Border style presets
