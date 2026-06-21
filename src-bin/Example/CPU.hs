@@ -7,6 +7,7 @@ import Control.Monad.Fix
 import Control.Monad.IO.Class
 import Data.Ratio
 import qualified Data.Text as T
+import Data.Text.Zipper (TextAlignment (..))
 import Data.Time
 import Data.Word
 import qualified Graphics.Vty as V
@@ -134,7 +135,7 @@ chart pct = do
           , T.pack (printf "%3d" $ (ceiling $ x * 100 :: Int))
           , "% "
           ]
-  boxTitle (pure doubleBoxStyle) (current title) $ col $ do
+  boxTitle (pure TextAlignment_Center) (pure doubleBoxStyle) (current title) $ col $ do
     grout flex blank
     dh <- displayHeight
     let heights = calcRowHeights <$> dh <*> pct

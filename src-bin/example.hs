@@ -16,6 +16,7 @@ import Reflex
 import Reflex.Network
 
 import qualified Data.Text.Zipper as TZ
+import Data.Text.Zipper (TextAlignment (..))
 import Example.CPU
 import Reflex.Vty
 
@@ -113,7 +114,7 @@ scrollingWithLayout
      )
   => m ()
 scrollingWithLayout = col $ do
-  (s, _) <- tile flex $ boxTitle (constant def) (constant "Tracks") $ scrollable def $ do
+  (s, _) <- tile flex $ boxTitle (constant TextAlignment_Center) (constant def) (constant "Tracks") $ scrollable def $ do
     result <- do
       forM_ [(0 :: Int) .. 10] $ \n -> do
         tile (fixed 5) $ do
@@ -150,7 +151,7 @@ easyExample = do
       b <- tile flex $ btn "RHYME"
       c <- tile flex $ btn "A BIG CRIME"
       return (a, b, c)
-    tile (fixed 7) $ boxTitle (constant def) "CLICK BUTTONS TO DRAW*" $ do
+    tile (fixed 7) $ boxTitle (constant TextAlignment_Center) (constant def) "CLICK BUTTONS TO DRAW*" $ do
       outputDyn <-
         foldDyn (<>) "" $
           mergeWith
@@ -348,7 +349,7 @@ testBoxes = do
                   "This box is a text input. The box below responds to mouse drag inputs. You can also drag the separator between the boxes to resize them."
               }
           textBox =
-            boxTitle (pure roundedBoxStyle) "Text Edit" $
+            boxTitle (pure TextAlignment_Center) (pure roundedBoxStyle) "Text Edit" $
               multilineTextInput cfg
           dragBox = boxStatic roundedBoxStyle dragTest
       in splitVDrag (hRule doubleBoxStyle) textBox dragBox
