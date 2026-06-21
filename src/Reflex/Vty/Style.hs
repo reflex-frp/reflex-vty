@@ -118,20 +118,18 @@ module Reflex.Vty.Style (
   measure,
 ) where
 
-import Data.Default (Default(..))
+import Data.Default (Default (..))
 import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Zipper (textWidth)
 import qualified Graphics.Vty as V
-import qualified Graphics.Vty.Attributes.Color as V
-import qualified Graphics.Vty.Image as V
 import Reflex (Behavior, Reflex)
 
 {- | A terminal color. Currently an alias for vty's 'V.Color'; this keeps the
 public API stable if vty's representation changes later.
 -}
-type Color = V.Color.Color
+type Color = V.Color
 
 {- | Underline decoration variants. vty only supports a single
 'V.underline' style bit, so 'UnderlineSingle' is the only one rendered
@@ -332,33 +330,33 @@ inheritMargin parent child =
 ----------------------------------------------------------------------------
 
 black, red, green, yellow, blue, magenta, cyan, white :: Color
-black = V.Color.black
-red = V.Color.red
-green = V.Color.green
-yellow = V.Color.yellow
-blue = V.Color.blue
-magenta = V.Color.magenta
-cyan = V.Color.cyan
-white = V.Color.white
+black = V.black
+red = V.red
+green = V.green
+yellow = V.yellow
+blue = V.blue
+magenta = V.magenta
+cyan = V.cyan
+white = V.white
 
 brightBlack, brightRed, brightGreen, brightYellow, brightBlue, brightMagenta, brightCyan, brightWhite :: Color
-brightBlack = V.Color.brightBlack
-brightRed = V.Color.brightRed
-brightGreen = V.Color.brightGreen
-brightYellow = V.Color.brightYellow
-brightBlue = V.Color.brightBlue
-brightMagenta = V.Color.brightMagenta
-brightCyan = V.Color.brightCyan
-brightWhite = V.Color.brightWhite
+brightBlack = V.brightBlack
+brightRed = V.brightRed
+brightGreen = V.brightGreen
+brightYellow = V.brightYellow
+brightBlue = V.brightBlue
+brightMagenta = V.brightMagenta
+brightCyan = V.brightCyan
+brightWhite = V.brightWhite
 
 {- | Construct a true-color 'Color' from sRGB components. Unlike vty's
-'V.Color.rgbColor' (which downsamples to the 256-color cube at
-construction), this preserves the full 24-bit 'V.Color.RGBColor' so the
+'V.rgbColor' (which downsamples to the 256-color cube at
+construction), this preserves the full 24-bit 'V.RGBColor' so the
 host can downsample once per frame based on the detected
 'Reflex.Vty.ColorProfile.ColorProfile'.
 -}
 rgbColor :: Int -> Int -> Int -> Color
-rgbColor = V.Color.srgbColor
+rgbColor = V.srgbColor
 
 ----------------------------------------------------------------------------
 -- Border style presets
@@ -648,56 +646,56 @@ render s content =
   -- inherit themed foreground/background unless explicitly overridden.
   borderAttr = applyAttr (borderStyleAttr s) baseAttr
   -- Render text with newlines
-  contentImage = V.vertCat $ map (V.Image.text' baseAttr) (T.split (== '\n') content)
+  contentImage = V.vertCat $ map (V.text' baseAttr) (T.split (== '\n') content)
   -- Whitespace fill of a given width/height using the whitespace char.
   fillImage :: V.Attr -> Int -> Int -> V.Image
   fillImage a w h
-    | w <= 0 || h <= 0 = V.Image.emptyImage
-    | otherwise = V.Image.charFill a ws w h
+    | w <= 0 || h <= 0 = V.emptyImage
+    | otherwise = V.charFill a ws w h
   -- Horizontal alignment of an image within a width.
   placeH :: V.Attr -> Int -> V.Image -> V.Image
   placeH a w img
     | imgW >= w = img
-    | otherwise = V.Image.horizCat [leftPad, img, rightPad]
+    | otherwise = V.horizCat [leftPad, img, rightPad]
    where
-    imgW = V.Image.imageWidth img
-    imgH = V.Image.imageHeight img
+    imgW = V.imageWidth img
+    imgH = V.imageHeight img
     slack = w - imgW
     leftPad = case fromMaybe HAlignLeft (_style_alignHorizontal s) of
-      HAlignLeft -> V.Image.emptyImage
+      HAlignLeft -> V.emptyImage
       HAlignCenter -> fillImage a (slack `div` 2) imgH
       HAlignRight -> fillImage a slack imgH
     rightPad = case fromMaybe HAlignLeft (_style_alignHorizontal s) of
       HAlignLeft -> fillImage a slack imgH
       HAlignCenter -> fillImage a (slack - slack `div` 2) imgH
-      HAlignRight -> V.Image.emptyImage
+      HAlignRight -> V.emptyImage
   -- Vertical alignment of an image within a height.
   placeV :: V.Attr -> Int -> V.Image -> V.Image
   placeV a h img
     | imgH >= h = img
-    | otherwise = V.Image.vertCat [topPad, img, bottomPad]
+    | otherwise = V.vertCat [topPad, img, bottomPad]
    where
-    imgH = V.Image.imageHeight img
-    imgW = V.Image.imageWidth img
+    imgH = V.imageHeight img
+    imgW = V.imageWidth img
     slack = h - imgH
     topPad = case fromMaybe VAlignTop (_style_alignVertical s) of
-      VAlignTop -> V.Image.emptyImage
+      VAlignTop -> V.emptyImage
       VAlignMiddle -> fillImage a imgW (slack `div` 2)
       VAlignBottom -> fillImage a imgW slack
     bottomPad = case fromMaybe VAlignTop (_style_alignVertical s) of
       VAlignTop -> fillImage a imgW slack
       VAlignMiddle -> fillImage a imgW (slack - slack `div` 2)
-      VAlignBottom -> V.Image.emptyImage
+      VAlignBottom -> V.emptyImage
   -- Width/height minimums: pad the image out to the requested size.
   applySize img =
-    let w = fromMaybe (V.Image.imageWidth img) (_style_width s)
-        h = fromMaybe (V.Image.imageHeight img) (_style_height s)
+    let w = fromMaybe (V.imageWidth img) (_style_width s)
+        h = fromMaybe (V.imageHeight img) (_style_height s)
         img' =
-          if V.Image.imageWidth img < w
+          if V.imageWidth img < w
             then placeH baseAttr w img
             else img
         img'' =
-          if V.Image.imageHeight img' < h
+          if V.imageHeight img' < h
             then placeV baseAttr h img'
             else img'
      in img''
@@ -708,11 +706,11 @@ render s content =
         bottom = fillImage baseAttr (innerW img) (_padding_bottom p)
         left = fillImage baseAttr (_padding_left p) (innerH img)
         right = fillImage baseAttr (_padding_right p) (innerH img)
-        innerW = V.Image.imageWidth
-        innerH = V.Image.imageHeight
-     in V.Image.vertCat
+        innerW = V.imageWidth
+        innerH = V.imageHeight
+     in V.vertCat
           [ top
-          , V.Image.horizCat [left, img, right]
+          , V.horizCat [left, img, right]
           , bottom
           ]
   -- Border.
@@ -731,11 +729,11 @@ render s content =
   -- Margin (transparent: uses pad so underlying layers show through).
   applyMargin img =
     let m = _style_margin s
-     in V.Image.pad (_margin_left m) (_margin_top m) (_margin_right m) (_margin_bottom m) img
+     in V.pad (_margin_left m) (_margin_top m) (_margin_right m) (_margin_bottom m) img
   -- Max-width / max-height clipping.
   applyMaxSize img =
-    let clipW = maybe img (\w -> V.Image.crop w (V.Image.imageHeight img) img) (_style_maxWidth s)
-        clipH = maybe clipW (\h -> V.Image.crop (V.Image.imageWidth clipW) h clipW) (_style_maxHeight s)
+    let clipW = maybe img (\w -> V.crop w (V.imageHeight img) img) (_style_maxWidth s)
+        clipH = maybe clipW (\h -> V.crop (V.imageWidth clipW) h clipW) (_style_maxHeight s)
      in clipH
 
 {- | A 'Style' that carries only the border color fields, for use as the
@@ -769,36 +767,36 @@ drawBorder ::
   V.Image ->
   V.Image
 drawBorder attr b mTop mBot mLeft mRight img =
-  V.Image.vertCat [topRow, middleRow, bottomRow]
+  V.vertCat [topRow, middleRow, bottomRow]
  where
-  w = V.Image.imageWidth img
+  w = V.imageWidth img
   topOn = sideOn _border_top mTop
   bottomOn = sideOn _border_bottom mBot
   leftOn = sideOn _border_left mLeft
   rightOn = sideOn _border_right mRight
   sideOn f mt = maybe (isJust (f b)) id mt
-  hFill c n = V.Image.charFill attr c (max 0 n) 1
-  vFill c n = V.Image.charFill attr c 1 (max 0 n)
+  hFill c n = V.charFill attr c (max 0 n) 1
+  vFill c n = V.charFill attr c 1 (max 0 n)
   topChar = _border_top b >>= \c -> if topOn then Just c else Nothing
   bottomChar = _border_bottom b >>= \c -> if bottomOn then Just c else Nothing
   leftChar = _border_left b >>= \c -> if leftOn then Just c else Nothing
   rightChar = _border_right b >>= \c -> if rightOn then Just c else Nothing
-  topLeftChar = _border_topLeft b >>= \c -> if topOn && leftOn then Just (V.Image.char attr c) else Nothing
-  topRightChar = _border_topRight b >>= \c -> if topOn && rightOn then Just (V.Image.char attr c) else Nothing
-  bottomLeftChar = _border_bottomLeft b >>= \c -> if bottomOn && leftOn then Just (V.Image.char attr c) else Nothing
-  bottomRightChar = _border_bottomRight b >>= \c -> if bottomOn && rightOn then Just (V.Image.char attr c) else Nothing
+  topLeftChar = _border_topLeft b >>= \c -> if topOn && leftOn then Just (V.char attr c) else Nothing
+  topRightChar = _border_topRight b >>= \c -> if topOn && rightOn then Just (V.char attr c) else Nothing
+  bottomLeftChar = _border_bottomLeft b >>= \c -> if bottomOn && leftOn then Just (V.char attr c) else Nothing
+  bottomRightChar = _border_bottomRight b >>= \c -> if bottomOn && rightOn then Just (V.char attr c) else Nothing
   topRow =
-    V.Image.horizCat $
+    V.horizCat $
       maybe [] (: []) topLeftChar
         ++ maybe [] (\c -> [hFill c w]) topChar
         ++ maybe [] (: []) topRightChar
   middleRow =
-    V.Image.horizCat $
-      maybe [] (\c -> [vFill c (V.Image.imageHeight img)]) leftChar
+    V.horizCat $
+      maybe [] (\c -> [vFill c (V.imageHeight img)]) leftChar
         ++ [img]
-        ++ maybe [] (\c -> [vFill c (V.Image.imageHeight img)]) rightChar
+        ++ maybe [] (\c -> [vFill c (V.imageHeight img)]) rightChar
   bottomRow =
-    V.Image.horizCat $
+    V.horizCat $
       maybe [] (: []) bottomLeftChar
         ++ maybe [] (\c -> [hFill c w]) bottomChar
         ++ maybe [] (: []) bottomRightChar
