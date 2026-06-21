@@ -118,13 +118,14 @@ module Reflex.Vty.Style (
   measure,
 ) where
 
-import Data.Default (Default (..))
+import Data.Default (Default(..))
 import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Text.Zipper (textWidth)
 import qualified Graphics.Vty as V
-import qualified Graphics.Vty.Attributes.Color as V.Color
-import qualified Graphics.Vty.Image as V.Image
+import qualified Graphics.Vty.Attributes.Color as V
+import qualified Graphics.Vty.Image as V
 import Reflex (Behavior, Reflex)
 
 {- | A terminal color. Currently an alias for vty's 'V.Color'; this keeps the
@@ -646,7 +647,8 @@ render s content =
   -- Layer border-specific colors on top of the content attr so borders
   -- inherit themed foreground/background unless explicitly overridden.
   borderAttr = applyAttr (borderStyleAttr s) baseAttr
-  contentImage = V.Image.text' baseAttr content
+  -- Render text with newlines
+  contentImage = V.vertCat $ map (V.Image.text' baseAttr) (T.split (== '\n') content)
   -- Whitespace fill of a given width/height using the whitespace char.
   fillImage :: V.Attr -> Int -> Int -> V.Image
   fillImage a w h
@@ -814,8 +816,9 @@ measure :: Style -> Text -> (Int, Int)
 measure s content =
   (totalW, totalH)
  where
-  contentW = T.length content -- approximation; wcwidth would be more accurate
-  contentH = 1
+  contentLines = T.split (== '\n') content
+  contentW = maximum (0 : map textWidth contentLines)
+  contentH = length contentLines
   p = _style_padding s
   m = _style_margin s
   borderWidth = if hasBorder then 2 else 0
