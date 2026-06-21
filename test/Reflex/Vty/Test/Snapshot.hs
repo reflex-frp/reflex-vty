@@ -7,6 +7,19 @@ Converts a 'V.Image' into a 2D grid of cells, each carrying the display
 character and its 'V.Attr'. This lets tests assert on rendered output
 without a real terminal — useful for golden-file comparison and precise
 cell-level checks.
+
+Golden file format (produced by 'renderGrid'):
+
+> 4x3
+> ┌──┐
+> │hi│
+> └──┘
+> --- attrs ---
+> 1,1 'h' fg=red style=bold
+
+The text grid is always shown. The @--- attrs ---@ section appears only
+when at least one cell has an explicit ('SetTo') attribute, keeping
+goldens clean for unstyled output.
 -}
 module Reflex.Vty.Test.Snapshot
   ( Cell (..)
@@ -15,6 +28,7 @@ module Reflex.Vty.Test.Snapshot
   , imageText
   , renderGrid
   , gridEquals
+  , assertGolden
   ) where
 
 import Data.List (foldl')
@@ -24,6 +38,9 @@ import qualified Data.Text.Lazy as TL
 import qualified Graphics.Vty as V
 import Graphics.Vty.Image.Internal (Image (..))
 import Graphics.Text.Width (wcwidth)
+import System.Directory (createDirectoryIfMissing, doesFileExist)
+import System.FilePath ((</>), (<.>))
+import Test.Hspec (Expectation, shouldBe)
 
 -- | A single rendered cell: the display character and its vty attribute.
 data Cell = Cell
@@ -58,21 +75,53 @@ imageText :: Image -> [String]
 imageText img = map (map cellChar) (imageToGrid img)
 
 -- | Pretty-print a grid for debugging or golden-file comparison.
--- Shows the text grid first, then per-cell attributes (only for cells
--- whose attr differs from 'V.defAttr').
+-- Format:
+--
+-- @
+-- <width>x<height>
+-- <text grid, one row per line>
+-- --- attrs ---           -- only if any cell has explicit attrs
+-- <row>,<col> '<char>' <formatted attrs>
+-- @
+--
+-- Only cells with at least one 'V.SetTo' attribute appear in the attrs
+-- section. Cells with pure 'V.Default' or 'V.KeepCurrent' attrs are
+-- omitted, keeping goldens clean for unstyled output.
 renderGrid :: Grid -> String
 renderGrid grid =
-  unlines ("--- text ---" : map (map cellChar) grid)
-    ++ "--- attrs ---\n"
-    ++ attrLines
+  unlines (header : textRows) ++ attrsSection
   where
-    attrLines =
-      unlines
-        [ show (row, col) ++ " " ++ show c ++ " " ++ showAttr (cellAttr c)
-        | (row, line) <- zip [0 ..] grid
-        , (col, c) <- zip [0 ..] line
-        , cellAttr c /= V.defAttr
-        ]
+    h = length grid
+    w = case grid of
+      [] -> 0
+      r : _ -> length r
+    header = show w ++ "x" ++ show h
+    textRows = map (map cellChar) grid
+    explicitCells =
+      [ (row, col, c)
+      | (row, line) <- zip [0 ..] grid
+      , (col, c) <- zip [0 ..] line
+      , hasExplicitAttr (cellAttr c)
+      ]
+    attrsSection
+      | null explicitCells = ""
+      | otherwise =
+          unlines $
+            "--- attrs ---"
+              : [ show row ++ "," ++ show col ++ " '" ++ [cellChar c] ++ "' " ++ showAttr (cellAttr c)
+                | (row, col, c) <- explicitCells
+                ]
+
+-- | True if any field of the attr is 'V.SetTo' (i.e. explicitly set).
+hasExplicitAttr :: V.Attr -> Bool
+hasExplicitAttr a =
+  isSetTo (V.attrStyle a)
+    || isSetTo (V.attrForeColor a)
+    || isSetTo (V.attrBackColor a)
+    || isSetTo (V.attrURL a)
+  where
+    isSetTo (V.SetTo _) = True
+    isSetTo _ = False
 
 -- | Check whether two grids are equal. Returns 'Nothing' if they match,
 -- or a description of the first differing cell.
@@ -195,3 +244,25 @@ showAttr a =
             ]
           active = [name | (name, s) <- styles, V.hasStyle styleMask s]
        in if null active then "none" else unwords active
+
+----------------------------------------------------------------------------
+-- Golden file comparison
+----------------------------------------------------------------------------
+
+-- | Directory where golden files are stored.
+goldenDir :: FilePath
+goldenDir = "test" </> "goldens"
+
+-- | Compare actual output against a golden file. If the file doesn't
+-- exist yet, it is created (first-run golden creation). If it exists but
+-- differs, the test fails with a unified diff.
+assertGolden :: String -> String -> Expectation
+assertGolden name actual = do
+  let path = goldenDir </> name <.> "txt"
+  createDirectoryIfMissing True goldenDir
+  exists <- doesFileExist path
+  if not exists
+    then writeFile path actual
+    else do
+      expected <- readFile path
+      actual `shouldBe` expected

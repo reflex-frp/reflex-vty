@@ -17,7 +17,6 @@ import Reflex.Vty.Style
   )
 import qualified Reflex.Vty.Style as Style (red)
 import Reflex.Vty.Test.Snapshot
-
 spec :: Spec
 spec = describe "Reflex.Vty.Test.Snapshot" $ do
   describe "imageToGrid" $ do
@@ -25,7 +24,9 @@ spec = describe "Reflex.Vty.Test.Snapshot" $ do
       let img = render def "hello"
           grid = imageToGrid img
       length grid `shouldBe` 1
-      map cellChar (head grid) `shouldBe` "hello"
+      case grid of
+        [row] -> map cellChar row `shouldBe` "hello"
+        _ -> expectationFailure "expected exactly one row"
 
     it "renders multi-line text with correct rows" $ do
       let img = render def "ab\ncd"
@@ -37,15 +38,18 @@ spec = describe "Reflex.Vty.Test.Snapshot" $ do
     it "preserves attributes from the style" $ do
       let img = render (withForeground Style.red def) "X"
           grid = imageToGrid img
-          attr = cellAttr (head (head grid))
-      V.attrForeColor attr `shouldBe` V.SetTo Style.red
+      case grid of
+        ((c : _) : _) -> V.attrForeColor (cellAttr c) `shouldBe` V.SetTo Style.red
+        _ -> expectationFailure "expected at least one cell"
 
     it "renders borders as box-drawing characters" $ do
       let img = render (withBorder singleBorder def) "hi"
           grid = imageToGrid img
-          topRow = map cellChar (head grid)
-      head topRow `shouldBe` '┌'
-      last topRow `shouldBe` '┐'
+      case grid of
+        (topRow : _) -> do
+          map cellChar topRow `shouldStartWith` "\9484" -- ┌
+          last (map cellChar topRow) `shouldBe` '\9488' -- ┐
+        [] -> expectationFailure "expected at least one row"
 
   describe "imageText" $ do
     it "extracts text content from image" $ do

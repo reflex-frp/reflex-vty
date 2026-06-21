@@ -1,0 +1,6 @@
+3x1
+Red
+--- attrs ---
+0,0 'R' fg=ISOColor 1 bg=keep style=none url=keep
+0,1 'e' fg=ISOColor 1 bg=keep style=none url=keep
+0,2 'd' fg=ISOColor 1 bg=keep style=none url=keep

@@ -1,0 +1,9 @@
+6x1
+Italic
+--- attrs ---
+0,0 'I' fg=keep bg=keep style=italic url=keep
+0,1 't' fg=keep bg=keep style=italic url=keep
+0,2 'a' fg=keep bg=keep style=italic url=keep
+0,3 'l' fg=keep bg=keep style=italic url=keep
+0,4 'i' fg=keep bg=keep style=italic url=keep
+0,5 'c' fg=keep bg=keep style=italic url=keep

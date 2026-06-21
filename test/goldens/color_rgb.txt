@@ -1,0 +1,6 @@
+3x1
+RGB
+--- attrs ---
+0,0 'R' fg=RGBColor 147 32 8 bg=keep style=none url=keep
+0,1 'G' fg=RGBColor 147 32 8 bg=keep style=none url=keep
+0,2 'B' fg=RGBColor 147 32 8 bg=keep style=none url=keep
