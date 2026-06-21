@@ -61,7 +61,7 @@ From within the nix-shell you can:
 * Load the library in the repl: `cabal repl reflex-vty`
 * Build the example executable: `cabal build example`
 * Build the docs: `cabal haddock`
-* Run ghcid for immediate compiler feedback when you save a .hs file: `ghcid -c "cabal repl reflex-vty --ghc-options=-Wall"`
+* Run ghcid for immediate compiler feedback when you save a .hs file: `ghcid -c "cabal repl library:reflex-vty executable:example test:reflex-vty-test --ghc-options=-Wall" -o ghcid-output.txt`
 * etc.
 
 ##### Selecting a compiler
@@ -83,10 +83,9 @@ From the reflex-vty project directory:
 
 ```bash
 # nix-shell -p cabal-install binutils icu # for nix users
-cabal new-configure
-cabal new-build # to build the library and example
-cabal new-repl # to enter a repl for the library
-cabal new-repl example # to enter a repl for the example executable
+cabal build          # to build the library, example, and test suite
+cabal repl           # to enter a multi-repl covering all components
+cabal repl example   # to enter a repl for the example executable only
 ```
 
 ## About Obsidian Systems
