@@ -55,6 +55,16 @@ Once it's done you can test the following:
     * Make sure the "Total Lines", "Scroll Pos", and "Scroll Height" readouts below the box update as you scroll.
     * Type <kbd>Esc</kbd>.
 
+  * Click on `Styles`.
+    * Make sure you see a grid of labeled boxes demonstrating every border style preset (single, rounded, thick, double, ascii), padding and margin, foreground/background colors (including an RGB true-color swatch), text transforms (bold, italic, underline, reverse), horizontal alignment within a fixed-width box (left/center/right), a combined rounded-border + padded + colored box, and a hyperlink (underline + OSC 8 — clickable in supporting terminals).
+    * Make sure that resizing your terminal window causes the layout to resize as well.
+    * Type <kbd>Esc</kbd>.
+
+  * Click on `Color Profile`.
+    * Make sure the top line shows your terminal's detected `ColorProfile` (e.g. `ColorProfile_TrueColor` on a modern terminal).
+    * Make sure the row of swatches shows the same RGB orange (200,100,50) rendered through each profile: TrueColor shows the exact orange, Ansi256 shows a close approximation, Ansi16 shows the nearest ANSI color, Ascii and NoTTY show plain text with no color.
+    * Type <kbd>Esc</kbd>.
+
   * Type <kbd>Ctrl</kbd>+<kbd>C</kbd> to quit.
 
-There should be 6 examples to cover. If there are more or less than this then this QA guide is out of date and QA should fail.
+There should be 8 examples to cover. If there are more or less than this then this QA guide is out of date and QA should fail.

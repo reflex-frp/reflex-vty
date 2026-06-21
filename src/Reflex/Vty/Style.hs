@@ -12,7 +12,7 @@ Use 'render' or 'renderB' to produce an 'Image' from a 'Style' and some text.
 -}
 module Reflex.Vty.Style
   ( -- * Types
-    Style
+    Style(..)
   , def
     -- ** Sub-types
   , Color

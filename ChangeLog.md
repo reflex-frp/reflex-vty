@@ -6,6 +6,8 @@
 * Add `Reflex.Vty.Widget.Text.textWithAlignment`, an alignable versrion of `text`. `text` is now a synonym for `textWithAlignment TextAlignment_Left`.
 * Add `Reflex.Vty.ColorProfile` module: `ColorProfile` datatype (`TrueColor`/`Ansi256`/`Ansi16`/`Ascii`/`NoTTY`), `detectColorProfile`/`colorProfileFromVty` to read the terminal's capability from vty handle, `convertColor` for downsampling, and `applyProfile` to downsample an entire `V.Attr` (resets colors/style to `Default` for `Ascii`/`NoTTY`).
 * *Breaking change*: Add `HasColorProfile` class (with `colorProfile`/`localColorProfile` and a `ColorProfileReader` transformer) to `Reflex.Vty.Widget`.Widgets can call `colorProfile` to make decisions based on terminal capability.
+* Add `Reflex.Vty.Style`: Lip Gloss-inspired declarative styling.
+* *Breaking change*: `Reflex.Vty.Style` re-exports color constants (`red`/`yellow`/`white`/etc.) from `Reflex.Vty`.
 
 ## 0.6.2.1
 
