@@ -3,7 +3,6 @@
 -}
 module Reflex.Vty.Widget.Split where
 
-import Control.Applicative
 import Control.Monad.Fix
 import Graphics.Vty as V
 import Reflex

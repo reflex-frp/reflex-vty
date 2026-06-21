@@ -6,7 +6,6 @@ Description: Monad transformer and tools for arranging widgets and building scre
 
 module Reflex.Vty.Widget.Layout where
 
-import Control.Applicative (liftA2)
 import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
 import Control.Monad.Morph
 import Control.Monad.NodeId (MonadNodeId(..), NodeId)

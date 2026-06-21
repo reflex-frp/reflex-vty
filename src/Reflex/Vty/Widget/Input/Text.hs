@@ -51,10 +51,13 @@ data TextInputConfig t = TextInputConfig
   , _textInputConfig_display :: Dynamic t (Char -> Char)
   -- ^ Transform the characters in a text input before displaying them. This is useful, e.g., for
   -- masking characters when entering passwords.
+  , _textInputConfig_alignment :: TextAlignment
+  -- ^ How to align the entered text within the input region. Defaults to
+  -- 'TextAlignment_Left'. See 'Data.Text.Zipper.displayLinesWithAlignment'.
   }
 
 instance Reflex t => Default (TextInputConfig t) where
-  def = TextInputConfig empty never 4 (pure id)
+  def = TextInputConfig empty never 4 (pure id) TextAlignment_Left
 
 -- | The output produced by text input widgets, including the text
 -- value and the number of display lines (post-wrapping). Note that some
@@ -105,7 +108,7 @@ textInput cfg = do
             <*> f
           toDisplayLines attr (w, s, x)  =
             let c = if x then toCursorAttrs attr else attr
-            in displayLines w attr c s
+            in displayLinesWithAlignment (_textInputConfig_alignment cfg) w attr c s
       attrDyn <- holdDyn attr0 $ pushAlways (\_ -> sample bt) (updated rowInputDyn)
       let rows = ffor2 attrDyn rowInputDyn toDisplayLines
           img = images . _displayLines_spans <$> rows

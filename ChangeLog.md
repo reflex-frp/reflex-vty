@@ -1,5 +1,11 @@
 # Revision history for reflex-vty
 
+## 0.7.0.0
+
+* *Breaking change*: `TextInputConfig` has a new field, `_textInputConfig_alignment :: TextAlignment`, controlling how entered text is aligned within the input region. `def` uses `TextAlignment_Left`, recovering the previous behavior. `textInput` now renders via `Data.Text.Zipper.displayLinesWithAlignment` instead of `displayLines`.
+* Add `Reflex.Vty.Widget.Text.textWithAlignment`, an alignment-aware variant of `text`. `text` is now a synonym for `textWithAlignment TextAlignment_Left`; both render via `Data.Text.Zipper.wrapWithOffsetAndAlignment` instead of the left-aligned-only `wrapWithOffset`.
+* Refresh `doc/qa.md` to cover all six example demos (`Todo List`, `Text Editor`, `Scrollable text display`, `Clickable buttons`, `CPU Usage`, `Scrollable`); the previous guide claimed there were only three.
+
 ## 0.6.2.1
 
 * Update dependency version bounds

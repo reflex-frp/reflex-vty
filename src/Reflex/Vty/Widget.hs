@@ -9,7 +9,6 @@ Description: Basic set of widgets and building blocks for reflex-vty application
 
 module Reflex.Vty.Widget where
 
-import Control.Applicative (liftA2)
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO)
@@ -19,6 +18,7 @@ import Control.Monad.Reader (ReaderT(..), ask, local, runReaderT)
 import Control.Monad.Ref
 import Control.Monad.Trans (MonadTrans, lift)
 import Control.Monad.Trans.State.Strict
+import Data.Kind (Type)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Graphics.Vty (Image)
@@ -248,7 +248,7 @@ inputInFocusedRegion = do
         V.EvKey _ _ | not focused -> Nothing
 
         -- filter scroll wheel input based on mouse position
-        ev@(V.EvMouseDown x y btn m) | btn == V.BScrollUp || btn == V.BScrollDown -> case tracking of
+        V.EvMouseDown x y btn m | btn == V.BScrollUp || btn == V.BScrollDown -> case tracking of
           trck@(Tracking _) -> Just (trck, Nothing)
           _ -> Just (WaitingForInput, if withinRegion reg x y then Just (V.EvMouseDown (x - l) (y - t) btn m) else Nothing)
 
@@ -462,7 +462,7 @@ runFocusReader b = flip runReaderT b . unFocusReader
 -- * "Image" output
 
 -- | A class for widgets that can produce images to draw to the display
-class (Reflex t, Monad m) => HasImageWriter (t :: *) m | m -> t where
+class (Reflex t, Monad m) => HasImageWriter (t :: Type) m | m -> t where
   -- | Send images upstream for rendering
   tellImages :: Behavior t [Image] -> m ()
   default tellImages :: (f m' ~ m, Monad m', MonadTrans f, HasImageWriter t m') => Behavior t [Image] -> m ()

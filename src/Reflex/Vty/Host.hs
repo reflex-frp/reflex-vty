@@ -16,21 +16,20 @@ import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.Chan (newChan, readChan, writeChan)
 import Control.Exception (onException)
 import Control.Monad (forM, forM_, forever)
-import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
+import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.Fix (MonadFix, fix)
-import Control.Monad.IO.Class (liftIO, MonadIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Identity (Identity(..))
 import Control.Monad.Primitive (PrimMonad)
 import Control.Monad.Ref (MonadRef, Ref, readRef)
-import Data.Dependent.Sum (DSum ((:=>)))
+import Data.Dependent.Sum (DSum((:=>)))
 import Data.IORef (IORef, readIORef)
 import Data.Maybe (catMaybes)
 
-import Reflex
-import Reflex.Host.Class
-import Reflex.Spider.Orphans ()
 import qualified Graphics.Vty as V
 import qualified Graphics.Vty.CrossPlatform as V
+import Reflex
+import Reflex.Host.Class
 
 import Graphics.Vty (DisplayRegion)
 
@@ -236,4 +235,3 @@ getDefaultVty = do
   vty <- V.mkVty cfg
   liftIO $ V.setMode (V.outputIface vty) V.Mouse True
   return vty
-

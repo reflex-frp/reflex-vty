@@ -113,7 +113,7 @@ scrollingWithLayout
      , PerformEvent t m
      ) => m ()
 scrollingWithLayout = col $ do
-  (s, x) <- tile flex $ boxTitle (constant def) (constant "Tracks") $ scrollable def $ do
+  (s, _) <- tile flex $ boxTitle (constant def) (constant "Tracks") $ scrollable def $ do
     result <- do
       forM_ [(0::Int)..10] $ \n -> do
         tile (fixed 5) $ do
@@ -333,11 +333,6 @@ testBoxes = do
     div' :: (Integral a, Applicative f) => f a -> f a -> f a
     div' = liftA2 div
 
-debugFocus :: (VtyExample t m) => m ()
-debugFocus = do
-  f <- focus
-  text $ T.pack . show <$> current f
-
 debugInput :: (VtyExample t m, MonadHold t m) => m ()
 debugInput = do
   lastEvent <- hold "No event yet" . fmap show =<< input
@@ -347,7 +342,3 @@ dragTest :: (VtyExample t m, MonadHold t m) => m ()
 dragTest = do
   lastEvent <- hold "No event yet" . fmap show =<< drag V.BLeft
   text $ T.pack <$> lastEvent
-
-testStringBox :: VtyExample t m => m ()
-testStringBox = boxStatic singleBoxStyle .
-  text . pure . T.pack . take 500 $ cycle ('\n' : ['a'..'z'])
