@@ -6,10 +6,12 @@
 import Test.Hspec
 
 import qualified Data.Text.ZipperSpec
+import qualified Reflex.Vty.ColorProfileSpec
 
 main :: IO ()
 main = hspec spec
 
 spec :: Spec
 spec = do
-  describe "Data.Text.ZipperSpec"     Data.Text.ZipperSpec.spec
+  describe "Data.Text.ZipperSpec"       Data.Text.ZipperSpec.spec
+  describe "Reflex.Vty.ColorProfileSpec" Reflex.Vty.ColorProfileSpec.spec

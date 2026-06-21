@@ -143,6 +143,8 @@ instance (HasFocusReader t m, Monad m) => HasFocusReader t (Focus t m)
 
 instance (HasTheme t m, Monad m) => HasTheme t (Focus t m)
 
+instance (HasColorProfile t m, Monad m) => HasColorProfile t (Focus t m)
+
 instance (Reflex t, MonadFix m, MonadNodeId m) => HasFocus t (Focus t m) where
   makeFocus = do
     fid <- FocusId <$> lift getNextNodeId
@@ -449,6 +451,8 @@ instance (HasDisplayRegion t m, HasImageWriter t m, MonadFix m) => HasImageWrite
 instance (HasFocusReader t m, Monad m) => HasFocusReader t (Layout t m)
 
 instance (HasTheme t m, Monad m) => HasTheme t (Layout t m)
+
+instance (HasColorProfile t m, Monad m) => HasColorProfile t (Layout t m)
 
 instance (Monad m, MonadNodeId m, Reflex t, MonadFix m) => HasLayout t (Layout t m) where
   axis o c (Layout x) = Layout $ do

@@ -12,6 +12,7 @@ Portability : POSIX
 -}
 module Reflex.Vty
   ( module Reflex
+  , module Reflex.Vty.ColorProfile
   , module Reflex.Vty.Host
   , module Reflex.Vty.Widget
   , module Reflex.Vty.Widget.Box
@@ -24,6 +25,7 @@ module Reflex.Vty
   ) where
 
 import Reflex
+import Reflex.Vty.ColorProfile
 import Reflex.Vty.Host
 import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Box

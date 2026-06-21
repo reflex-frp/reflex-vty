@@ -29,6 +29,7 @@ type VtyExample t m =
   , HasFocus t m
   , HasFocusReader t m
   , HasTheme t m
+  , HasColorProfile t m
   )
 
 type Manager t m =

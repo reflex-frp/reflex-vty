@@ -2,9 +2,10 @@
 
 ## 0.7.0.0
 
-* *Breaking change*: `TextInputConfig` has a new field, `_textInputConfig_alignment :: TextAlignment`, controlling how entered text is aligned within the input region. `def` uses `TextAlignment_Left`, recovering the previous behavior. `textInput` now renders via `Data.Text.Zipper.displayLinesWithAlignment` instead of `displayLines`.
-* Add `Reflex.Vty.Widget.Text.textWithAlignment`, an alignment-aware variant of `text`. `text` is now a synonym for `textWithAlignment TextAlignment_Left`; both render via `Data.Text.Zipper.wrapWithOffsetAndAlignment` instead of the left-aligned-only `wrapWithOffset`.
-* Refresh `doc/qa.md` to cover all six example demos (`Todo List`, `Text Editor`, `Scrollable text display`, `Clickable buttons`, `CPU Usage`, `Scrollable`); the previous guide claimed there were only three.
+* *Breaking change*: `TextInputConfig` has a new field, `_textInputConfig_alignment :: TextAlignment`, controlling how entered text is aligned within the input region. `def` uses `TextAlignment_Left`.
+* Add `Reflex.Vty.Widget.Text.textWithAlignment`, an alignable versrion of `text`. `text` is now a synonym for `textWithAlignment TextAlignment_Left`.
+* Add `Reflex.Vty.ColorProfile` module: `ColorProfile` datatype (`TrueColor`/`Ansi256`/`Ansi16`/`Ascii`/`NoTTY`), `detectColorProfile`/`colorProfileFromVty` to read the terminal's capability from vty handle, `convertColor` for downsampling, and `applyProfile` to downsample an entire `V.Attr` (resets colors/style to `Default` for `Ascii`/`NoTTY`).
+* *Breaking change*: Add `HasColorProfile` class (with `colorProfile`/`localColorProfile` and a `ColorProfileReader` transformer) to `Reflex.Vty.Widget`.Widgets can call `colorProfile` to make decisions based on terminal capability.
 
 ## 0.6.2.1
 

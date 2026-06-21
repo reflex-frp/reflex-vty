@@ -26,6 +26,7 @@ import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Class ()
 import Reflex.Host.Class (MonadReflexCreateTrigger)
+import Reflex.Vty.ColorProfile
 import Reflex.Vty.Host
 
 -- * Running a vty application
@@ -41,10 +42,12 @@ mainWidgetWithHandle
       , HasFocusReader t m
       , HasInput t m
       , HasTheme t m
+      , HasColorProfile t m
       ) => m (Event t ()))
   -> IO ()
 mainWidgetWithHandle vty child =
   runVtyAppWithHandle vty $ \dr0 inp -> do
+    let profile = colorProfileFromVty vty
     size <- holdDyn dr0 $ fforMaybe inp $ \case
       V.EvResize w h -> Just (w, h)
       _ -> Nothing
@@ -52,13 +55,14 @@ mainWidgetWithHandle vty child =
           V.EvResize {} -> Nothing
           x -> Just x
     (shutdown, images) <- runThemeReader (constant V.defAttr) $
-      runFocusReader (pure True) $
-        runDisplayRegion (fmap (\(w, h) -> Region 0 0 w h) size) $
-          runImageWriter $
-            runNodeIdT $
-              runInput inp' $ do
-                tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
-                child
+      runColorProfileReader (constant profile) $
+        runFocusReader (pure True) $
+          runDisplayRegion (fmap (\(w, h) -> Region 0 0 w h) size) $
+            runImageWriter $
+              runNodeIdT $
+                runInput inp' $ do
+                  tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
+                  child
     return $ VtyResult
       { _vtyResult_picture = fmap (V.picForLayers . reverse) images
       , _vtyResult_shutdown = shutdown
@@ -78,6 +82,7 @@ mainWidget
       , HasDisplayRegion t m
       , HasFocusReader t m
       , HasTheme t m
+      , HasColorProfile t m
       , HasInput t m
       ) => m (Event t ()))
   -> IO ()
@@ -630,6 +635,87 @@ runThemeReader
   -> ThemeReader t m a
   -> m a
 runThemeReader b = flip runReaderT b . unThemeReader
+
+-- * Color profile
+
+-- | A class for widgets that need to know the terminal's color capability.
+-- Widgets build with true-color 'V.Attr's and the host downsamples via
+-- 'Reflex.Vty.ColorProfile.applyProfile' at the 'V.Picture' boundary, so
+-- most widgets never need to call 'colorProfile' directly — it is useful
+-- when a widget wants to make a /structural/ decision based on capability
+-- (e.g. choosing a different glyph for an 8-color terminal).
+class (Reflex t, Monad m) => HasColorProfile t m | m -> t where
+  colorProfile :: m (Behavior t ColorProfile)
+  default colorProfile :: (f m' ~ m, Monad m', MonadTrans f, HasColorProfile t m') => m (Behavior t ColorProfile)
+  colorProfile = lift colorProfile
+  localColorProfile :: (Behavior t ColorProfile -> Behavior t ColorProfile) -> m a -> m a
+  default localColorProfile :: (f m' ~ m, Monad m', MFunctor f, HasColorProfile t m') => (Behavior t ColorProfile -> Behavior t ColorProfile) -> m a -> m a
+  localColorProfile f = hoist (localColorProfile f)
+
+instance HasColorProfile t m => HasColorProfile t (ReaderT x m)
+instance HasColorProfile t m => HasColorProfile t (BehaviorWriterT t x m)
+instance HasColorProfile t m => HasColorProfile t (DynamicWriterT t x m)
+instance HasColorProfile t m => HasColorProfile t (EventWriterT t x m)
+instance HasColorProfile t m => HasColorProfile t (NodeIdT m)
+instance HasColorProfile t m => HasColorProfile t (Input t m)
+instance HasColorProfile t m => HasColorProfile t (ImageWriter t m)
+instance HasColorProfile t m => HasColorProfile t (DisplayRegion t m)
+instance HasColorProfile t m => HasColorProfile t (FocusReader t m)
+instance HasColorProfile t m => HasColorProfile t (ThemeReader t m)
+
+-- | A widget that has access to the terminal's 'ColorProfile'.
+newtype ColorProfileReader t m a = ColorProfileReader
+  { unColorProfileReader :: ReaderT (Behavior t ColorProfile) m a }
+  deriving
+    ( Functor
+    , Applicative
+    , Monad
+    , MonadFix
+    , MonadHold t
+    , MonadIO
+    , MonadRef
+    , MonadSample t
+    , MonadCatch
+    , MonadThrow
+    , MonadMask
+    )
+
+instance (Monad m, Reflex t) => HasColorProfile t (ColorProfileReader t m) where
+  colorProfile = ColorProfileReader ask
+  localColorProfile f = ColorProfileReader . local f . unColorProfileReader
+
+deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (ColorProfileReader t m)
+deriving instance NotReady t m => NotReady t (ColorProfileReader t m)
+deriving instance PerformEvent t m => PerformEvent t (ColorProfileReader t m)
+deriving instance PostBuild t m => PostBuild t (ColorProfileReader t m)
+deriving instance TriggerEvent t m => TriggerEvent t (ColorProfileReader t m)
+instance HasImageWriter t m => HasImageWriter t (ColorProfileReader t m) where
+  captureImages x = ColorProfileReader $ do
+    a <- ask
+    lift $ captureImages $ flip runReaderT a $ unColorProfileReader x
+instance HasTheme t m => HasTheme t (ColorProfileReader t m)
+
+instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (ColorProfileReader t m) where
+  runWithReplace (ColorProfileReader a) e = ColorProfileReader $ runWithReplace a $ fmap unColorProfileReader e
+  traverseIntMapWithKeyWithAdjust f m e = ColorProfileReader $ traverseIntMapWithKeyWithAdjust (\k v -> unColorProfileReader $ f k v) m e
+  traverseDMapWithKeyWithAdjust f m e = ColorProfileReader $ traverseDMapWithKeyWithAdjust (\k v -> unColorProfileReader $ f k v) m e
+  traverseDMapWithKeyWithAdjustWithMove f m e = ColorProfileReader $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unColorProfileReader $ f k v) m e
+
+instance MonadTrans (ColorProfileReader t) where
+  lift = ColorProfileReader . lift
+
+instance MFunctor (ColorProfileReader t) where
+  hoist f = ColorProfileReader . hoist f . unColorProfileReader
+
+instance MonadNodeId m => MonadNodeId (ColorProfileReader t m)
+
+-- | Run a 'ColorProfileReader' action with the given profile.
+runColorProfileReader
+  :: (Reflex t, Monad m)
+  => Behavior t ColorProfile
+  -> ColorProfileReader t m a
+  -> m a
+runColorProfileReader b = flip runReaderT b . unColorProfileReader
 
 
 -- ** Manipulating images
