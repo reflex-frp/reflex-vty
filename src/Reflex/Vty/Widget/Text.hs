@@ -10,6 +10,7 @@ import qualified Graphics.Vty as V
 import Reflex
 
 import Data.Text.Zipper as TZ
+import Reflex.Vty.Style (mergeAttr)
 import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Scroll
 
@@ -43,10 +44,12 @@ richText
   -> m ()
 richText cfg t = do
   dw <- displayWidth
-  let img =
+  bt <- themeAttr
+  let attrs = mergeAttr <$> bt <*> _richTextConfig_attributes cfg
+      img =
         (\w a s -> [wrapTextImage TextAlignment_Left w a s])
           <$> current dw
-          <*> _richTextConfig_attributes cfg
+          <*> attrs
           <*> t
   tellImages img
 

@@ -1,16 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Data.Text.ZipperSpec (
-  spec,
-) where
-
-import Prelude
-
-import Test.Hspec
+module Data.Text.ZipperSpec
+  ( spec
+  ) where
 
 import Control.Monad
 import qualified Data.Map as Map
 import qualified Data.Text as T
+import Test.Hspec
+import Prelude
 
 import Data.Text.Zipper
 
@@ -69,16 +67,15 @@ spec =
           , (5, (3, 11)) -- jump by 2 for char and 1 for space
           ]
     it "displayLinesWithAlignment - spans" $ do
-      let
-        makespans = fmap (fmap (Span ()))
-        insertcharnewlinesentence = insertChar '\n' $ insertChar '\n' $ insertChar '\n' $ insertChar '\n' $ insertChar '\n' $ fromText ""
-        cursorspan = [[Span () " "]]
-        -- newline cases
-        dl0 = displayLinesWithAlignment TextAlignment_Right 10 () () (fromText newlineSentence)
-        dl1 = displayLinesWithAlignment TextAlignment_Right 10 () () (fromText "aoeu\n\n\naoeu")
-        dl2 = displayLinesWithAlignment TextAlignment_Right 10 () () (fromText "\n\n\naoeu")
-        dl3 = displayLinesWithAlignment TextAlignment_Right 10 () () (fromText "aoeu\n\n\n")
-        dl4 = displayLinesWithAlignment TextAlignment_Right 10 () () (empty)
+      let makespans = fmap (fmap (Span ()))
+          insertcharnewlinesentence = insertChar '\n' $ insertChar '\n' $ insertChar '\n' $ insertChar '\n' $ insertChar '\n' $ fromText ""
+          cursorspan = [[Span () " "]]
+          -- newline cases
+          dl0 = displayLinesWithAlignment TextAlignment_Right 10 () () (fromText newlineSentence)
+          dl1 = displayLinesWithAlignment TextAlignment_Right 10 () () (fromText "aoeu\n\n\naoeu")
+          dl2 = displayLinesWithAlignment TextAlignment_Right 10 () () (fromText "\n\n\naoeu")
+          dl3 = displayLinesWithAlignment TextAlignment_Right 10 () () (fromText "aoeu\n\n\n")
+          dl4 = displayLinesWithAlignment TextAlignment_Right 10 () () (empty)
 
       insertcharnewlinesentence `shouldBe` fromText newlineSentence
 
@@ -90,22 +87,20 @@ spec =
       _displayLines_spans dl4 `shouldBe` makespans [[""]]
 
     it "displayLinesWithAlignment - cursor tag" $ do
-      let
-        dl0 = displayLinesWithAlignment TextAlignment_Right 10 0 1 (fromText "abc")
-        dl1 = displayLinesWithAlignment TextAlignment_Right 10 0 1 empty
+      let dl0 = displayLinesWithAlignment TextAlignment_Right 10 0 1 (fromText "abc")
+          dl1 = displayLinesWithAlignment TextAlignment_Right 10 0 1 empty
       _displayLines_spans dl0 `shouldBe` [[Span 0 "abc", Span 1 ""]]
       _displayLines_spans dl1 `shouldBe` [[Span 1 ""]]
 
     it "displayLines - cursorPos" $ do
-      let
-        dl0 = displayLinesWithAlignment TextAlignment_Left 10 () () (fromText "")
-        dl1 = displayLinesWithAlignment TextAlignment_Left 10 () () (fromText "aoeu")
-        dl2 = displayLinesWithAlignment TextAlignment_Left 10 () () (fromText "aoeu\n")
-        dl3 = displayLinesWithAlignment TextAlignment_Left 10 () () (fromText "0123456789")
-        dl4 = displayLinesWithAlignment TextAlignment_Left 10 () () (insertChar 'a' $ fromText "aoeu")
-        dl5 = displayLinesWithAlignment TextAlignment_Left 10 () () (left $ insertChar 'a' $ fromText "aoeu")
-        dl6 = displayLinesWithAlignment TextAlignment_Left 10 () () (deleteLeft $ insertChar 'a' $ fromText "aoeu")
-        dl7 = displayLinesWithAlignment TextAlignment_Right 10 () () (fromText "")
+      let dl0 = displayLinesWithAlignment TextAlignment_Left 10 () () (fromText "")
+          dl1 = displayLinesWithAlignment TextAlignment_Left 10 () () (fromText "aoeu")
+          dl2 = displayLinesWithAlignment TextAlignment_Left 10 () () (fromText "aoeu\n")
+          dl3 = displayLinesWithAlignment TextAlignment_Left 10 () () (fromText "0123456789")
+          dl4 = displayLinesWithAlignment TextAlignment_Left 10 () () (insertChar 'a' $ fromText "aoeu")
+          dl5 = displayLinesWithAlignment TextAlignment_Left 10 () () (left $ insertChar 'a' $ fromText "aoeu")
+          dl6 = displayLinesWithAlignment TextAlignment_Left 10 () () (deleteLeft $ insertChar 'a' $ fromText "aoeu")
+          dl7 = displayLinesWithAlignment TextAlignment_Right 10 () () (fromText "")
 
       _displayLines_cursorPos dl0 `shouldBe` (0, 0)
       _displayLines_cursorPos dl1 `shouldBe` (4, 0)
@@ -116,8 +111,7 @@ spec =
       _displayLines_cursorPos dl6 `shouldBe` (4, 0)
       _displayLines_cursorPos dl7 `shouldBe` (10, 0)
     it "displayLinesWithAlignment - spans" $ do
-      let
-        someText = top $ fromText "0123456789abcdefgh"
+      let someText = top $ fromText "0123456789abcdefgh"
       -- outer span length should be invariant when changing TextAlignment and CursorPosition
       -- print $ displayLinesWithAlignment TextAlignment_Left 5 () () someText
       forM_ [0 .. 4] $ \x -> do

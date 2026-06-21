@@ -1,0 +1,7 @@
+4x1
+Blue
+--- attrs ---
+0,0 'B' fg=keep bg=ISOColor 4 style=none url=keep
+0,1 'l' fg=keep bg=ISOColor 4 style=none url=keep
+0,2 'u' fg=keep bg=ISOColor 4 style=none url=keep
+0,3 'e' fg=keep bg=ISOColor 4 style=none url=keep

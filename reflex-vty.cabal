@@ -152,10 +152,15 @@ test-suite reflex-vty-test
     Data.Text.ZipperSpec
     Reflex.Vty.ColorProfileSpec
     Reflex.Vty.StyleSpec
+    Reflex.Vty.Test.Snapshot
+    Reflex.Vty.Test.SnapshotSpec
+    Reflex.Vty.Test.GoldenSpec
   build-depends:
     base,
     reflex,
     containers,
+    directory,
+    filepath,
     reflex-vty,
     text,
     extra,

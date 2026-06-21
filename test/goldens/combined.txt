@@ -1,0 +1,69 @@
+14x5
+╭────────────╮
+│            │
+│  Combined  │
+│            │
+╰────────────╯
+--- attrs ---
+0,0 '╭' fg=ISOColor 13 bg=keep style=none url=keep
+0,1 '─' fg=ISOColor 13 bg=keep style=none url=keep
+0,2 '─' fg=ISOColor 13 bg=keep style=none url=keep
+0,3 '─' fg=ISOColor 13 bg=keep style=none url=keep
+0,4 '─' fg=ISOColor 13 bg=keep style=none url=keep
+0,5 '─' fg=ISOColor 13 bg=keep style=none url=keep
+0,6 '─' fg=ISOColor 13 bg=keep style=none url=keep
+0,7 '─' fg=ISOColor 13 bg=keep style=none url=keep
+0,8 '─' fg=ISOColor 13 bg=keep style=none url=keep
+0,9 '─' fg=ISOColor 13 bg=keep style=none url=keep
+0,10 '─' fg=ISOColor 13 bg=keep style=none url=keep
+0,11 '─' fg=ISOColor 13 bg=keep style=none url=keep
+0,12 '─' fg=ISOColor 13 bg=keep style=none url=keep
+0,13 '╮' fg=ISOColor 13 bg=keep style=none url=keep
+1,0 '│' fg=ISOColor 13 bg=keep style=none url=keep
+1,1 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+1,2 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+1,3 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+1,4 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+1,5 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+1,6 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+1,7 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+1,8 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+1,13 '│' fg=ISOColor 13 bg=keep style=none url=keep
+2,0 '│' fg=ISOColor 13 bg=keep style=none url=keep
+2,1 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+2,2 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+2,3 'C' fg=ISOColor 10 bg=keep style=none url=keep
+2,4 'o' fg=ISOColor 10 bg=keep style=none url=keep
+2,5 'm' fg=ISOColor 10 bg=keep style=none url=keep
+2,6 'b' fg=ISOColor 10 bg=keep style=none url=keep
+2,7 'i' fg=ISOColor 10 bg=keep style=none url=keep
+2,8 'n' fg=ISOColor 10 bg=keep style=none url=keep
+2,9 'e' fg=ISOColor 10 bg=keep style=none url=keep
+2,10 'd' fg=ISOColor 10 bg=keep style=none url=keep
+2,11 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+2,12 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+2,13 '│' fg=ISOColor 13 bg=keep style=none url=keep
+3,0 '│' fg=ISOColor 13 bg=keep style=none url=keep
+3,1 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+3,2 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+3,3 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+3,4 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+3,5 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+3,6 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+3,7 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+3,8 ' ' fg=ISOColor 10 bg=keep style=none url=keep
+3,13 '│' fg=ISOColor 13 bg=keep style=none url=keep
+4,0 '╰' fg=ISOColor 13 bg=keep style=none url=keep
+4,1 '─' fg=ISOColor 13 bg=keep style=none url=keep
+4,2 '─' fg=ISOColor 13 bg=keep style=none url=keep
+4,3 '─' fg=ISOColor 13 bg=keep style=none url=keep
+4,4 '─' fg=ISOColor 13 bg=keep style=none url=keep
+4,5 '─' fg=ISOColor 13 bg=keep style=none url=keep
+4,6 '─' fg=ISOColor 13 bg=keep style=none url=keep
+4,7 '─' fg=ISOColor 13 bg=keep style=none url=keep
+4,8 '─' fg=ISOColor 13 bg=keep style=none url=keep
+4,9 '─' fg=ISOColor 13 bg=keep style=none url=keep
+4,10 '─' fg=ISOColor 13 bg=keep style=none url=keep
+4,11 '─' fg=ISOColor 13 bg=keep style=none url=keep
+4,12 '─' fg=ISOColor 13 bg=keep style=none url=keep
+4,13 '╯' fg=ISOColor 13 bg=keep style=none url=keep

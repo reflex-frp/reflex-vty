@@ -1,10 +1,10 @@
-{ reflex-platform ? import ./dep/reflex-platform
-, supportedSystems ? [ "x86_64-linux" "x86_64-darwin" ]
+{ supportedSystems ? [ "x86_64-linux" "x86_64-darwin" ]
+, pkgs ? import ./dep/nixpkgs {}
 }:
 let
-  rp = reflex-platform {};
-  pkgs = rp.nixpkgs;
   inherit (pkgs) lib;
+  nixThunk = import ./dep/nix-thunk {};
+  thunkSource = nixThunk.thunkSource;
   haskellLib = pkgs.haskell.lib;
   commonOverrides = self: super: {
     vty = self.callHackageDirect {
@@ -22,13 +22,9 @@ let
       ver = "0.2.0.0";
       sha256 = "b03a315f1aa8f70e5e3aab36b88ed2e49cd646c56b1e34c195dae13c929ca926";
     } {};
-    reflex = self.callCabal2nix "reflex" (rp.hackGet ./dep/reflex) {};
+    reflex = self.callCabal2nix "reflex" (thunkSource ./dep/reflex) {};
   };
   ghcs = lib.genAttrs supportedSystems (system: let
-    rp = reflex-platform { inherit system; __useNewerCompiler = true; };
-    rpGhc = rp.ghc.override {
-      overrides = commonOverrides;
-    };
     nixGhc94 = (import ./dep/nixpkgs { inherit system; }).haskell.packages.ghc94.override {
       overrides = self: super: commonOverrides self super // {
         hlint = self.callHackageDirect {
@@ -50,7 +46,7 @@ let
     nixGhc96 = (import ./dep/nixpkgs { inherit system; }).haskell.packages.ghc96.override {
       overrides = self: super: commonOverrides self super // {
 
-        reflex = self.callCabal2nix "reflex" (rp.hackGet ./dep/reflex) {};
+        reflex = self.callCabal2nix "reflex" (thunkSource ./dep/reflex) {};
 
         patch = self.callHackageDirect {
           pkg = "patch";
@@ -98,7 +94,6 @@ let
   in
   {
     recurseForDerivations = true;
-    ghc810 = rpGhc.callCabal2nix "reflex-vty" (import ./src.nix) {};
     ghc94 = nixGhc94.callCabal2nix "reflex-vty" (import ./src.nix) {};
     ghc96 = nixGhc96.callCabal2nix "reflex-vty" (import ./src.nix) {};
     ghc98 = nixGhc98.callCabal2nix "reflex-vty" (import ./src.nix) {};

@@ -1,0 +1,7 @@
+4x1
+Bold
+--- attrs ---
+0,0 'B' fg=keep bg=keep style=bold url=keep
+0,1 'o' fg=keep bg=keep style=bold url=keep
+0,2 'l' fg=keep bg=keep style=bold url=keep
+0,3 'd' fg=keep bg=keep style=bold url=keep

@@ -2,11 +2,10 @@
 
 module Reflex.Vty.StyleSpec (spec) where
 
-import Test.Hspec
-
 import qualified Graphics.Vty as V
 import qualified Graphics.Vty.Attributes.Color as V.Color
 import qualified Graphics.Vty.Image as V.Image
+import Test.Hspec
 
 import Reflex.Vty.Style
 
@@ -19,6 +18,41 @@ spec = describe "Reflex.Vty.Style" $ do
       _style_border def `shouldBe` Nothing
     it "has zero padding" $
       _style_padding def `shouldBe` Padding 0 0 0 0
+    it "has zero margin" $
+      _style_margin def `shouldBe` Margin 0 0 0 0
+
+  describe "per-side setters" $ do
+    it "withPaddingTop sets only top" $ do
+      let s = withPaddingTop 3 def
+      _padding_top (_style_padding s) `shouldBe` 3
+      _padding_right (_style_padding s) `shouldBe` 0
+    it "withPaddingRight sets only right" $ do
+      let s = withPaddingRight 2 def
+      _padding_right (_style_padding s) `shouldBe` 2
+      _padding_top (_style_padding s) `shouldBe` 0
+    it "withPaddingBottom sets only bottom" $ do
+      let s = withPaddingBottom 4 def
+      _padding_bottom (_style_padding s) `shouldBe` 4
+    it "withPaddingLeft sets only left" $ do
+      let s = withPaddingLeft 1 def
+      _padding_left (_style_padding s) `shouldBe` 1
+    it "withMarginTop sets only top" $ do
+      let s = withMarginTop 2 def
+      _margin_top (_style_margin s) `shouldBe` 2
+      _margin_right (_style_margin s) `shouldBe` 0
+    it "withMarginLeft sets only left" $ do
+      let s = withMarginLeft 3 def
+      _margin_left (_style_margin s) `shouldBe` 3
+    it "withBorderTop enables only top toggle" $ do
+      let s = withBorderTop True def
+      _style_borderTop s `shouldBe` Just True
+      _style_borderBottom s `shouldBe` Nothing
+    it "withBorderForeground sets border color" $ do
+      let s = withBorderForeground red def
+      _style_borderForeground s `shouldBe` Just red
+    it "withBorderBackground sets border bg" $ do
+      let s = withBorderBackground blue def
+      _style_borderBackground s `shouldBe` Just blue
 
   describe "inherit" $ do
     let parent = withForeground red . withBold . withWidth 10 $ def
@@ -56,11 +90,43 @@ spec = describe "Reflex.Vty.Style" $ do
     it "does not apply underline for UnderlineNone" $ do
       let s = withUnderline UnderlineNone def
       V.hasStyle (V.styleMask (applyAttr s V.defAttr)) V.underline `shouldBe` False
+    it "applies italic" $ do
+      let s = withItalic def
+      V.hasStyle (V.styleMask (applyAttr s V.defAttr)) V.italic `shouldBe` True
+    it "applies faint (dim)" $ do
+      let s = withFaint def
+      V.hasStyle (V.styleMask (applyAttr s V.defAttr)) V.dim `shouldBe` True
+    it "applies blink" $ do
+      let s = withBlink def
+      V.hasStyle (V.styleMask (applyAttr s V.defAttr)) V.blink `shouldBe` True
+    it "applies strikethrough" $ do
+      let s = withStrikethrough def
+      V.hasStyle (V.styleMask (applyAttr s V.defAttr)) V.strikethrough `shouldBe` True
+    it "applies reverse video" $ do
+      let s = withReverse def
+      V.hasStyle (V.styleMask (applyAttr s V.defAttr)) V.reverseVideo `shouldBe` True
     it "applies the hyperlink URL" $ do
       let s = withHyperlink "https://example.com" def
       V.attrURL (applyAttr s V.defAttr) `shouldBe` V.SetTo "https://example.com"
     it "leaves the base attr unchanged for def" $ do
       applyAttr def V.defAttr `shouldBe` V.defAttr
+
+  describe "mergeAttr" $ do
+    let base = V.defAttr `V.withForeColor` red `V.withBackColor` blue
+    it "uses overlay's SetTo fields over the base" $ do
+      let overlay = V.defAttr `V.withForeColor` green
+          result = mergeAttr base overlay
+      V.attrForeColor result `shouldBe` V.SetTo green
+      V.attrBackColor result `shouldBe` V.SetTo blue
+    it "falls through to base when overlay is Default" $ do
+      let overlay = V.defAttr
+          result = mergeAttr base overlay
+      V.attrForeColor result `shouldBe` V.SetTo red
+      V.attrBackColor result `shouldBe` V.SetTo blue
+    it "falls through to base when overlay is KeepCurrent" $ do
+      let overlay = V.Attr {V.attrStyle = V.KeepCurrent, V.attrForeColor = V.KeepCurrent, V.attrBackColor = V.KeepCurrent, V.attrURL = V.KeepCurrent}
+          result = mergeAttr base overlay
+      V.attrForeColor result `shouldBe` V.SetTo red
 
   describe "border style presets" $ do
     it "singleBorder has all sides and corners" $ do
@@ -93,6 +159,49 @@ spec = describe "Reflex.Vty.Style" $ do
       let b = markdownBorder
       _border_top b `shouldSatisfy` isJust
       _border_topLeft b `shouldBe` Nothing
+    it "roundedBorder has all sides and corners" $ do
+      all
+        (isJust . ($ roundedBorder))
+        [ _border_top
+        , _border_bottom
+        , _border_left
+        , _border_right
+        , _border_topLeft
+        , _border_topRight
+        , _border_bottomLeft
+        , _border_bottomRight
+        ]
+        `shouldBe` True
+    it "thickBorder has all sides and corners" $ do
+      all
+        (isJust . ($ thickBorder))
+        [ _border_top
+        , _border_bottom
+        , _border_left
+        , _border_right
+        , _border_topLeft
+        , _border_topRight
+        , _border_bottomLeft
+        , _border_bottomRight
+        ]
+        `shouldBe` True
+    it "doubleBorder has all sides and corners" $ do
+      all
+        (isJust . ($ doubleBorder))
+        [ _border_top
+        , _border_bottom
+        , _border_left
+        , _border_right
+        , _border_topLeft
+        , _border_topRight
+        , _border_bottomLeft
+        , _border_bottomRight
+        ]
+        `shouldBe` True
+    it "asciiBorder uses ASCII characters" $ do
+      _border_top asciiBorder `shouldBe` Just '-'
+      _border_left asciiBorder `shouldBe` Just '|'
+      _border_topLeft asciiBorder `shouldBe` Just '+'
 
   describe "render" $ do
     it "produces a non-empty image for plain text" $ do
@@ -126,6 +235,15 @@ spec = describe "Reflex.Vty.Style" $ do
           img = render s "hi"
       V.Image.imageWidth img `shouldBe` 4
       V.Image.imageHeight img `shouldBe` 3
+    it "renders multi-line text with correct height" $ do
+      let img = render def "hello\nworld"
+      V.Image.imageHeight img `shouldBe` 2
+    it "renders multi-line text width as longest line" $ do
+      let img = render def "hello\nhi"
+      V.Image.imageWidth img `shouldBe` 5
+    it "renders wide characters at correct width" $ do
+      let img = render def "文"
+      V.Image.imageWidth img `shouldBe` 2
 
   describe "measure" $ do
     it "matches render's width for plain text" $ do
@@ -140,6 +258,22 @@ spec = describe "Reflex.Vty.Style" $ do
     it "accounts for margin" $ do
       let s = withMargin 1 1 1 1 def
       fst (measure s "hi") `shouldBe` 2 + 2
+    it "measures multi-line text with correct height" $ do
+      snd (measure def "hello\nworld") `shouldBe` 2
+    it "measures multi-line text with correct width" $ do
+      fst (measure def "hello\nhi") `shouldBe` 5
+    it "measures multi-line text with matching render dimensions" $ do
+      let s = withBorder singleBorder def
+          (w, h) = measure s "hello\nworld"
+          img = render s "hello\nworld"
+      w `shouldBe` V.Image.imageWidth img
+      h `shouldBe` V.Image.imageHeight img
+    it "measures wide characters at display width" $ do
+      fst (measure def "文") `shouldBe` 2
+    it "measures mixed wide and narrow characters" $ do
+      fst (measure def "a文b") `shouldBe` 4
+    it "measures empty content as zero width, one line" $ do
+      measure def "" `shouldBe` (0, 1)
 
 isJust :: Maybe a -> Bool
 isJust (Just _) = True

@@ -1,0 +1,6 @@
+3x1
+Rev
+--- attrs ---
+0,0 'R' fg=keep bg=keep style=reverse url=keep
+0,1 'e' fg=keep bg=keep style=reverse url=keep
+0,2 'v' fg=keep bg=keep style=reverse url=keep
