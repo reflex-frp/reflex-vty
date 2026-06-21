@@ -10,14 +10,14 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.Zipper as TZ
 import Data.Time (getCurrentTime)
 import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Network
-import Reflex.Vty
 
+import qualified Data.Text.Zipper as TZ
 import Example.CPU
+import Reflex.Vty
 
 type VtyExample t m =
   ( MonadFix m
@@ -45,7 +45,7 @@ data Example
   | Example_CPUStat
   | Example_Scrollable
   | Example_Showcase
-  deriving (Show, Read, Eq, Ord, Enum, Bounded)
+  deriving (Bounded, Enum, Eq, Ord, Read, Show)
 
 withCtrlC :: (Monad m, HasInput t m, Reflex t) => m () -> m (Event t ())
 withCtrlC f = do
@@ -100,18 +100,18 @@ main = mainWidget $ withCtrlC $ do
           Right () -> buttons
     return ()
 
-scrollingWithLayout ::
-  forall t m.
-  ( VtyExample t m
-  , HasInput t m
-  , MonadHold t m
-  , Manager t m
-  , PostBuild t m
-  , MonadIO (Performable m)
-  , TriggerEvent t m
-  , PerformEvent t m
-  ) =>
-  m ()
+scrollingWithLayout
+  :: forall t m
+   . ( VtyExample t m
+     , HasInput t m
+     , MonadHold t m
+     , Manager t m
+     , PostBuild t m
+     , MonadIO (Performable m)
+     , TriggerEvent t m
+     , PerformEvent t m
+     )
+  => m ()
 scrollingWithLayout = col $ do
   (s, _) <- tile flex $ boxTitle (constant def) (constant "Tracks") $ scrollable def $ do
     result <- do
@@ -162,22 +162,22 @@ easyExample = do
   return $ fforMaybe inp $ \case
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
- where
-  btn label = do
-    let cfg = def{_buttonConfig_focusStyle = pure doubleBoxStyle}
-    buttonClick <- textButtonStatic cfg label
-    keyPress <-
-      keyCombos $
-        Set.fromList
-          [ (V.KEnter, [])
-          , (V.KChar ' ', [])
-          ]
-    pure $ leftmost [() <$ buttonClick, () <$ keyPress]
+  where
+    btn label = do
+      let cfg = def {_buttonConfig_focusStyle = pure doubleBoxStyle}
+      buttonClick <- textButtonStatic cfg label
+      keyPress <-
+        keyCombos $
+          Set.fromList
+            [ (V.KEnter, [])
+            , (V.KChar ' ', [])
+            ]
+      pure $ leftmost [() <$ buttonClick, () <$ keyPress]
 
 -- * Task list example
-taskList ::
-  (VtyExample t m, Manager t m, MonadHold t m, Adjustable t m, PostBuild t m) =>
-  m ()
+taskList
+  :: (VtyExample t m, Manager t m, MonadHold t m, Adjustable t m, PostBuild t m)
+  => m ()
 taskList = col $ do
   let todos0 =
         [ Todo "Find reflex-vty" True
@@ -194,7 +194,7 @@ data Todo = Todo
   { _todo_label :: Text
   , _todo_done :: Bool
   }
-  deriving (Show, Read, Eq, Ord)
+  deriving (Eq, Ord, Read, Show)
 
 data TodoOutput t = TodoOutput
   { _todoOutput_todo :: Dynamic t Todo
@@ -203,10 +203,10 @@ data TodoOutput t = TodoOutput
   , _todoOutput_focusId :: FocusId
   }
 
-todo ::
-  (VtyExample t m, Manager t m, MonadHold t m) =>
-  Todo ->
-  m (TodoOutput t)
+todo
+  :: (VtyExample t m, Manager t m, MonadHold t m)
+  => Todo
+  -> m (TodoOutput t)
 todo t0 = row $ do
   let toggleKeys =
         Set.fromList
@@ -238,22 +238,22 @@ todo t0 = row $ do
           , _todoOutput_height = _textInput_lines ti
           , _todoOutput_focusId = fid
           }
- where
-  backspaceOnEmpty v = \case
-    V.EvKey V.KBS _ | T.null v -> Just ()
-    _ -> Nothing
+  where
+    backspaceOnEmpty v = \case
+      V.EvKey V.KBS _ | T.null v -> Just ()
+      _ -> Nothing
 
-todos ::
-  forall t m.
-  ( MonadHold t m
-  , Manager t m
-  , VtyExample t m
-  , Adjustable t m
-  , PostBuild t m
-  ) =>
-  [Todo] ->
-  Event t () ->
-  m (Dynamic t (Map Int (TodoOutput t)))
+todos
+  :: forall t m
+   . ( MonadHold t m
+     , Manager t m
+     , VtyExample t m
+     , Adjustable t m
+     , PostBuild t m
+     )
+  => [Todo]
+  -> Event t ()
+  -> m (Dynamic t (Map Int (TodoOutput t)))
 todos todos0 newTodo = do
   let todosMap0 = Map.fromList $ zip [0 ..] todos0
   rec listOut <- listHoldWithKey todosMap0 updates $ \k t -> grout (fixed 1) $ do
@@ -278,7 +278,7 @@ todos todos0 newTodo = do
                 <$> attachWithMaybe
                   ( \m k ->
                       let (before, after) = Map.split k m
-                       in fmap fst $ Map.lookupMax before <|> Map.lookupMin after
+                      in fmap fst $ Map.lookupMax before <|> Map.lookupMin after
                   )
                   (current todosMap)
                   todoDelete
@@ -286,16 +286,16 @@ todos todos0 newTodo = do
 
 -- * Scrollable text example
 
-scrolling ::
-  ( VtyExample t m
-  , MonadHold t m
-  , Manager t m
-  , PostBuild t m
-  , MonadIO (Performable m)
-  , TriggerEvent t m
-  , PerformEvent t m
-  ) =>
-  m ()
+scrolling
+  :: ( VtyExample t m
+     , MonadHold t m
+     , Manager t m
+     , PostBuild t m
+     , MonadIO (Performable m)
+     , TriggerEvent t m
+     , PerformEvent t m
+     )
+  => m ()
 scrolling = col $ do
   grout (fixed 2) $ text "Use your mouse wheel or up and down arrows to scroll:"
   (fid, out) <- tile' (fixed 5) $ boxStatic def $ scrollableText def $ "Gallia est omnis divisa in partes tres, quarum unam incolunt Belgae, aliam Aquitani, tertiam qui ipsorum lingua Celtae, nostra Galli appellantur. Hi omnes lingua, institutis, legibus inter se differunt. Gallos ab Aquitanis Garumna flumen, a Belgis Matrona et Sequana dividit. Horum omnium fortissimi sunt Belgae, propterea quod a cultu atque humanitate provinciae longissime absunt, minimeque ad eos mercatores saepe commeant atque ea quae ad effeminandos animos pertinent important, proximique sunt Germanis, qui trans Rhenum incolunt, quibuscum continenter bellum gerunt. Qua de causa Helvetii quoque reliquos Gallos virtute praecedunt, quod fere cotidianis proeliis cum Germanis contendunt, cum aut suis finibus eos prohibent aut ipsi in eorum finibus bellum gerunt. Eorum una pars, quam Gallos obtinere dictum est, initium capit a flumine Rhodano, continetur Garumna flumine, Oceano, finibus Belgarum, attingit etiam ab Sequanis et Helvetiis flumen Rhenum, vergit ad septentriones. Belgae ab extremis Galliae finibus oriuntur, pertinent ad inferiorem partem fluminis Rheni, spectant in septentrionem et orientem solem. Aquitania a Garumna flumine ad Pyrenaeos montes et eam partem Oceani quae est ad Hispaniam pertinet; spectat inter occasum solis et septentriones.\nApud Helvetios longe nobilissimus fuit et ditissimus Orgetorix. Is M. Messala, [et P.] M. Pisone consulibus regni cupiditate inductus coniurationem nobilitatis fecit et civitati persuasit ut de finibus suis cum omnibus copiis exirent: perfacile esse, cum virtute omnibus praestarent, totius Galliae imperio potiri. Id hoc facilius iis persuasit, quod undique loci natura Helvetii continentur: una ex parte flumine Rheno latissimo atque altissimo, qui agrum Helvetium a Germanis dividit; altera ex parte monte Iura altissimo, qui est inter Sequanos et Helvetios; tertia lacu Lemanno et flumine Rhodano, qui provinciam nostram ab Helvetiis dividit. His rebus fiebat ut et minus late vagarentur et minus facile finitimis bellum inferre possent; qua ex parte homines bellandi cupidi magno dolore adficiebantur. Pro multitudine autem hominum et pro gloria belli atque fortitudinis angustos se fines habere arbitrabantur, qui in longitudinem milia passuum CCXL, in latitudinem CLXXX patebant."
@@ -331,9 +331,9 @@ scrolling = col $ do
 
 --  * Text editor example with resizable boxes
 
-testBoxes ::
-  (MonadHold t m, VtyExample t m) =>
-  m ()
+testBoxes
+  :: (MonadHold t m, VtyExample t m)
+  => m ()
 testBoxes = do
   dw <- displayWidth
   dh <- displayHeight
@@ -351,11 +351,11 @@ testBoxes = do
             boxTitle (pure roundedBoxStyle) "Text Edit" $
               multilineTextInput cfg
           dragBox = boxStatic roundedBoxStyle dragTest
-       in splitVDrag (hRule doubleBoxStyle) textBox dragBox
+      in splitVDrag (hRule doubleBoxStyle) textBox dragBox
   return ()
- where
-  div' :: (Integral a, Applicative f) => f a -> f a -> f a
-  div' = liftA2 div
+  where
+    div' :: (Integral a, Applicative f) => f a -> f a -> f a
+    div' = liftA2 div
 
 debugInput :: (VtyExample t m, MonadHold t m) => m ()
 debugInput = do
@@ -462,11 +462,11 @@ showcaseDemo = do
             grout flex $ profileSwatch "Ansi16" ColorProfile_Ansi16
             grout flex $ profileSwatch "Ascii" ColorProfile_Ascii
             grout flex $ profileSwatch "NoTTY" ColorProfile_NoTTY
- where
-  orange = rgbColor 200 100 50
-  styledImage label s = do
-    th <- theme
-    tellImages $ (\t -> [render (inherit (_theme_default t) s) label]) <$> th
-  profileSwatch label prof = do
-    bt <- themeAttr
-    tellImages $ (\a -> [V.text' (applyProfile prof (V.withForeColor a orange)) (label <> " ")]) <$> bt
+  where
+    orange = rgbColor 200 100 50
+    styledImage label s = do
+      th <- theme
+      tellImages $ (\t -> [render (inherit (_theme_default t) s) label]) <$> th
+    profileSwatch label prof = do
+      bt <- themeAttr
+      tellImages $ (\a -> [V.text' (applyProfile prof (V.withForeColor a orange)) (label <> " ")]) <$> bt

@@ -1,11 +1,11 @@
-{- |
-  Description: Mouse clicks, drags, and scrolls
--}
+-- |
+--   Description: Mouse clicks, drags, and scrolls
 module Reflex.Vty.Widget.Input.Mouse where
 
 import Control.Monad.Fix
 import qualified Graphics.Vty as V
 import Reflex
+
 import Reflex.Vty.Widget
 
 -- | Information about a drag operation
@@ -24,10 +24,10 @@ data Drag = Drag
   deriving (Eq, Ord, Show)
 
 -- | Converts raw vty mouse drag events into an event stream of 'Drag's
-drag ::
-  (Reflex t, MonadFix m, MonadHold t m, HasInput t m) =>
-  V.Button ->
-  m (Event t Drag)
+drag
+  :: (Reflex t, MonadFix m, MonadHold t m, HasInput t m)
+  => V.Button
+  -> m (Event t Drag)
 drag btn = do
   inp <- input
   let f :: Maybe Drag -> V.Event -> Maybe Drag
@@ -55,10 +55,10 @@ drag btn = do
   return (fmapMaybe id $ updated dragD)
 
 -- | Mouse down events for a particular mouse button
-mouseDown ::
-  (Reflex t, Monad m, HasInput t m) =>
-  V.Button ->
-  m (Event t MouseDown)
+mouseDown
+  :: (Reflex t, Monad m, HasInput t m)
+  => V.Button
+  -> m (Event t MouseDown)
 mouseDown btn = do
   i <- input
   return $ fforMaybe i $ \case
@@ -69,9 +69,9 @@ mouseDown btn = do
     _ -> Nothing
 
 -- | Mouse up events for a particular mouse button
-mouseUp ::
-  (Reflex t, Monad m, HasInput t m) =>
-  m (Event t MouseUp)
+mouseUp
+  :: (Reflex t, Monad m, HasInput t m)
+  => m (Event t MouseUp)
 mouseUp = do
   i <- input
   return $ fforMaybe i $ \case
@@ -98,9 +98,9 @@ data ScrollDirection = ScrollDirection_Up | ScrollDirection_Down
   deriving (Eq, Ord, Show)
 
 -- | Produce an event that fires when the mouse wheel is scrolled
-mouseScroll ::
-  (Reflex t, Monad m, HasInput t m) =>
-  m (Event t ScrollDirection)
+mouseScroll
+  :: (Reflex t, Monad m, HasInput t m)
+  => m (Event t ScrollDirection)
 mouseScroll = do
   up <- mouseDown V.BScrollUp
   down <- mouseDown V.BScrollDown

@@ -1,6 +1,5 @@
-{- |
-  Description: A CPU usage indicator
--}
+-- |
+--   Description: A CPU usage indicator
 module Example.CPU where
 
 import Control.Exception
@@ -11,9 +10,9 @@ import qualified Data.Text as T
 import Data.Time
 import Data.Word
 import qualified Graphics.Vty as V
+import Reflex
 import Text.Printf
 
-import Reflex
 import Reflex.Vty
 
 -- | Each constructor represents a cpu statistic column as presented in @/proc/stat@
@@ -28,7 +27,7 @@ data CpuStat
   | CpuStat_Steal
   | CpuStat_Guest
   | CpuStat_GuestNice
-  deriving (Show, Read, Eq, Ord, Enum, Bounded)
+  deriving (Bounded, Enum, Eq, Ord, Read, Show)
 
 -- | Read @/proc/stat@
 getCpuStat :: IO (Maybe (CpuStat -> Word64))
@@ -71,39 +70,38 @@ idleStats =
   , CpuStat_Iowait
   ]
 
-{- | Draws the cpu usage percent as a live-updating bar graph. The output should look like:
-
-> ╔══════ CPU Usage:  38% ══════╗
-> ║                             ║
-> ║                             ║
-> ║                             ║
-> ║                             ║
-> ║                             ║
-> ║                             ║
-> ║█████████████████████████████║
-> ║█████████████████████████████║
-> ║█████████████████████████████║
-> ║█████████████████████████████║
-> ╚═════════════════════════════╝
--}
-cpuStats ::
-  ( Reflex t
-  , MonadFix m
-  , MonadHold t m
-  , MonadIO (Performable m)
-  , MonadIO m
-  , PerformEvent t m
-  , PostBuild t m
-  , TriggerEvent t m
-  , HasDisplayRegion t m
-  , HasImageWriter t m
-  , HasLayout t m
-  , HasFocus t m
-  , HasInput t m
-  , HasFocusReader t m
-  , HasTheme t m
-  ) =>
-  m ()
+-- | Draws the cpu usage percent as a live-updating bar graph. The output should look like:
+--
+-- > ╔══════ CPU Usage:  38% ══════╗
+-- > ║                             ║
+-- > ║                             ║
+-- > ║                             ║
+-- > ║                             ║
+-- > ║                             ║
+-- > ║                             ║
+-- > ║█████████████████████████████║
+-- > ║█████████████████████████████║
+-- > ║█████████████████████████████║
+-- > ║█████████████████████████████║
+-- > ╚═════════════════════════════╝
+cpuStats
+  :: ( Reflex t
+     , MonadFix m
+     , MonadHold t m
+     , MonadIO (Performable m)
+     , MonadIO m
+     , PerformEvent t m
+     , PostBuild t m
+     , TriggerEvent t m
+     , HasDisplayRegion t m
+     , HasImageWriter t m
+     , HasLayout t m
+     , HasFocus t m
+     , HasInput t m
+     , HasFocusReader t m
+     , HasTheme t m
+     )
+  => m ()
 cpuStats = do
   tick <- tickLossy 0.25 =<< liftIO getCurrentTime
   cpuStat :: Event t (Word64, Word64) <- fmap (fmapMaybe id) $
@@ -117,18 +115,18 @@ cpuStats = do
   let pct = fmap snd active
   chart pct
 
-chart ::
-  ( MonadFix m
-  , MonadHold t m
-  , HasFocus t m
-  , HasLayout t m
-  , HasImageWriter t m
-  , HasInput t m
-  , HasDisplayRegion t m
-  , HasFocusReader t m
-  , HasTheme t m
-  ) =>
-  Dynamic t (Ratio Word64) -> m ()
+chart
+  :: ( MonadFix m
+     , MonadHold t m
+     , HasFocus t m
+     , HasLayout t m
+     , HasImageWriter t m
+     , HasInput t m
+     , HasDisplayRegion t m
+     , HasFocusReader t m
+     , HasTheme t m
+     )
+  => Dynamic t (Ratio Word64) -> m ()
 chart pct = do
   let title = ffor pct $ \x ->
         mconcat
@@ -156,39 +154,39 @@ chart pct = do
     grout (fixed $ _quarter_third <$> quarters) $ fill' (pure '█') (pure orangeAttr)
     grout (fixed $ _quarter_second <$> quarters) $ fill' (pure '█') (pure yellowAttr)
     grout (fixed $ _quarter_first <$> quarters) $ fill' (pure '█') (pure whiteAttr)
- where
-  -- Calculate number of full rows, height of partial row
-  calcRowHeights :: Int -> Ratio Word64 -> (Quarter Int, Int)
-  calcRowHeights h r =
-    let (full, leftovers) = divMod (numerator r * fromIntegral h) (denominator r)
-        partial = ceiling $ 8 * (leftovers % denominator r)
-        quarter = ceiling $ fromIntegral h / (4 :: Double)
-        n = fromIntegral full
-     in if
-          | n <= quarter ->
-              (Quarter n 0 0 0, partial)
-          | n <= (2 * quarter) ->
-              (Quarter quarter (n - quarter) 0 0, partial)
-          | n <= (3 * quarter) ->
-              (Quarter quarter quarter (n - (2 * quarter)) 0, partial)
-          | otherwise ->
-              (Quarter quarter quarter quarter (n - (3 * quarter)), partial)
-  fill' bc attr = do
-    dw <- displayWidth
-    dh <- displayHeight
-    let fillImg =
-          (\w h c a -> [V.charFill a c w h])
-            <$> current dw
-            <*> current dh
-            <*> bc
-            <*> attr
-    tellImages fillImg
-  color :: Int -> Int -> Int -> V.Color
-  color = V.rgbColor
-  redAttr = V.withForeColor V.defAttr $ color 255 0 0
-  orangeAttr = V.withForeColor V.defAttr $ color 255 165 0
-  yellowAttr = V.withForeColor V.defAttr $ color 255 255 0
-  whiteAttr = V.withForeColor V.defAttr $ color 255 255 255
+  where
+    -- Calculate number of full rows, height of partial row
+    calcRowHeights :: Int -> Ratio Word64 -> (Quarter Int, Int)
+    calcRowHeights h r =
+      let (full, leftovers) = divMod (numerator r * fromIntegral h) (denominator r)
+          partial = ceiling $ 8 * (leftovers % denominator r)
+          quarter = ceiling $ fromIntegral h / (4 :: Double)
+          n = fromIntegral full
+      in if
+           | n <= quarter ->
+               (Quarter n 0 0 0, partial)
+           | n <= (2 * quarter) ->
+               (Quarter quarter (n - quarter) 0 0, partial)
+           | n <= (3 * quarter) ->
+               (Quarter quarter quarter (n - (2 * quarter)) 0, partial)
+           | otherwise ->
+               (Quarter quarter quarter quarter (n - (3 * quarter)), partial)
+    fill' bc attr = do
+      dw <- displayWidth
+      dh <- displayHeight
+      let fillImg =
+            (\w h c a -> [V.charFill a c w h])
+              <$> current dw
+              <*> current dh
+              <*> bc
+              <*> attr
+      tellImages fillImg
+    color :: Int -> Int -> Int -> V.Color
+    color = V.rgbColor
+    redAttr = V.withForeColor V.defAttr $ color 255 0 0
+    orangeAttr = V.withForeColor V.defAttr $ color 255 165 0
+    yellowAttr = V.withForeColor V.defAttr $ color 255 255 0
+    whiteAttr = V.withForeColor V.defAttr $ color 255 255 255
 
 data Quarter a = Quarter
   { _quarter_first :: a
@@ -210,32 +208,31 @@ eighthBlocks n =
     | n == 7 -> '▇'
     | otherwise -> '█'
 
-{- | Determine the current percentage usage according to this algorithm:
-
-PrevIdle = previdle + previowait
-Idle = idle + iowait
-
-PrevNonIdle = prevuser + prevnice + prevsystem + previrq + prevsoftirq + prevsteal
-NonIdle = user + nice + system + irq + softirq + steal
-
-PrevTotal = PrevIdle + PrevNonIdle
-Total = Idle + NonIdle
-
-totald = Total - PrevTotal
-idled = Idle - PrevIdle
-
-CPU_Percentage = (totald - idled)/totald
-
-Source: https://stackoverflow.com/questions/23367857/accurate-calculation-of-cpu-usage-given-in-percentage-in-linux
--}
-cpuPercentStep ::
-  (Word64, Word64) -> -- Current active, Current idle
-  ((Word64, Word64), Ratio Word64) -> -- (Previous idle, Previous total), previous percent
-  ((Word64, Word64), Ratio Word64) -- (New idle, new total), percent
+-- | Determine the current percentage usage according to this algorithm:
+--
+-- PrevIdle = previdle + previowait
+-- Idle = idle + iowait
+--
+-- PrevNonIdle = prevuser + prevnice + prevsystem + previrq + prevsoftirq + prevsteal
+-- NonIdle = user + nice + system + irq + softirq + steal
+--
+-- PrevTotal = PrevIdle + PrevNonIdle
+-- Total = Idle + NonIdle
+--
+-- totald = Total - PrevTotal
+-- idled = Idle - PrevIdle
+--
+-- CPU_Percentage = (totald - idled)/totald
+--
+-- Source: https://stackoverflow.com/questions/23367857/accurate-calculation-of-cpu-usage-given-in-percentage-in-linux
+cpuPercentStep
+  :: (Word64, Word64) -- Current active, Current idle
+  -> ((Word64, Word64), Ratio Word64) -- (Previous idle, Previous total), previous percent
+  -> ((Word64, Word64), Ratio Word64) -- (New idle, new total), percent
 cpuPercentStep (nonidle, idle) ((previdle, prevtotal), _) =
   let total = idle + nonidle
       idled = idle - previdle
       totald = total - prevtotal
-   in ( (idle, total)
-      , (totald - idled) % totald
-      )
+  in ( (idle, total)
+     , (totald - idled) % totald
+     )

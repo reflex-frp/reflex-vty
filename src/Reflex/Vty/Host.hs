@@ -1,16 +1,15 @@
-{- |
-Module: Reflex.Vty.Host
-Description: Scaffolding for running a reflex-vty application
--}
-module Reflex.Vty.Host (
-  VtyApp,
-  VtyResult (..),
-  getDefaultVty,
-  runVtyApp,
-  runVtyAppWithHandle,
-  MonadVtyApp,
-  VtyEvent,
-) where
+-- |
+-- Module: Reflex.Vty.Host
+-- Description: Scaffolding for running a reflex-vty application
+module Reflex.Vty.Host
+  ( VtyApp
+  , VtyResult (..)
+  , getDefaultVty
+  , runVtyApp
+  , runVtyAppWithHandle
+  , MonadVtyApp
+  , VtyEvent
+  ) where
 
 import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.Chan (newChan, readChan, writeChan)
@@ -25,32 +24,27 @@ import Control.Monad.Ref (MonadRef, Ref, readRef)
 import Data.Dependent.Sum (DSum ((:=>)))
 import Data.IORef (IORef, readIORef)
 import Data.Maybe (catMaybes)
-
+import Graphics.Vty (DisplayRegion)
 import qualified Graphics.Vty as V
 import qualified Graphics.Vty.CrossPlatform as V
 import Reflex
 import Reflex.Host.Class
 
-import Graphics.Vty (DisplayRegion)
-
-{- | A synonym for the underlying vty event type from 'Graphics.Vty'. This should
-probably ultimately be replaced by something defined in this library.
--}
+-- | A synonym for the underlying vty event type from 'Graphics.Vty'. This should
+-- probably ultimately be replaced by something defined in this library.
 type VtyEvent = V.Event
 
 -- | The output of a 'VtyApp'.
 data VtyResult t = VtyResult
   { _vtyResult_picture :: Behavior t V.Picture
-  {- ^ The current vty output. 'runVtyAppWithHandle' samples this value every time an
-  event fires and updates the display.
-  -}
+  -- ^ The current vty output. 'runVtyAppWithHandle' samples this value every time an
+  --   event fires and updates the display.
   , _vtyResult_shutdown :: Event t ()
   -- ^ An event that requests application termination.
   }
 
-{- | The constraints necessary to run a 'VtyApp'. See 'runVtyAppWithHandle' for more
-on why each of these are necessary and how they can be fulfilled.
--}
+-- | The constraints necessary to run a 'VtyApp'. See 'runVtyAppWithHandle' for more
+-- on why each of these are necessary and how they can be fulfilled.
 type MonadVtyApp t m =
   ( Reflex t
   , Adjustable t m
@@ -77,26 +71,25 @@ type MonadVtyApp t m =
 
 -- | A functional reactive vty application.
 type VtyApp t m =
-  (MonadVtyApp t m) =>
-  -- | The initial display size (updates to this come as events)
-  DisplayRegion ->
-  -- | Vty input events.
-  Event t V.Event ->
-  {- | The output of the 'VtyApp'. The application runs in a context that,
-  among other things, allows new events to be created and triggered
-  ('TriggerEvent'), provides access to an event that fires immediately upon
-  app instantiation ('PostBuild'), and allows actions to be run upon
-  occurrences of events ('PerformEvent').
-  -}
-  m (VtyResult t)
+  MonadVtyApp t m
+  => DisplayRegion
+  -- ^ The initial display size (updates to this come as events)
+  -> Event t V.Event
+  -- ^ Vty input events.
+  -> m (VtyResult t)
+  -- ^ The output of the 'VtyApp'. The application runs in a context that,
+  --   among other things, allows new events to be created and triggered
+  --   ('TriggerEvent'), provides access to an event that fires immediately upon
+  --   app instantiation ('PostBuild'), and allows actions to be run upon
+  --   occurrences of events ('PerformEvent').
 
 -- | Runs a 'VtyApp' in a given 'Graphics.Vty.Vty'.
-runVtyAppWithHandle ::
-  -- | A 'Graphics.Vty.Vty' handle.
-  V.Vty ->
-  -- | A functional reactive vty application.
-  (forall t m. VtyApp t m) ->
-  IO ()
+runVtyAppWithHandle
+  :: V.Vty
+  -- ^ A 'Graphics.Vty.Vty' handle.
+  -> (forall t m. VtyApp t m)
+  -- ^ A functional reactive vty application.
+  -> IO ()
 runVtyAppWithHandle vty vtyGuest = flip onException (V.shutdown vty) $
   -- We are using the 'Spider' implementation of reflex. Running the host
   -- allows us to take actions on the FRP timeline. The scoped type signature
@@ -170,14 +163,13 @@ runVtyAppWithHandle vty vtyGuest = flip onException (V.shutdown vty) $
     nextEventThread <- liftIO $ forkIO $ forever $ do
       -- Retrieve the next input event.
       ne <- V.nextEvent vty
-      let
-        -- The reference to the vty input 'EventTrigger'. This is the trigger
-        -- we'd like to associate the input event value with.
-        triggerRef = EventTriggerRef vtyEventTriggerRef
-        -- Create an event 'TriggerInvocation' with the value that we'd like
-        -- the event to have if it is fired. It may not fire with this value
-        -- if nobody is subscribed to the 'Event'.
-        triggerInvocation = TriggerInvocation ne $ return ()
+      let -- The reference to the vty input 'EventTrigger'. This is the trigger
+          -- we'd like to associate the input event value with.
+          triggerRef = EventTriggerRef vtyEventTriggerRef
+          -- Create an event 'TriggerInvocation' with the value that we'd like
+          -- the event to have if it is fired. It may not fire with this value
+          -- if nobody is subscribed to the 'Event'.
+          triggerInvocation = TriggerInvocation ne $ return ()
       -- Write our input event's 'EventTrigger' with the newly created
       -- 'TriggerInvocation' value to the queue of events.
       writeChan events [triggerRef :=> triggerInvocation]
@@ -204,28 +196,28 @@ runVtyAppWithHandle vty vtyGuest = flip onException (V.shutdown vty) $
           -- Otherwise, update the display and loop.
           updateVty
           loop
- where
-  -- \| Use the given 'FireCommand' to fire events that have subscribers
-  -- and call the callback for the 'TriggerInvocation' of each.
-  fireEventTriggerRefs ::
-    (Monad (ReadPhase m), MonadIO m) =>
-    FireCommand t m ->
-    [DSum (EventTriggerRef t) TriggerInvocation] ->
-    ReadPhase m a ->
-    m [a]
-  fireEventTriggerRefs (FireCommand fire) ers rcb = do
-    mes <- liftIO $
-      forM ers $ \(EventTriggerRef er :=> TriggerInvocation a _) -> do
-        me <- readIORef er
-        return $ fmap (\e -> e :=> Identity a) me
-    a <- fire (catMaybes mes) rcb
-    liftIO $ forM_ ers $ \(_ :=> TriggerInvocation _ cb) -> cb
-    return a
+  where
+    -- \| Use the given 'FireCommand' to fire events that have subscribers
+    -- and call the callback for the 'TriggerInvocation' of each.
+    fireEventTriggerRefs
+      :: (Monad (ReadPhase m), MonadIO m)
+      => FireCommand t m
+      -> [DSum (EventTriggerRef t) TriggerInvocation]
+      -> ReadPhase m a
+      -> m [a]
+    fireEventTriggerRefs (FireCommand fire) ers rcb = do
+      mes <- liftIO $
+        forM ers $ \(EventTriggerRef er :=> TriggerInvocation a _) -> do
+          me <- readIORef er
+          return $ fmap (\e -> e :=> Identity a) me
+      a <- fire (catMaybes mes) rcb
+      liftIO $ forM_ ers $ \(_ :=> TriggerInvocation _ cb) -> cb
+      return a
 
 -- | Run a 'VtyApp' with a 'Graphics.Vty.Vty' handle with a standard configuration.
-runVtyApp ::
-  (forall t m. VtyApp t m) ->
-  IO ()
+runVtyApp
+  :: (forall t m. VtyApp t m)
+  -> IO ()
 runVtyApp app = do
   vty <- getDefaultVty
   runVtyAppWithHandle vty app

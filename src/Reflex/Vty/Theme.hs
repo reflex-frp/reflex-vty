@@ -1,25 +1,25 @@
-{- |
-Module: Reflex.Vty.Theme
-Description: Structured theme record for reflex-vty widgets
-
-A 'Theme' is a record of 'Style's for each part of the UI. 'HasTheme' delivers
-the ambient 'Theme' to widgets; 'localTheme' overrides it for a subtree.
--}
-module Reflex.Vty.Theme (
-  Theme (..),
-  defTheme,
-  darkTheme,
-  charmTheme,
-  draculaTheme,
-  nordTheme,
-  zenburnTheme,
-  gruvboxTheme,
-  themeToAttr,
-) where
+-- |
+-- Module: Reflex.Vty.Theme
+-- Description: Structured theme record for reflex-vty widgets
+--
+-- A 'Theme' is a record of 'Style's for each part of the UI. 'HasTheme' delivers
+-- the ambient 'Theme' to widgets; 'localTheme' overrides it for a subtree.
+module Reflex.Vty.Theme
+  ( Theme (..)
+  , defTheme
+  , darkTheme
+  , charmTheme
+  , draculaTheme
+  , nordTheme
+  , zenburnTheme
+  , gruvboxTheme
+  , themeToAttr
+  ) where
 
 import Data.Default (Default (..))
 import qualified Graphics.Vty as V
 import Reflex (Behavior, Reflex)
+
 import Reflex.Vty.Style
 
 -- | A structured theme: one 'Style' per UI element.
@@ -125,8 +125,7 @@ gruvboxTheme =
     , _theme_textInputCursor = withReverse def
     }
 
-{- | Convenience: extract the ambient 'V.Attr' from the theme's
-'_theme_default' 'Style'. Most widgets only need this.
--}
-themeToAttr :: (Reflex t) => Behavior t Theme -> Behavior t V.Attr
+-- | Convenience: extract the ambient 'V.Attr' from the theme's
+-- '_theme_default' 'Style'. Most widgets only need this.
+themeToAttr :: Reflex t => Behavior t Theme -> Behavior t V.Attr
 themeToAttr = fmap (flip applyAttr V.defAttr . _theme_default)

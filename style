@@ -1,0 +1,3 @@
+#!/bin/sh
+
+nix run github:obsidiansystems/style.hs -- "$@"

@@ -3,17 +3,15 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-{- |
-Module: Reflex.Vty.Widget
-Description: Basic set of widgets and building blocks for reflex-vty applications
--}
+-- |
+-- Module: Reflex.Vty.Widget
+-- Description: Basic set of widgets and building blocks for reflex-vty applications
 module Reflex.Vty.Widget where
 
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Morph (MFunctor (..))
-import Control.Monad.NodeId
 import Control.Monad.Reader (ReaderT (..), ask, local, runReaderT)
 import Control.Monad.Ref
 import Control.Monad.Trans (MonadTrans, lift)
@@ -26,6 +24,8 @@ import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Class ()
 import Reflex.Host.Class (MonadReflexCreateTrigger)
+
+import Control.Monad.NodeId
 import Reflex.Vty.ColorProfile
 import Reflex.Vty.Host
 import Reflex.Vty.Theme (Theme (..), defTheme, themeToAttr)
@@ -33,21 +33,21 @@ import Reflex.Vty.Theme (Theme (..), defTheme, themeToAttr)
 -- * Running a vty application
 
 -- | Sets up the top-level context for a vty widget and runs it with that context
-mainWidgetWithHandle ::
-  V.Vty ->
-  ( forall t m.
-    ( MonadVtyApp t m
-    , HasImageWriter t m
-    , MonadNodeId m
-    , HasDisplayRegion t m
-    , HasFocusReader t m
-    , HasInput t m
-    , HasTheme t m
-    , HasColorProfile t m
-    ) =>
-    m (Event t ())
-  ) ->
-  IO ()
+mainWidgetWithHandle
+  :: V.Vty
+  -> ( forall t m
+        . ( MonadVtyApp t m
+          , HasImageWriter t m
+          , MonadNodeId m
+          , HasDisplayRegion t m
+          , HasFocusReader t m
+          , HasInput t m
+          , HasTheme t m
+          , HasColorProfile t m
+          )
+       => m (Event t ())
+     )
+  -> IO ()
 mainWidgetWithHandle vty child =
   runVtyAppWithHandle vty $ \dr0 inp -> do
     let profile = colorProfileFromVty vty
@@ -55,7 +55,7 @@ mainWidgetWithHandle vty child =
       V.EvResize w h -> Just (w, h)
       _ -> Nothing
     let inp' = fforMaybe inp $ \case
-          V.EvResize{} -> Nothing
+          V.EvResize {} -> Nothing
           x -> Just x
     (shutdown, images) <- runThemeReader (constant defTheme) $
       runColorProfileReader (constant profile) $
@@ -78,20 +78,20 @@ data VtyWidgetOut t = VtyWidgetOut
   }
 
 -- | Like 'mainWidgetWithHandle', but uses a default vty configuration
-mainWidget ::
-  ( forall t m.
-    ( MonadVtyApp t m
-    , HasImageWriter t m
-    , MonadNodeId m
-    , HasDisplayRegion t m
-    , HasFocusReader t m
-    , HasTheme t m
-    , HasColorProfile t m
-    , HasInput t m
-    ) =>
-    m (Event t ())
-  ) ->
-  IO ()
+mainWidget
+  :: ( forall t m
+        . ( MonadVtyApp t m
+          , HasImageWriter t m
+          , MonadNodeId m
+          , HasDisplayRegion t m
+          , HasFocusReader t m
+          , HasTheme t m
+          , HasColorProfile t m
+          , HasInput t m
+          )
+       => m (Event t ())
+     )
+  -> IO ()
 mainWidget child = do
   vty <- getDefaultVty
   mainWidgetWithHandle vty child
@@ -104,9 +104,8 @@ class HasInput t m | m -> t where
   default input :: (f m' ~ m, Monad m', MonadTrans f, HasInput t m') => m (Event t VtyEvent)
   input = lift input
 
-  {- | User input events that the widget's parent chooses to share. These will generally
-  be filtered for relevance.
-  -}
+  -- | User input events that the widget's parent chooses to share. These will generally
+  --   be filtered for relevance.
   localInput :: (Event t VtyEvent -> Event t VtyEvent) -> m a -> m a
   default localInput :: (f m' ~ m, Monad m', MFunctor f, HasInput t m') => (Event t VtyEvent -> Event t VtyEvent) -> m a -> m a
   localInput f = hoist (localInput f)
@@ -120,17 +119,17 @@ newtype Input t m a = Input
   { unInput :: ReaderT (Event t VtyEvent) m a
   }
   deriving
-    ( Functor
-    , Applicative
+    ( Applicative
+    , Functor
     , Monad
-    , MonadSample t
-    , MonadHold t
-    , MonadFix
-    , MonadIO
-    , MonadRef
     , MonadCatch
-    , MonadThrow
+    , MonadFix
+    , MonadHold t
+    , MonadIO
     , MonadMask
+    , MonadRef
+    , MonadSample t
+    , MonadThrow
     )
 
 instance (Adjustable t m, MonadHold t m, Reflex t) => Adjustable t (Input t m) where
@@ -143,17 +142,17 @@ instance (Adjustable t m, MonadHold t m, Reflex t) => Adjustable t (Input t m) w
   traverseDMapWithKeyWithAdjustWithMove f dm0 dm' = Input $ do
     traverseDMapWithKeyWithAdjustWithMove (\k v -> unInput (f k v)) dm0 dm'
 
-deriving instance (MonadReflexCreateTrigger t m) => MonadReflexCreateTrigger t (Input t m)
-deriving instance (NotReady t m) => NotReady t (Input t m)
-deriving instance (PerformEvent t m) => PerformEvent t (Input t m)
-deriving instance (PostBuild t m) => PostBuild t (Input t m)
-deriving instance (TriggerEvent t m) => TriggerEvent t (Input t m)
-instance (HasImageWriter t m) => HasImageWriter t (Input t m) where
+deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (Input t m)
+deriving instance NotReady t m => NotReady t (Input t m)
+deriving instance PerformEvent t m => PerformEvent t (Input t m)
+deriving instance PostBuild t m => PostBuild t (Input t m)
+deriving instance TriggerEvent t m => TriggerEvent t (Input t m)
+instance HasImageWriter t m => HasImageWriter t (Input t m) where
   captureImages x = do
     a <- input
     lift $ captureImages $ runInput a x
-instance (HasDisplayRegion t m) => HasDisplayRegion t (Input t m)
-instance (HasFocusReader t m) => HasFocusReader t (Input t m)
+instance HasDisplayRegion t m => HasDisplayRegion t (Input t m)
+instance HasFocusReader t m => HasFocusReader t (Input t m)
 
 instance MonadTrans (Input t) where
   lift f = Input $ lift f
@@ -161,14 +160,14 @@ instance MonadTrans (Input t) where
 instance MFunctor (Input t) where
   hoist f = Input . hoist f . unInput
 
-instance (MonadNodeId m) => MonadNodeId (Input t m)
+instance MonadNodeId m => MonadNodeId (Input t m)
 
 -- | Runs an 'Input' with a given context
-runInput ::
-  (Reflex t) =>
-  Event t VtyEvent ->
-  Input t m a ->
-  m a
+runInput
+  :: Reflex t
+  => Event t VtyEvent
+  -> Input t m a
+  -> m a
 runInput e w = runReaderT (unInput w) e
 
 -- ** Filtering input
@@ -185,17 +184,17 @@ keys :: (Monad m, Reflex t, HasInput t m) => [V.Key] -> m (Event t KeyCombo)
 keys = keyCombos . Set.fromList . fmap (,[])
 
 -- | Emit an event that fires whenever the provided key combination occurs
-keyCombo ::
-  (Reflex t, Monad m, HasInput t m) =>
-  KeyCombo ->
-  m (Event t KeyCombo)
+keyCombo
+  :: (Reflex t, Monad m, HasInput t m)
+  => KeyCombo
+  -> m (Event t KeyCombo)
 keyCombo = keyCombos . Set.singleton
 
 -- | Emit an event that fires whenever any of the provided key combinations occur
-keyCombos ::
-  (Reflex t, Monad m, HasInput t m) =>
-  Set KeyCombo ->
-  m (Event t KeyCombo)
+keyCombos
+  :: (Reflex t, Monad m, HasInput t m)
+  => Set KeyCombo
+  -> m (Event t KeyCombo)
 keyCombos ks = do
   i <- input
   return $ fforMaybe i $ \case
@@ -217,84 +216,80 @@ filterKeys f x =
     )
     x
 
-{- | Filter mouse input events based on whether they target a particular region
-and translate them to the internal coordinate system of that region.
-
-NB: Non-mouse events are passed through unfiltered and unchanged
--}
+-- | Filter mouse input events based on whether they target a particular region
+-- and translate them to the internal coordinate system of that region.
+--
+-- NB: Non-mouse events are passed through unfiltered and unchanged
 mouseInRegion :: Region -> VtyEvent -> Maybe VtyEvent
 mouseInRegion (Region l t w h) e = case e of
   V.EvMouseDown x y btn m -> mouse (\u v -> V.EvMouseDown u v btn m) x y
   V.EvMouseUp x y btn -> mouse (\u v -> V.EvMouseUp u v btn) x y
   _ -> Just e
- where
-  mouse con x y
-    | or
-        [ x < l
-        , y < t
-        , x >= l + w
-        , y >= t + h
-        ] =
-        Nothing
-    | otherwise =
-        Just (con (x - l) (y - t))
+  where
+    mouse con x y
+      | or
+          [ x < l
+          , y < t
+          , x >= l + w
+          , y >= t + h
+          ] =
+          Nothing
+      | otherwise =
+          Just (con (x - l) (y - t))
 
-{- |
-* 'Tracking' state means actively tracking the current stream of mouse events
-* 'NotTracking' state means not tracking the current stream of mouse events
-* 'WaitingForInput' means state will be set on next 'EvMouseDown' event
--}
-data MouseTrackingState = Tracking V.Button | NotTracking | WaitingForInput deriving (Show, Eq)
+-- |
+-- * 'Tracking' state means actively tracking the current stream of mouse events
+-- * 'NotTracking' state means not tracking the current stream of mouse events
+-- * 'WaitingForInput' means state will be set on next 'EvMouseDown' event
+data MouseTrackingState = Tracking V.Button | NotTracking | WaitingForInput deriving (Eq, Show)
 
-{- | Filter mouse input outside the current display region
-keyboard input is reported only if the region is focused
-scroll wheel input is reported only if the region is focused
-mouse input is reported if the mouse is in the region
-EXCEPT mouse drag sequences that start OFF the region are NOT reported
-AND mouse drag sequences that start ON the region and drag off ARE reported
--}
-inputInFocusedRegion ::
-  forall t m.
-  (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasFocusReader t m, HasInput t m) =>
-  m (Event t VtyEvent)
+-- | Filter mouse input outside the current display region
+-- keyboard input is reported only if the region is focused
+-- scroll wheel input is reported only if the region is focused
+-- mouse input is reported if the mouse is in the region
+-- EXCEPT mouse drag sequences that start OFF the region are NOT reported
+-- AND mouse drag sequences that start ON the region and drag off ARE reported
+inputInFocusedRegion
+  :: forall t m
+   . (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasFocusReader t m, HasInput t m)
+  => m (Event t VtyEvent)
 inputInFocusedRegion = do
   inp <- input
   regBeh <- current <$> askRegion
   foc <- current <$> focus
-  let
-    trackMouse ::
-      VtyEvent ->
-      (MouseTrackingState, Maybe VtyEvent) ->
-      PushM t (Maybe (MouseTrackingState, Maybe VtyEvent))
-    trackMouse e (tracking, _) = do
-      -- sampling (as oppose to using attachPromptlyDyn) is necessary here as the focus may change from the event produced here
-      focused <- sample foc
-      -- strictly speaking the same could also happen here too
-      reg@(Region l t _ _) <- sample regBeh
-      return $ case e of
-        -- filter keyboard input if region is not focused
-        V.EvKey _ _ | not focused -> Nothing
-        -- filter scroll wheel input based on mouse position
-        V.EvMouseDown x y btn m | btn == V.BScrollUp || btn == V.BScrollDown -> case tracking of
-          trck@(Tracking _) -> Just (trck, Nothing)
-          _ -> Just (WaitingForInput, if withinRegion reg x y then Just (V.EvMouseDown (x - l) (y - t) btn m) else Nothing)
-        -- only do tracking for l/m/r mouse buttons
-        V.EvMouseDown x y btn m ->
-          if tracking == Tracking btn || (tracking == WaitingForInput && withinRegion reg x y)
-            then Just (Tracking btn, Just $ V.EvMouseDown (x - l) (y - t) btn m)
-            else Just (NotTracking, Nothing)
-        V.EvMouseUp x y mbtn -> case mbtn of
-          Nothing -> case tracking of
-            Tracking _ -> Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
-            _ -> Just (WaitingForInput, Nothing)
-          Just btn ->
-            if tracking == Tracking btn
-              -- NOTE we only report EvMouseUp for the button we are tracking
-              -- vty has mouse buttons override others (seems to be based on ordering of Button) when multiple are pressed.
-              -- so it IS possible for child widget to miss out on a 'EvMouseUp' event with this current implementation
-              then Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
-              else Just (WaitingForInput, Nothing)
-        _ -> Just (tracking, Just e)
+  let trackMouse
+        :: VtyEvent
+        -> (MouseTrackingState, Maybe VtyEvent)
+        -> PushM t (Maybe (MouseTrackingState, Maybe VtyEvent))
+      trackMouse e (tracking, _) = do
+        -- sampling (as oppose to using attachPromptlyDyn) is necessary here as the focus may change from the event produced here
+        focused <- sample foc
+        -- strictly speaking the same could also happen here too
+        reg@(Region l t _ _) <- sample regBeh
+        return $ case e of
+          -- filter keyboard input if region is not focused
+          V.EvKey _ _ | not focused -> Nothing
+          -- filter scroll wheel input based on mouse position
+          V.EvMouseDown x y btn m | btn == V.BScrollUp || btn == V.BScrollDown -> case tracking of
+            trck@(Tracking _) -> Just (trck, Nothing)
+            _ -> Just (WaitingForInput, if withinRegion reg x y then Just (V.EvMouseDown (x - l) (y - t) btn m) else Nothing)
+          -- only do tracking for l/m/r mouse buttons
+          V.EvMouseDown x y btn m ->
+            if tracking == Tracking btn || (tracking == WaitingForInput && withinRegion reg x y)
+              then Just (Tracking btn, Just $ V.EvMouseDown (x - l) (y - t) btn m)
+              else Just (NotTracking, Nothing)
+          V.EvMouseUp x y mbtn -> case mbtn of
+            Nothing -> case tracking of
+              Tracking _ -> Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
+              _ -> Just (WaitingForInput, Nothing)
+            Just btn ->
+              if tracking == Tracking btn
+                -- NOTE we only report EvMouseUp for the button we are tracking
+                -- vty has mouse buttons override others (seems to be based on ordering of Button) when multiple are pressed.
+                -- so it IS possible for child widget to miss out on a 'EvMouseUp' event with this current implementation
+                then Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
+                else Just (WaitingForInput, Nothing)
+          _ -> Just (tracking, Just e)
   dynInputEvTracking <- foldDynMaybeM trackMouse (WaitingForInput, Nothing) $ inp
   return (fmapMaybe snd $ updated dynInputEvTracking)
 
@@ -307,7 +302,7 @@ data Region = Region
   , _region_width :: Int
   , _region_height :: Int
   }
-  deriving (Show, Read, Eq, Ord)
+  deriving (Eq, Ord, Read, Show)
 
 -- | A region that occupies no space.
 nilRegion :: Region
@@ -318,13 +313,13 @@ regionSize :: Region -> (Int, Int)
 regionSize (Region _ _ w h) = (w, h)
 
 -- | Check whether the x,y coordinates are within the specified region
-withinRegion ::
-  Region ->
-  -- | x-coordinate
-  Int ->
-  -- | y-coordinate
-  Int ->
-  Bool
+withinRegion
+  :: Region
+  -> Int
+  -- ^ x-coordinate
+  -> Int
+  -- ^ y-coordinate
+  -> Bool
 withinRegion (Region l t w h) x y =
   not . or $
     [ x < l
@@ -351,50 +346,50 @@ class (Reflex t, Monad m) => HasDisplayRegion t m | m -> t where
   localRegion f = hoist (localRegion f)
 
 -- | Retrieve the display width
-displayWidth :: (HasDisplayRegion t m) => m (Dynamic t Int)
+displayWidth :: HasDisplayRegion t m => m (Dynamic t Int)
 displayWidth = fmap _region_width <$> askRegion
 
 -- | Retrieve the display height
-displayHeight :: (HasDisplayRegion t m) => m (Dynamic t Int)
+displayHeight :: HasDisplayRegion t m => m (Dynamic t Int)
 displayHeight = fmap _region_height <$> askRegion
 
-instance (HasDisplayRegion t m) => HasDisplayRegion t (ReaderT x m)
-instance (HasDisplayRegion t m) => HasDisplayRegion t (BehaviorWriterT t x m)
-instance (HasDisplayRegion t m) => HasDisplayRegion t (DynamicWriterT t x m)
-instance (HasDisplayRegion t m) => HasDisplayRegion t (EventWriterT t x m)
-instance (HasDisplayRegion t m) => HasDisplayRegion t (NodeIdT m)
+instance HasDisplayRegion t m => HasDisplayRegion t (ReaderT x m)
+instance HasDisplayRegion t m => HasDisplayRegion t (BehaviorWriterT t x m)
+instance HasDisplayRegion t m => HasDisplayRegion t (DynamicWriterT t x m)
+instance HasDisplayRegion t m => HasDisplayRegion t (EventWriterT t x m)
+instance HasDisplayRegion t m => HasDisplayRegion t (NodeIdT m)
 
 -- | A widget that has access to a particular region of the vty display
 newtype DisplayRegion t m a = DisplayRegion
   {unDisplayRegion :: ReaderT (Dynamic t Region) m a}
   deriving
-    ( Functor
-    , Applicative
+    ( Applicative
+    , Functor
     , Monad
+    , MonadCatch
     , MonadFix
     , MonadHold t
     , MonadIO
+    , MonadMask
     , MonadRef
     , MonadSample t
-    , MonadCatch
     , MonadThrow
-    , MonadMask
     )
 
 instance (Monad m, Reflex t) => HasDisplayRegion t (DisplayRegion t m) where
   askRegion = DisplayRegion ask
   localRegion f = DisplayRegion . local f . unDisplayRegion
 
-deriving instance (MonadReflexCreateTrigger t m) => MonadReflexCreateTrigger t (DisplayRegion t m)
-deriving instance (NotReady t m) => NotReady t (DisplayRegion t m)
-deriving instance (PerformEvent t m) => PerformEvent t (DisplayRegion t m)
-deriving instance (PostBuild t m) => PostBuild t (DisplayRegion t m)
-deriving instance (TriggerEvent t m) => TriggerEvent t (DisplayRegion t m)
-instance (HasImageWriter t m) => HasImageWriter t (DisplayRegion t m) where
+deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (DisplayRegion t m)
+deriving instance NotReady t m => NotReady t (DisplayRegion t m)
+deriving instance PerformEvent t m => PerformEvent t (DisplayRegion t m)
+deriving instance PostBuild t m => PostBuild t (DisplayRegion t m)
+deriving instance TriggerEvent t m => TriggerEvent t (DisplayRegion t m)
+instance HasImageWriter t m => HasImageWriter t (DisplayRegion t m) where
   captureImages x = do
     reg <- askRegion
     lift $ captureImages $ runDisplayRegion reg x
-instance (HasFocusReader t m) => HasFocusReader t (DisplayRegion t m)
+instance HasFocusReader t m => HasFocusReader t (DisplayRegion t m)
 
 instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (DisplayRegion t m) where
   runWithReplace (DisplayRegion a) e = DisplayRegion $ runWithReplace a $ fmap unDisplayRegion e
@@ -408,14 +403,14 @@ instance MonadTrans (DisplayRegion t) where
 instance MFunctor (DisplayRegion t) where
   hoist f = DisplayRegion . hoist f . unDisplayRegion
 
-instance (MonadNodeId m) => MonadNodeId (DisplayRegion t m)
+instance MonadNodeId m => MonadNodeId (DisplayRegion t m)
 
 -- | Run a 'DisplayRegion' action with a given 'Region'
-runDisplayRegion ::
-  (Reflex t, Monad m) =>
-  Dynamic t Region ->
-  DisplayRegion t m a ->
-  m a
+runDisplayRegion
+  :: (Reflex t, Monad m)
+  => Dynamic t Region
+  -> DisplayRegion t m a
+  -> m a
 runDisplayRegion r = flip runReaderT r . unDisplayRegion
 
 -- * Getting focus state
@@ -429,39 +424,39 @@ class (Reflex t, Monad m) => HasFocusReader t m | m -> t where
   default localFocus :: (f m' ~ m, Monad m', MFunctor f, HasFocusReader t m') => (Dynamic t Bool -> Dynamic t Bool) -> m a -> m a
   localFocus f = hoist (localFocus f)
 
-instance (HasFocusReader t m) => HasFocusReader t (ReaderT x m)
-instance (HasFocusReader t m) => HasFocusReader t (BehaviorWriterT t x m)
-instance (HasFocusReader t m) => HasFocusReader t (DynamicWriterT t x m)
-instance (HasFocusReader t m) => HasFocusReader t (EventWriterT t x m)
-instance (HasFocusReader t m) => HasFocusReader t (NodeIdT m)
+instance HasFocusReader t m => HasFocusReader t (ReaderT x m)
+instance HasFocusReader t m => HasFocusReader t (BehaviorWriterT t x m)
+instance HasFocusReader t m => HasFocusReader t (DynamicWriterT t x m)
+instance HasFocusReader t m => HasFocusReader t (EventWriterT t x m)
+instance HasFocusReader t m => HasFocusReader t (NodeIdT m)
 
 -- | A widget that has access to information about whether it is focused
 newtype FocusReader t m a = FocusReader
   {unFocusReader :: ReaderT (Dynamic t Bool) m a}
   deriving
-    ( Functor
-    , Applicative
+    ( Applicative
+    , Functor
     , Monad
+    , MonadCatch
     , MonadFix
     , MonadHold t
     , MonadIO
+    , MonadMask
     , MonadRef
     , MonadSample t
-    , MonadCatch
     , MonadThrow
-    , MonadMask
     )
 
 instance (Monad m, Reflex t) => HasFocusReader t (FocusReader t m) where
   focus = FocusReader ask
   localFocus f = FocusReader . local f . unFocusReader
 
-deriving instance (MonadReflexCreateTrigger t m) => MonadReflexCreateTrigger t (FocusReader t m)
-deriving instance (NotReady t m) => NotReady t (FocusReader t m)
-deriving instance (PerformEvent t m) => PerformEvent t (FocusReader t m)
-deriving instance (PostBuild t m) => PostBuild t (FocusReader t m)
-deriving instance (TriggerEvent t m) => TriggerEvent t (FocusReader t m)
-instance (HasImageWriter t m) => HasImageWriter t (FocusReader t m) where
+deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (FocusReader t m)
+deriving instance NotReady t m => NotReady t (FocusReader t m)
+deriving instance PerformEvent t m => PerformEvent t (FocusReader t m)
+deriving instance PostBuild t m => PostBuild t (FocusReader t m)
+deriving instance TriggerEvent t m => TriggerEvent t (FocusReader t m)
+instance HasImageWriter t m => HasImageWriter t (FocusReader t m) where
   captureImages x = do
     a <- focus
     lift $ captureImages $ runFocusReader a x
@@ -478,14 +473,14 @@ instance MonadTrans (FocusReader t) where
 instance MFunctor (FocusReader t) where
   hoist f = FocusReader . hoist f . unFocusReader
 
-instance (MonadNodeId m) => MonadNodeId (FocusReader t m)
+instance MonadNodeId m => MonadNodeId (FocusReader t m)
 
 -- | Run a 'FocusReader' action with the given focus value
-runFocusReader ::
-  (Reflex t, Monad m) =>
-  Dynamic t Bool ->
-  FocusReader t m a ->
-  m a
+runFocusReader
+  :: (Reflex t, Monad m)
+  => Dynamic t Bool
+  -> FocusReader t m a
+  -> m a
 runFocusReader b = flip runReaderT b . unFocusReader
 
 -- * "Image" output
@@ -509,22 +504,22 @@ class (Reflex t, Monad m) => HasImageWriter (t :: Type) m | m -> t where
 newtype ImageWriter t m a = ImageWriter
   {unImageWriter :: BehaviorWriterT t [Image] m a}
   deriving
-    ( Functor
-    , Applicative
+    ( Applicative
+    , Functor
     , Monad
+    , MonadCatch
     , MonadFix
     , MonadHold t
     , MonadIO
+    , MonadMask
     , MonadRef
     , MonadReflexCreateTrigger t
     , MonadSample t
+    , MonadThrow
     , NotReady t
     , PerformEvent t
     , PostBuild t
     , TriggerEvent t
-    , MonadCatch
-    , MonadThrow
-    , MonadMask
     )
 
 instance MonadTrans (ImageWriter t) where
@@ -539,31 +534,31 @@ instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (ImageWrite
   traverseDMapWithKeyWithAdjust f m e = ImageWriter $ traverseDMapWithKeyWithAdjust (\k v -> unImageWriter $ f k v) m e
   traverseDMapWithKeyWithAdjustWithMove f m e = ImageWriter $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unImageWriter $ f k v) m e
 
-instance (HasImageWriter t m) => HasImageWriter t (ReaderT x m) where
+instance HasImageWriter t m => HasImageWriter t (ReaderT x m) where
   captureImages x = do
     a <- ask
     lift $ captureImages $ runReaderT x a
-instance (HasImageWriter t m) => HasImageWriter t (BehaviorWriterT t x m) where
+instance HasImageWriter t m => HasImageWriter t (BehaviorWriterT t x m) where
   captureImages (BehaviorWriterT x) = BehaviorWriterT $ do
     s <- get
     ((result, s'), images) <- lift $ captureImages $ runStateT x s
     put s'
     return (result, images)
-instance (HasImageWriter t m) => HasImageWriter t (DynamicWriterT t x m) where
+instance HasImageWriter t m => HasImageWriter t (DynamicWriterT t x m) where
   captureImages (DynamicWriterT x) = DynamicWriterT $ do
     s <- get
     ((result, s'), images) <- lift $ captureImages $ runStateT x s
     put s'
     return (result, images)
 
-instance (HasImageWriter t m) => HasImageWriter t (EventWriterT t x m) where
+instance HasImageWriter t m => HasImageWriter t (EventWriterT t x m) where
   captureImages (EventWriterT x) = EventWriterT $ do
     s <- get
     ((result, s'), images) <- lift $ captureImages $ runStateT x s
     put s'
     return (result, images)
 
-instance (HasImageWriter t m) => HasImageWriter t (NodeIdT m) where
+instance HasImageWriter t m => HasImageWriter t (NodeIdT m) where
   captureImages x = NodeIdT $ do
     ref <- ask
     lift $ captureImages $ flip runReaderT ref . unNodeIdT $ x
@@ -577,14 +572,14 @@ instance (Monad m, Reflex t) => HasImageWriter t (ImageWriter t m) where
   captureImages (ImageWriter x) = ImageWriter $ do
     lift $ runBehaviorWriterT x
 
-instance (HasDisplayRegion t m) => HasDisplayRegion t (ImageWriter t m)
-instance (HasFocusReader t m) => HasFocusReader t (ImageWriter t m)
+instance HasDisplayRegion t m => HasDisplayRegion t (ImageWriter t m)
+instance HasFocusReader t m => HasFocusReader t (ImageWriter t m)
 
 -- | Run a widget that can produce images
-runImageWriter ::
-  (Reflex t, Monad m) =>
-  ImageWriter t m a ->
-  m (a, Behavior t [Image])
+runImageWriter
+  :: (Reflex t, Monad m)
+  => ImageWriter t m a
+  -> m (a, Behavior t [Image])
 runImageWriter = runBehaviorWriterT . unImageWriter
 
 -- * Theming
@@ -595,9 +590,8 @@ class (Reflex t, Monad m) => HasTheme t m | m -> t where
   default theme :: (f m' ~ m, Monad m', MonadTrans f, HasTheme t m') => m (Behavior t Theme)
   theme = lift theme
 
-  {- | Convenience: the ambient 'V.Attr' from '_theme_default'. Most widgets
-  only need this.
-  -}
+  -- | Convenience: the ambient 'V.Attr' from '_theme_default'. Most widgets
+  --   only need this.
   themeAttr :: m (Behavior t V.Attr)
   default themeAttr :: (f m' ~ m, Monad m', MonadTrans f, HasTheme t m') => m (Behavior t V.Attr)
   themeAttr = lift themeAttr
@@ -606,31 +600,31 @@ class (Reflex t, Monad m) => HasTheme t m | m -> t where
   default localTheme :: (f m' ~ m, Monad m', MFunctor f, HasTheme t m') => (Behavior t Theme -> Behavior t Theme) -> m a -> m a
   localTheme f = hoist (localTheme f)
 
-instance (HasTheme t m) => HasTheme t (ReaderT x m)
-instance (HasTheme t m) => HasTheme t (BehaviorWriterT t x m)
-instance (HasTheme t m) => HasTheme t (DynamicWriterT t x m)
-instance (HasTheme t m) => HasTheme t (EventWriterT t x m)
-instance (HasTheme t m) => HasTheme t (NodeIdT m)
-instance (HasTheme t m) => HasTheme t (Input t m)
-instance (HasTheme t m) => HasTheme t (ImageWriter t m)
-instance (HasTheme t m) => HasTheme t (DisplayRegion t m)
-instance (HasTheme t m) => HasTheme t (FocusReader t m)
+instance HasTheme t m => HasTheme t (ReaderT x m)
+instance HasTheme t m => HasTheme t (BehaviorWriterT t x m)
+instance HasTheme t m => HasTheme t (DynamicWriterT t x m)
+instance HasTheme t m => HasTheme t (EventWriterT t x m)
+instance HasTheme t m => HasTheme t (NodeIdT m)
+instance HasTheme t m => HasTheme t (Input t m)
+instance HasTheme t m => HasTheme t (ImageWriter t m)
+instance HasTheme t m => HasTheme t (DisplayRegion t m)
+instance HasTheme t m => HasTheme t (FocusReader t m)
 
 -- | A widget that has access to theme information
 newtype ThemeReader t m a = ThemeReader
   {unThemeReader :: ReaderT (Behavior t Theme) m a}
   deriving
-    ( Functor
-    , Applicative
+    ( Applicative
+    , Functor
     , Monad
+    , MonadCatch
     , MonadFix
     , MonadHold t
     , MonadIO
+    , MonadMask
     , MonadRef
     , MonadSample t
-    , MonadCatch
     , MonadThrow
-    , MonadMask
     )
 
 instance (Monad m, Reflex t) => HasTheme t (ThemeReader t m) where
@@ -638,12 +632,12 @@ instance (Monad m, Reflex t) => HasTheme t (ThemeReader t m) where
   themeAttr = Reflex.Vty.Theme.themeToAttr <$> ThemeReader ask
   localTheme f = ThemeReader . local f . unThemeReader
 
-deriving instance (MonadReflexCreateTrigger t m) => MonadReflexCreateTrigger t (ThemeReader t m)
-deriving instance (NotReady t m) => NotReady t (ThemeReader t m)
-deriving instance (PerformEvent t m) => PerformEvent t (ThemeReader t m)
-deriving instance (PostBuild t m) => PostBuild t (ThemeReader t m)
-deriving instance (TriggerEvent t m) => TriggerEvent t (ThemeReader t m)
-instance (HasImageWriter t m) => HasImageWriter t (ThemeReader t m) where
+deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (ThemeReader t m)
+deriving instance NotReady t m => NotReady t (ThemeReader t m)
+deriving instance PerformEvent t m => PerformEvent t (ThemeReader t m)
+deriving instance PostBuild t m => PostBuild t (ThemeReader t m)
+deriving instance TriggerEvent t m => TriggerEvent t (ThemeReader t m)
+instance HasImageWriter t m => HasImageWriter t (ThemeReader t m) where
   captureImages x = ThemeReader $ do
     a <- ask
     lift $ captureImages $ flip runReaderT a $ unThemeReader x
@@ -660,25 +654,24 @@ instance MonadTrans (ThemeReader t) where
 instance MFunctor (ThemeReader t) where
   hoist f = ThemeReader . hoist f . unThemeReader
 
-instance (MonadNodeId m) => MonadNodeId (ThemeReader t m)
+instance MonadNodeId m => MonadNodeId (ThemeReader t m)
 
 -- | Run a 'ThemeReader' action with the given theme
-runThemeReader ::
-  (Reflex t, Monad m) =>
-  Behavior t Theme ->
-  ThemeReader t m a ->
-  m a
+runThemeReader
+  :: (Reflex t, Monad m)
+  => Behavior t Theme
+  -> ThemeReader t m a
+  -> m a
 runThemeReader b = flip runReaderT b . unThemeReader
 
 -- * Color profile
 
-{- | A class for widgets that need to know the terminal's color capability.
-Widgets build with true-color 'V.Attr's and the host downsamples via
-'Reflex.Vty.ColorProfile.applyProfile' at the 'V.Picture' boundary, so
-most widgets never need to call 'colorProfile' directly: it is useful
-when a widget wants to make a structural decision based on capability
-(e.g. choosing a different glyph for an 8-color terminal).
--}
+-- | A class for widgets that need to know the terminal's color capability.
+-- Widgets build with true-color 'V.Attr's and the host downsamples via
+-- 'Reflex.Vty.ColorProfile.applyProfile' at the 'V.Picture' boundary, so
+-- most widgets never need to call 'colorProfile' directly: it is useful
+-- when a widget wants to make a structural decision based on capability
+-- (e.g. choosing a different glyph for an 8-color terminal).
 class (Reflex t, Monad m) => HasColorProfile t m | m -> t where
   colorProfile :: m (Behavior t ColorProfile)
   default colorProfile :: (f m' ~ m, Monad m', MonadTrans f, HasColorProfile t m') => m (Behavior t ColorProfile)
@@ -687,48 +680,48 @@ class (Reflex t, Monad m) => HasColorProfile t m | m -> t where
   default localColorProfile :: (f m' ~ m, Monad m', MFunctor f, HasColorProfile t m') => (Behavior t ColorProfile -> Behavior t ColorProfile) -> m a -> m a
   localColorProfile f = hoist (localColorProfile f)
 
-instance (HasColorProfile t m) => HasColorProfile t (ReaderT x m)
-instance (HasColorProfile t m) => HasColorProfile t (BehaviorWriterT t x m)
-instance (HasColorProfile t m) => HasColorProfile t (DynamicWriterT t x m)
-instance (HasColorProfile t m) => HasColorProfile t (EventWriterT t x m)
-instance (HasColorProfile t m) => HasColorProfile t (NodeIdT m)
-instance (HasColorProfile t m) => HasColorProfile t (Input t m)
-instance (HasColorProfile t m) => HasColorProfile t (ImageWriter t m)
-instance (HasColorProfile t m) => HasColorProfile t (DisplayRegion t m)
-instance (HasColorProfile t m) => HasColorProfile t (FocusReader t m)
-instance (HasColorProfile t m) => HasColorProfile t (ThemeReader t m)
+instance HasColorProfile t m => HasColorProfile t (ReaderT x m)
+instance HasColorProfile t m => HasColorProfile t (BehaviorWriterT t x m)
+instance HasColorProfile t m => HasColorProfile t (DynamicWriterT t x m)
+instance HasColorProfile t m => HasColorProfile t (EventWriterT t x m)
+instance HasColorProfile t m => HasColorProfile t (NodeIdT m)
+instance HasColorProfile t m => HasColorProfile t (Input t m)
+instance HasColorProfile t m => HasColorProfile t (ImageWriter t m)
+instance HasColorProfile t m => HasColorProfile t (DisplayRegion t m)
+instance HasColorProfile t m => HasColorProfile t (FocusReader t m)
+instance HasColorProfile t m => HasColorProfile t (ThemeReader t m)
 
 -- | A widget that has access to the terminal's 'ColorProfile'.
 newtype ColorProfileReader t m a = ColorProfileReader
   {unColorProfileReader :: ReaderT (Behavior t ColorProfile) m a}
   deriving
-    ( Functor
-    , Applicative
+    ( Applicative
+    , Functor
     , Monad
+    , MonadCatch
     , MonadFix
     , MonadHold t
     , MonadIO
+    , MonadMask
     , MonadRef
     , MonadSample t
-    , MonadCatch
     , MonadThrow
-    , MonadMask
     )
 
 instance (Monad m, Reflex t) => HasColorProfile t (ColorProfileReader t m) where
   colorProfile = ColorProfileReader ask
   localColorProfile f = ColorProfileReader . local f . unColorProfileReader
 
-deriving instance (MonadReflexCreateTrigger t m) => MonadReflexCreateTrigger t (ColorProfileReader t m)
-deriving instance (NotReady t m) => NotReady t (ColorProfileReader t m)
-deriving instance (PerformEvent t m) => PerformEvent t (ColorProfileReader t m)
-deriving instance (PostBuild t m) => PostBuild t (ColorProfileReader t m)
-deriving instance (TriggerEvent t m) => TriggerEvent t (ColorProfileReader t m)
-instance (HasImageWriter t m) => HasImageWriter t (ColorProfileReader t m) where
+deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (ColorProfileReader t m)
+deriving instance NotReady t m => NotReady t (ColorProfileReader t m)
+deriving instance PerformEvent t m => PerformEvent t (ColorProfileReader t m)
+deriving instance PostBuild t m => PostBuild t (ColorProfileReader t m)
+deriving instance TriggerEvent t m => TriggerEvent t (ColorProfileReader t m)
+instance HasImageWriter t m => HasImageWriter t (ColorProfileReader t m) where
   captureImages x = ColorProfileReader $ do
     a <- ask
     lift $ captureImages $ flip runReaderT a $ unColorProfileReader x
-instance (HasTheme t m) => HasTheme t (ColorProfileReader t m)
+instance HasTheme t m => HasTheme t (ColorProfileReader t m)
 
 instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (ColorProfileReader t m) where
   runWithReplace (ColorProfileReader a) e = ColorProfileReader $ runWithReplace a $ fmap unColorProfileReader e
@@ -742,55 +735,53 @@ instance MonadTrans (ColorProfileReader t) where
 instance MFunctor (ColorProfileReader t) where
   hoist f = ColorProfileReader . hoist f . unColorProfileReader
 
-instance (MonadNodeId m) => MonadNodeId (ColorProfileReader t m)
+instance MonadNodeId m => MonadNodeId (ColorProfileReader t m)
 
 -- | Run a 'ColorProfileReader' action with the given profile.
-runColorProfileReader ::
-  (Reflex t, Monad m) =>
-  Behavior t ColorProfile ->
-  ColorProfileReader t m a ->
-  m a
+runColorProfileReader
+  :: (Reflex t, Monad m)
+  => Behavior t ColorProfile
+  -> ColorProfileReader t m a
+  -> m a
 runColorProfileReader b = flip runReaderT b . unColorProfileReader
 
 -- ** Manipulating images
 
-{- | Translates and crops an 'Image' so that it is contained by
-the given 'Region'.
--}
-withinImage ::
-  Region ->
-  Image ->
-  Image
+-- | Translates and crops an 'Image' so that it is contained by
+-- the given 'Region'.
+withinImage
+  :: Region
+  -> Image
+  -> Image
 withinImage (Region left top width height)
   | width < 0 || height < 0 = withinImage (Region left top 0 0)
   | otherwise = V.translate left top . V.crop width height
 
 -- | Crop a behavior of images to a behavior of regions. See 'withinImage'.
-imagesInRegion ::
-  (Reflex t) =>
-  Behavior t Region ->
-  Behavior t [Image] ->
-  Behavior t [Image]
+imagesInRegion
+  :: Reflex t
+  => Behavior t Region
+  -> Behavior t [Image]
+  -> Behavior t [Image]
 imagesInRegion reg = liftA2 (\r is -> map (withinImage r) is) reg
 
 -- * Running sub-widgets
 
-{- | Low-level widget combinator that runs a child widget within
-a given region and context. This widget filters and modifies the input
-that the child widget receives such that:
-* unfocused widgets receive no key events
-* mouse inputs inside the region have their coordinates translated such
-  that (0,0) is the top-left corner of the region
-* mouse drag sequences that start OFF the region are ignored
-* mouse drag sequences that start ON the region and drag off are NOT ignored
--}
-pane ::
-  (MonadFix m, MonadHold t m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m) =>
-  Dynamic t Region ->
-  -- | Whether the widget should be focused when the parent is.
-  Dynamic t Bool ->
-  m a ->
-  m a
+-- | Low-level widget combinator that runs a child widget within
+-- a given region and context. This widget filters and modifies the input
+-- that the child widget receives such that:
+-- * unfocused widgets receive no key events
+-- * mouse inputs inside the region have their coordinates translated such
+--   that (0,0) is the top-left corner of the region
+-- * mouse drag sequences that start OFF the region are ignored
+-- * mouse drag sequences that start ON the region and drag off are NOT ignored
+pane
+  :: (MonadFix m, MonadHold t m, HasInput t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m)
+  => Dynamic t Region
+  -> Dynamic t Bool
+  -- ^ Whether the widget should be focused when the parent is.
+  -> m a
+  -> m a
 pane dr foc child =
   localRegion (const dr) $
     mapImages (imagesInRegion $ current dr) $
@@ -800,5 +791,5 @@ pane dr foc child =
 -- * Misc
 
 -- | A widget that draws nothing
-blank :: (Monad m) => m ()
+blank :: Monad m => m ()
 blank = return ()
