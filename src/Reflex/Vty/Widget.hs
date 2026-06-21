@@ -648,8 +648,8 @@ runThemeReader b = flip runReaderT b . unThemeReader
 -- | A class for widgets that need to know the terminal's color capability.
 -- Widgets build with true-color 'V.Attr's and the host downsamples via
 -- 'Reflex.Vty.ColorProfile.applyProfile' at the 'V.Picture' boundary, so
--- most widgets never need to call 'colorProfile' directly — it is useful
--- when a widget wants to make a /structural/ decision based on capability
+-- most widgets never need to call 'colorProfile' directly: it is useful
+-- when a widget wants to make a structural decision based on capability
 -- (e.g. choosing a different glyph for an 8-color terminal).
 class (Reflex t, Monad m) => HasColorProfile t m | m -> t where
   colorProfile :: m (Behavior t ColorProfile)

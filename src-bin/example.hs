@@ -43,9 +43,7 @@ data Example = Example_TextEditor
              | Example_ClickButtonsGetEmojis
              | Example_CPUStat
              | Example_Scrollable
-             | Example_Styles
-             | Example_ColorProfile
-             | Example_Themes
+             | Example_Showcase
   deriving (Show, Read, Eq, Ord, Enum, Bounded)
 
 withCtrlC :: (Monad m, HasInput t m, Reflex t) => m () -> m (Event t ())
@@ -73,9 +71,7 @@ main = mainWidget $ withCtrlC $ do
           d <- t $ textButtonStatic def "Clickable buttons"
           e <- t $ textButtonStatic def "CPU Usage"
           f <- t $ textButtonStatic def "Scrollable"
-          g <- t $ textButtonStatic def "Styles"
-          h <- t $ textButtonStatic def "Color Profile"
-          i <- t $ textButtonStatic def "Themes"
+          g <- t $ textButtonStatic def "Showcase"
           return $ leftmost
             [ Left Example_Todo <$ a
             , Left Example_TextEditor <$ b
@@ -83,9 +79,7 @@ main = mainWidget $ withCtrlC $ do
             , Left Example_ClickButtonsGetEmojis <$ d
             , Left Example_CPUStat <$ e
             , Left Example_Scrollable <$ f
-            , Left Example_Styles <$ g
-            , Left Example_ColorProfile <$ h
-            , Left Example_Themes <$ i
+            , Left Example_Showcase <$ g
             ]
     let escapable w = do
           void w
@@ -100,9 +94,7 @@ main = mainWidget $ withCtrlC $ do
           Left Example_ClickButtonsGetEmojis -> escapable easyExample
           Left Example_CPUStat -> escapable cpuStats
           Left Example_Scrollable -> escapable scrollingWithLayout
-          Left Example_Styles -> escapable stylesDemo
-          Left Example_ColorProfile -> escapable colorProfileDemo
-          Left Example_Themes -> escapable themesDemo
+          Left Example_Showcase -> escapable showcaseDemo
           Right () -> buttons
     return ()
 
@@ -348,86 +340,14 @@ dragTest = do
   lastEvent <- hold "No event yet" . fmap show =<< drag V.BLeft
   text $ T.pack <$> lastEvent
 
--- * Styles demo: shows off borders, padding, margin, colors, alignment,
--- underline, hyperlinks, and the border-style presets.
-stylesDemo :: (VtyExample t m, MonadHold t m, HasLayout t m) => m ()
-stylesDemo = col $ do
-  grout (fixed 1) $ text "Each row shows a different Style.render output."
-  grout (fixed 1) $ text "Esc to go back."
-  -- Border style presets
-  grout (fixed 3) $ row $ do
-    grout flex $ styledImage "single" (withBorder singleBorder def)
-    grout flex $ styledImage "rounded" (withBorder roundedBorder def)
-    grout flex $ styledImage "thick" (withBorder thickBorder def)
-    grout flex $ styledImage "double" (withBorder doubleBorder def)
-    grout flex $ styledImage "ascii" (withBorder asciiBorder def)
-  -- Padding and margin
-  grout (fixed 3) $ row $ do
-    grout flex $ styledImage "pad 1" (withPadding 1 1 1 1 def)
-    grout flex $ styledImage "pad 2" (withPadding 2 2 2 2 def)
-    grout flex $ styledImage "margin 1" (withMargin 1 1 1 1 def)
-  -- Colors
-  grout (fixed 3) $ row $ do
-    grout flex $ styledImage "red fg" (withForeground red def)
-    grout flex $ styledImage "blue bg" (withBackground blue def)
-    grout flex $ styledImage "rgb" (withForeground (rgbColor 200 100 50) def)
-  -- Text transforms
-  grout (fixed 3) $ row $ do
-    grout flex $ styledImage "bold" (withBold def)
-    grout flex $ styledImage "italic" (withItalic def)
-    grout flex $ styledImage "underline" (withUnderline UnderlineSingle def)
-    grout flex $ styledImage "reverse" (withReverse def)
-  -- Alignment within a fixed-width box
-  grout (fixed 3) $ row $ do
-    grout flex $ styledImage "left" (withAlignH HAlignLeft . withWidth 20 $ def)
-    grout flex $ styledImage "center" (withAlignH HAlignCenter . withWidth 20 $ def)
-    grout flex $ styledImage "right" (withAlignH HAlignRight . withWidth 20 $ def)
-  -- Combined: border + padding + color
-  grout (fixed 5) $ styledImage "combined"
-    ( withBorder roundedBorder
-    . withPadding 1 2 1 2
-    . withForeground brightGreen
-    . withBorderForeground brightMagenta
-    $ def )
-  -- Hyperlink (OSC 8 — visible only in supporting terminals)
-  grout (fixed 3) $ styledImage "hyperlink"
-    (withHyperlink "https://reflex-frp.org" . withUnderline UnderlineSingle $ def)
-  pure ()
-  where
-    -- Render a Style'd label and tell the image.
-    styledImage :: (Reflex t, Monad m, HasImageWriter t m)
-                => Text -> Style -> m ()
-    styledImage label s =
-      tellImages . pure . pure $ render s label
-
--- * Color profile demo: shows the detected profile and how downsampling
--- affects an RGB color across profiles.
-colorProfileDemo :: (VtyExample t m, MonadHold t m, HasLayout t m, HasColorProfile t m) => m ()
-colorProfileDemo = col $ do
-  grout (fixed 1) $ text "Detected terminal color profile:"
-  profBeh <- colorProfile
-  grout (fixed 1) $ text $ T.pack . show <$> profBeh
-  grout (fixed 1) $ text "Each row shows the same RGB color (200,100,50) rendered"
-  grout (fixed 1) $ text "through a different profile via applyProfile:"
-  grout (fixed 2) $ row $ do
-    grout flex $ profileSwatch "TrueColor" ColorProfile_TrueColor
-    grout flex $ profileSwatch "Ansi256" ColorProfile_Ansi256
-    grout flex $ profileSwatch "Ansi16" ColorProfile_Ansi16
-    grout flex $ profileSwatch "Ascii" ColorProfile_Ascii
-    grout flex $ profileSwatch "NoTTY" ColorProfile_NoTTY
-  pure ()
-  where
-    orange = rgbColor 200 100 50
-    profileSwatch label prof =
-      tellImages . pure . pure $
-        V.text' (applyProfile prof (V.withForeColor V.defAttr orange)) (label <> " ")
-
--- * Themes demo: cycles through the predefined themes, each applied to a
--- small panel of buttons, a checkbox, a link, and a text input.
-themesDemo :: (VtyExample t m, MonadHold t m, HasLayout t m) => m ()
-themesDemo = do
+-- * Showcase: one screen showing off all styling, theming, and color
+-- profiling. Tab cycles the predefined themes; the whole screen is
+-- rendered under the current theme.
+showcaseDemo :: (VtyExample t m, MonadHold t m, HasLayout t m, HasColorProfile t m) => m ()
+showcaseDemo = do
   tab <- key (V.KChar '\t')
   nDyn <- foldDyn (\_ n -> n + 1) 0 tab
+  prof <- colorProfile
   let themes = cycle
         [ ("default", defTheme)
         , ("dark", darkTheme)
@@ -445,14 +365,71 @@ themesDemo = do
         (label, _) : _ -> label
         [] -> ""
       themeBeh = curTheme <$> current nDyn
-      labelBeh = T.pack . ("Theme: " <>) . curLabel <$> current nDyn
+      headerBeh = (\n p -> T.pack ("Theme: " <> curLabel n <> "  |  Profile: " <> show p <> "  |  Tab cycles  |  Esc back"))
+        <$> current nDyn <*> prof
   localTheme (const themeBeh) $ do
     fill (pure ' ')
     col $ do
-      grout (fixed 1) $ text "Tab cycles themes. Esc to go back."
-      grout flex $ boxTitle (constant singleBoxStyle) labelBeh $ col $ do
-        void $ tile (fixed 3) $ textButtonStatic def "A button"
-        void $ tile (fixed 3) $ checkbox def False
-        void $ tile (fixed 3) $ linkStatic "A link"
-        void $ tile (fixed 3) $ textInput def
-        pure ()
+      grout (fixed 1) $ text headerBeh
+      grout flex $ row $ do
+        -- Left column: style samples
+        grout flex $ col $ do
+          grout (fixed 1) $ text "Borders:"
+          grout (fixed 3) $ row $ do
+            grout flex $ styledImage "single" (withBorder singleBorder def)
+            grout flex $ styledImage "rounded" (withBorder roundedBorder def)
+            grout flex $ styledImage "thick" (withBorder thickBorder def)
+            grout flex $ styledImage "double" (withBorder doubleBorder def)
+            grout flex $ styledImage "ascii" (withBorder asciiBorder def)
+          grout (fixed 1) $ text "Padding/Margin:"
+          grout (fixed 3) $ row $ do
+            grout flex $ styledImage "pad 1" (withPadding 1 1 1 1 def)
+            grout flex $ styledImage "pad 2" (withPadding 2 2 2 2 def)
+            grout flex $ styledImage "margin 1" (withMargin 1 1 1 1 def)
+          grout (fixed 1) $ text "Colors:"
+          grout (fixed 3) $ row $ do
+            grout flex $ styledImage "red fg" (withForeground red def)
+            grout flex $ styledImage "blue bg" (withBackground blue def)
+            grout flex $ styledImage "rgb" (withForeground (rgbColor 200 100 50) def)
+          grout (fixed 1) $ text "Transforms:"
+          grout (fixed 3) $ row $ do
+            grout flex $ styledImage "bold" (withBold def)
+            grout flex $ styledImage "italic" (withItalic def)
+            grout flex $ styledImage "underline" (withUnderline UnderlineSingle def)
+            grout flex $ styledImage "reverse" (withReverse def)
+          grout (fixed 1) $ text "Alignment:"
+          grout (fixed 3) $ row $ do
+            grout flex $ styledImage "left" (withAlignH HAlignLeft . withWidth 20 $ def)
+            grout flex $ styledImage "center" (withAlignH HAlignCenter . withWidth 20 $ def)
+            grout flex $ styledImage "right" (withAlignH HAlignRight . withWidth 20 $ def)
+          grout (fixed 1) $ text "Combined & Hyperlink:"
+          grout (fixed 5) $ row $ do
+            grout flex $ styledImage "combined"
+              ( withBorder roundedBorder
+              . withPadding 1 2 1 2
+              . withForeground brightGreen
+              . withBorderForeground brightMagenta
+              $ def )
+            grout flex $ styledImage "link"
+              (withHyperlink "https://reflex-frp.org" . withUnderline UnderlineSingle $ def)
+        -- Right column: themed widgets + color profile swatches
+        grout flex $ col $ do
+          grout (fixed 1) $ text "Themed Widgets:"
+          void $ grout (fixed 3) $ textButtonStatic def "A button"
+          void $ grout (fixed 3) $ checkbox def False
+          void $ grout (fixed 3) $ linkStatic "A link"
+          void $ grout (fixed 3) $ textInput def
+          grout (fixed 1) $ text "Color Profile Swatches:"
+          grout (fixed 2) $ row $ do
+            grout flex $ profileSwatch "TrueColor" ColorProfile_TrueColor
+            grout flex $ profileSwatch "Ansi256" ColorProfile_Ansi256
+            grout flex $ profileSwatch "Ansi16" ColorProfile_Ansi16
+            grout flex $ profileSwatch "Ascii" ColorProfile_Ascii
+            grout flex $ profileSwatch "NoTTY" ColorProfile_NoTTY
+  where
+    orange = rgbColor 200 100 50
+    styledImage label s =
+      tellImages . pure . pure $ render s label
+    profileSwatch label prof =
+      tellImages . pure . pure $
+        V.text' (applyProfile prof (V.withForeColor V.defAttr orange)) (label <> " ")

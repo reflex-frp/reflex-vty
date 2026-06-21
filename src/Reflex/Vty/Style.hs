@@ -435,10 +435,22 @@ withWhitespace c s = s { _style_whitespaceChar = Just c }
 -- Rendering
 ----------------------------------------------------------------------------
 
+-- | An attr where every field is 'V.KeepCurrent', so painted cells inherit
+-- the underlying layer's value for any attribute the 'Style' doesn't
+-- explicitly set. Used as the base for 'render' so themed backgrounds
+-- show through where the 'Style' has no explicit color.
+transparentAttr :: V.Attr
+transparentAttr = V.Attr
+  { V.attrStyle = V.KeepCurrent
+  , V.attrForeColor = V.KeepCurrent
+  , V.attrBackColor = V.KeepCurrent
+  , V.attrURL = V.KeepCurrent
+  }
+
 -- | Merge the color and text-transform fields of a 'Style' onto an
 -- existing 'V.Attr'. Fields that are 'Nothing' in the 'Style' are left
 -- unchanged (the existing 'V.Attr' value is kept). Padding, margin,
--- border, dimensions, and alignment are not handled here — those are
+-- border, dimensions, and alignment are not handled here: those are
 -- layout concerns handled by 'render'. This is used by widgets that want
 -- to layer a 'Style' on top of the ambient 'HasTheme' attribute.
 applyAttr :: Style -> V.Attr -> V.Attr
@@ -480,8 +492,11 @@ render s content =
   applyMaxSize $ applySize $ applyMargin $ applyBorder $ applyPadding $ applyAlign $ contentImage
   where
     ws = fromMaybe ' ' (_style_whitespaceChar s)
-    baseAttr = applyAttr s V.defAttr
-    borderAttr = applyAttr (borderStyleAttr s) V.defAttr
+    -- Use KeepCurrent for all unset attrs so underlying layers (e.g. the
+    -- themed fill) show through where the Style doesn't explicitly set a
+    -- color or style.
+    baseAttr = applyAttr s transparentAttr
+    borderAttr = applyAttr (borderStyleAttr s) transparentAttr
     contentImage = V.Image.text' baseAttr content
     -- Whitespace fill of a given width/height using the whitespace char.
     fillImage :: V.Attr -> Int -> Int -> V.Image
@@ -495,14 +510,15 @@ render s content =
       | otherwise = V.Image.horizCat [leftPad, img, rightPad]
       where
         imgW = V.Image.imageWidth img
+        imgH = V.Image.imageHeight img
         slack = w - imgW
         leftPad = case fromMaybe HAlignLeft (_style_alignHorizontal s) of
           HAlignLeft   -> V.Image.emptyImage
-          HAlignCenter -> fillImage a (slack `div` 2) 1
-          HAlignRight  -> fillImage a slack 1
+          HAlignCenter -> fillImage a (slack `div` 2) imgH
+          HAlignRight  -> fillImage a slack imgH
         rightPad = case fromMaybe HAlignLeft (_style_alignHorizontal s) of
-          HAlignLeft   -> fillImage a slack 1
-          HAlignCenter -> fillImage a (slack - slack `div` 2) 1
+          HAlignLeft   -> fillImage a slack imgH
+          HAlignCenter -> fillImage a (slack - slack `div` 2) imgH
           HAlignRight  -> V.Image.emptyImage
     -- Vertical alignment of an image within a height.
     placeV :: V.Attr -> Int -> V.Image -> V.Image
@@ -511,14 +527,15 @@ render s content =
       | otherwise = V.Image.vertCat [topPad, img, bottomPad]
       where
         imgH = V.Image.imageHeight img
+        imgW = V.Image.imageWidth img
         slack = h - imgH
         topPad = case fromMaybe VAlignTop (_style_alignVertical s) of
           VAlignTop    -> V.Image.emptyImage
-          VAlignMiddle -> fillImage a 1 (slack `div` 2)
-          VAlignBottom -> fillImage a 1 slack
+          VAlignMiddle -> fillImage a imgW (slack `div` 2)
+          VAlignBottom -> fillImage a imgW slack
         bottomPad = case fromMaybe VAlignTop (_style_alignVertical s) of
-          VAlignTop    -> fillImage a 1 slack
-          VAlignMiddle -> fillImage a 1 (slack - slack `div` 2)
+          VAlignTop    -> fillImage a imgW slack
+          VAlignMiddle -> fillImage a imgW (slack - slack `div` 2)
           VAlignBottom -> V.Image.emptyImage
     -- Width/height minimums: pad the image out to the requested size.
     applySize img =
@@ -556,17 +573,10 @@ render s content =
                      (_style_borderLeft s)
                      (_style_borderRight s)
                      img
-    -- Margin (drawn outside the border, using the same whitespace char).
+    -- Margin (transparent: uses pad so underlying layers show through).
     applyMargin img =
       let m = _style_margin s
-          top    = fillImage V.defAttr (V.Image.imageWidth img) (_margin_top m)
-          bottom = fillImage V.defAttr (V.Image.imageWidth img) (_margin_bottom m)
-          left   = fillImage V.defAttr (_margin_left m) (V.Image.imageHeight img)
-          right  = fillImage V.defAttr (_margin_right m) (V.Image.imageHeight img)
-      in V.Image.vertCat [ top
-                         , V.Image.horizCat [ left, img, right ]
-                         , bottom
-                         ]
+      in V.Image.pad (_margin_left m) (_margin_top m) (_margin_right m) (_margin_bottom m) img
     -- Max-width / max-height clipping.
     applyMaxSize img =
       let clipW = maybe img (\w -> V.Image.crop w (V.Image.imageHeight img) img) (_style_maxWidth s)

@@ -72,7 +72,7 @@ detectColorProfile = pure . colorProfileFromVty
 
 -- | Downsample a single 'V.Color' to the closest representation the profile
 -- can render. For 'ColorProfile_Ascii' and 'ColorProfile_NoTTY' the color is
--- returned unchanged — callers should use 'applyProfile' to set the
+-- returned unchanged: callers should use 'applyProfile' to set the
 -- surrounding 'V.Attr' field to 'V.Default' instead, since those profiles
 -- have no color representation at all.
 convertColor :: ColorProfile -> V.Color.Color -> V.Color.Color
