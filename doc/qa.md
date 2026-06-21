@@ -33,9 +33,44 @@ Once it's done you can test the following:
 
   * Click on `Scrollable text display`.
     * Make sure that you can scroll up and down through the small box of text with your mouse's scroll wheel.
+    * Make sure that the second box, "This one scrolls automatically as the output grows", appends one timestamped line per second and stays scrolled to the bottom as new lines appear.
+    * Make sure that the "Height", "Scroll", and "Length" readouts below update as you scroll and as new lines arrive.
     * Make sure that resizing your terminal window causes the boxes to resize as well.
+    * Type <kbd>Esc</kbd>.
+
+  * Click on `Clickable buttons`.
+    * Make sure that clicking each of the nine buttons (or focusing one and pressing <kbd>Enter</kbd> or <kbd>Space</kbd>) appends its associated emoji into the "CLICK BUTTONS TO DRAW" box.
+    * Make sure the focused button is rendered with a double-line border; unfocused buttons use the default single-line border.
+    * Type <kbd>Esc</kbd>.
+
+  * Click on `CPU Usage`.
+    * Make sure a vertical bar chart appears inside the titled box and updates several times per second.
+    * Make sure the bars are colored (red/orange/yellow/white by load) and use unicode block elements.
+    * Make sure that resizing your terminal window causes the chart to resize as well.
+    * Type <kbd>Esc</kbd>.
+
+  * Click on `Scrollable`.
+    * Make sure the titled "Tracks" box contains 11 numbered, focusable buttons stacked vertically.
+    * Make sure you can scroll through them with the mouse wheel or arrow keys, and that focus tracks the visible buttons.
+    * Make sure the "Total Lines", "Scroll Pos", and "Scroll Height" readouts below the box update as you scroll.
+    * Type <kbd>Esc</kbd>.
+
+  * Click on `Styles`.
+    * Make sure you see a grid of labeled boxes demonstrating every border style preset (single, rounded, thick, double, ascii), padding and margin, foreground/background colors (including an RGB true-color swatch), text transforms (bold, italic, underline, reverse), horizontal alignment within a fixed-width box (left/center/right), a combined rounded-border + padded + colored box, and a hyperlink (underline + OSC 8 clickable in supporting terminals).
+    * Make sure that resizing your terminal window causes the layout to resize as well.
+    * Type <kbd>Esc</kbd>.
+
+  * Click on `Color Profile`.
+    * Make sure the top line shows your terminal's detected `ColorProfile` (e.g. `ColorProfile_TrueColor` on a modern terminal).
+    * Make sure the row of swatches shows the same RGB orange (200,100,50) rendered through each profile: TrueColor shows the exact orange, Ansi256 shows a close approximation, Ansi16 shows the nearest ANSI color, Ascii and NoTTY show plain text with no color.
+    * Type <kbd>Esc</kbd>.
+
+  * Click on `Themes`.
+    * Make sure you see a titled panel showing a button, a checkbox, a link, and a text input, all rendered in the currently selected theme.
+    * Make sure pressing <kbd>Tab</kbd> cycles through the seven predefined themes (`default`, `dark`, `charm`, `dracula`, `nord`, `zenburn`, `gruvbox`), updating the panel's title and the colors of every element each time.
+    * Make sure the checkbox still toggles, the link is underlined, and the text input accepts typing in every theme.
     * Type <kbd>Esc</kbd>.
 
   * Type <kbd>Ctrl</kbd>+<kbd>C</kbd> to quit.
 
-There should be only 3 examples to cover. If there are more or less than this then this QA guide is out of date and QA should fail.
+There should be 9 examples to cover. If there are more or less than this then this QA guide is out of date and QA should fail.

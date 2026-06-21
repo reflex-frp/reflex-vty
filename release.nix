@@ -102,6 +102,7 @@ let
     ghc94 = nixGhc94.callCabal2nix "reflex-vty" (import ./src.nix) {};
     ghc96 = nixGhc96.callCabal2nix "reflex-vty" (import ./src.nix) {};
     ghc98 = nixGhc98.callCabal2nix "reflex-vty" (import ./src.nix) {};
+    ghc98Packages = nixGhc98;
   });
   in
     ghcs

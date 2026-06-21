@@ -63,7 +63,7 @@ boxTitle :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasImageWriter t m
 boxTitle boxStyle title child = do
   dh <- displayHeight
   dw <- displayWidth
-  bt <- theme
+  bt <- themeAttr
   let boxReg = Region 0 0 <$> dw <*> dh
       innerReg = Region 1 1 <$> (subtract 2 <$> dw) <*> (subtract 2 <$> dh)
 

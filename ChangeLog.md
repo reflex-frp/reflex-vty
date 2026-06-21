@@ -1,5 +1,20 @@
 # Revision history for reflex-vty
 
+## 0.7.0.0
+
+* *Breaking change*: `TextInputConfig` has a new field, `_textInputConfig_alignment :: TextAlignment`, controlling how entered text is aligned within the input region. `def` uses `TextAlignment_Left`.
+* Add `Reflex.Vty.Widget.Text.textWithAlignment`, an alignable versrion of `text`. `text` is now a synonym for `textWithAlignment TextAlignment_Left`.
+* Add `Reflex.Vty.ColorProfile` module: `ColorProfile` datatype (`TrueColor`/`Ansi256`/`Ansi16`/`Ascii`/`NoTTY`), `detectColorProfile`/`colorProfileFromVty` to read the terminal's capability from vty handle, `convertColor` for downsampling, and `applyProfile` to downsample an entire `V.Attr` (resets colors/style to `Default` for `Ascii`/`NoTTY`).
+* *Breaking change*: Add `HasColorProfile` class (with `colorProfile`/`localColorProfile` and a `ColorProfileReader` transformer) to `Reflex.Vty.Widget`.Widgets can call `colorProfile` to make decisions based on terminal capability.
+* Add `Reflex.Vty.Style`: Lip Gloss-inspired declarative styling.
+* *Breaking change*: `Reflex.Vty.Style` re-exports color constants (`red`/`yellow`/`white`/etc.) from `Reflex.Vty`.
+* *Breaking change*: `HasTheme` now has a structured `Theme` record (in `Reflex.Vty.Theme`) instead of `Behavior t V.Attr`. Use `themeAttr` to get the `V.Attr`, or `theme` for the full record.
+* *Breaking change*: `CheckboxConfig._checkboxConfig_attributes` removed; `checkbox` reads from `HasTheme`.
+* Fix `textInput` cursor: uses `_theme_textInputCursor` instead of hardcoded `reverseVideo`.
+* Fix `textButton` centering: now uses `textWithAlignment TextAlignment_Center`.
+* Add `Reflex.Vty.Theme.darkTheme`
+* Add `Reflex.Vty.Theme` presets: `charmTheme`, `draculaTheme`, `nordTheme`, `zenburnTheme`, `gruvboxTheme`.
+
 ## 0.6.2.1
 
 * Update dependency version bounds

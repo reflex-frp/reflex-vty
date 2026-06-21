@@ -16,6 +16,8 @@ import Data.Text.Zipper
 import qualified Graphics.Vty as V
 import Reflex
 
+import Reflex.Vty.Style (applyAttr)
+import Reflex.Vty.Theme (Theme(..))
 import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Layout
 import Reflex.Vty.Widget.Input.Mouse
@@ -51,10 +53,13 @@ data TextInputConfig t = TextInputConfig
   , _textInputConfig_display :: Dynamic t (Char -> Char)
   -- ^ Transform the characters in a text input before displaying them. This is useful, e.g., for
   -- masking characters when entering passwords.
+  , _textInputConfig_alignment :: TextAlignment
+  -- ^ How to align the entered text within the input region. Defaults to
+  -- 'TextAlignment_Left'. See 'Data.Text.Zipper.displayLinesWithAlignment'.
   }
 
 instance Reflex t => Default (TextInputConfig t) where
-  def = TextInputConfig empty never 4 (pure id)
+  def = TextInputConfig empty never 4 (pure id) TextAlignment_Left
 
 -- | The output produced by text input widgets, including the text
 -- value and the number of display lines (post-wrapping). Note that some
@@ -79,8 +84,10 @@ textInput cfg = do
   f <- focus
   dh <- displayHeight
   dw <- displayWidth
-  bt <- theme
+  bt <- themeAttr
+  th <- theme
   attr0 <- sample bt
+  cursorStyle0 <- sample (fmap _theme_textInputCursor th)
   rec
       -- we split up the events from vty and the one users provide to avoid cyclical
       -- update dependencies. This way, users may subscribe only to UI updates.
@@ -97,15 +104,14 @@ textInput cfg = do
         ]
       click <- mouseDown V.BLeft
 
-      -- TODO reverseVideo is prob not what we want. Does not work with `darkTheme` in example.hs (cursor is dark rather than light bg)
-      let toCursorAttrs attr = V.withStyle attr V.reverseVideo
+      let toCursorAttrs attr = applyAttr cursorStyle0 attr
           rowInputDyn = (,,)
             <$> dw
             <*> (mapZipper <$> _textInputConfig_display cfg <*> v)
             <*> f
           toDisplayLines attr (w, s, x)  =
             let c = if x then toCursorAttrs attr else attr
-            in displayLines w attr c s
+            in displayLinesWithAlignment (_textInputConfig_alignment cfg) w attr c s
       attrDyn <- holdDyn attr0 $ pushAlways (\_ -> sample bt) (updated rowInputDyn)
       let rows = ffor2 attrDyn rowInputDyn toDisplayLines
           img = images . _displayLines_spans <$> rows

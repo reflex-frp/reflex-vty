@@ -9,7 +9,6 @@ Description: Basic set of widgets and building blocks for reflex-vty application
 
 module Reflex.Vty.Widget where
 
-import Control.Applicative (liftA2)
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO)
@@ -19,6 +18,7 @@ import Control.Monad.Reader (ReaderT(..), ask, local, runReaderT)
 import Control.Monad.Ref
 import Control.Monad.Trans (MonadTrans, lift)
 import Control.Monad.Trans.State.Strict
+import Data.Kind (Type)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Graphics.Vty (Image)
@@ -26,7 +26,9 @@ import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Class ()
 import Reflex.Host.Class (MonadReflexCreateTrigger)
+import Reflex.Vty.ColorProfile
 import Reflex.Vty.Host
+import Reflex.Vty.Theme (Theme(..), defTheme, themeToAttr)
 
 -- * Running a vty application
 
@@ -41,24 +43,27 @@ mainWidgetWithHandle
       , HasFocusReader t m
       , HasInput t m
       , HasTheme t m
+      , HasColorProfile t m
       ) => m (Event t ()))
   -> IO ()
 mainWidgetWithHandle vty child =
   runVtyAppWithHandle vty $ \dr0 inp -> do
+    let profile = colorProfileFromVty vty
     size <- holdDyn dr0 $ fforMaybe inp $ \case
       V.EvResize w h -> Just (w, h)
       _ -> Nothing
     let inp' = fforMaybe inp $ \case
           V.EvResize {} -> Nothing
           x -> Just x
-    (shutdown, images) <- runThemeReader (constant V.defAttr) $
-      runFocusReader (pure True) $
-        runDisplayRegion (fmap (\(w, h) -> Region 0 0 w h) size) $
-          runImageWriter $
-            runNodeIdT $
-              runInput inp' $ do
-                tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
-                child
+    (shutdown, images) <- runThemeReader (constant defTheme) $
+      runColorProfileReader (constant profile) $
+        runFocusReader (pure True) $
+          runDisplayRegion (fmap (\(w, h) -> Region 0 0 w h) size) $
+            runImageWriter $
+              runNodeIdT $
+                runInput inp' $ do
+                  tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
+                  child
     return $ VtyResult
       { _vtyResult_picture = fmap (V.picForLayers . reverse) images
       , _vtyResult_shutdown = shutdown
@@ -78,6 +83,7 @@ mainWidget
       , HasDisplayRegion t m
       , HasFocusReader t m
       , HasTheme t m
+      , HasColorProfile t m
       , HasInput t m
       ) => m (Event t ()))
   -> IO ()
@@ -248,7 +254,7 @@ inputInFocusedRegion = do
         V.EvKey _ _ | not focused -> Nothing
 
         -- filter scroll wheel input based on mouse position
-        ev@(V.EvMouseDown x y btn m) | btn == V.BScrollUp || btn == V.BScrollDown -> case tracking of
+        V.EvMouseDown x y btn m | btn == V.BScrollUp || btn == V.BScrollDown -> case tracking of
           trck@(Tracking _) -> Just (trck, Nothing)
           _ -> Just (WaitingForInput, if withinRegion reg x y then Just (V.EvMouseDown (x - l) (y - t) btn m) else Nothing)
 
@@ -462,7 +468,7 @@ runFocusReader b = flip runReaderT b . unFocusReader
 -- * "Image" output
 
 -- | A class for widgets that can produce images to draw to the display
-class (Reflex t, Monad m) => HasImageWriter (t :: *) m | m -> t where
+class (Reflex t, Monad m) => HasImageWriter (t :: Type) m | m -> t where
   -- | Send images upstream for rendering
   tellImages :: Behavior t [Image] -> m ()
   default tellImages :: (f m' ~ m, Monad m', MonadTrans f, HasImageWriter t m') => Behavior t [Image] -> m ()
@@ -561,11 +567,16 @@ runImageWriter = runBehaviorWriterT . unImageWriter
 
 -- | A class for things that can be visually styled
 class (Reflex t, Monad m) => HasTheme t m | m -> t where
-  theme :: m (Behavior t V.Attr)
-  default theme :: (f m' ~ m, Monad m', MonadTrans f, HasTheme t m') => m (Behavior t V.Attr)
+  theme :: m (Behavior t Theme)
+  default theme :: (f m' ~ m, Monad m', MonadTrans f, HasTheme t m') => m (Behavior t Theme)
   theme = lift theme
-  localTheme :: (Behavior t V.Attr -> Behavior t V.Attr) -> m a -> m a
-  default localTheme :: (f m' ~ m, Monad m', MFunctor f, HasTheme t m') => (Behavior t V.Attr -> Behavior t V.Attr) -> m a -> m a
+  -- | Convenience: the ambient 'V.Attr' from '_theme_default'. Most widgets
+  -- only need this.
+  themeAttr :: m (Behavior t V.Attr)
+  default themeAttr :: (f m' ~ m, Monad m', MonadTrans f, HasTheme t m') => m (Behavior t V.Attr)
+  themeAttr = lift themeAttr
+  localTheme :: (Behavior t Theme -> Behavior t Theme) -> m a -> m a
+  default localTheme :: (f m' ~ m, Monad m', MFunctor f, HasTheme t m') => (Behavior t Theme -> Behavior t Theme) -> m a -> m a
   localTheme f = hoist (localTheme f)
 
 instance HasTheme t m => HasTheme t (ReaderT x m)
@@ -580,7 +591,7 @@ instance HasTheme t m => HasTheme t (FocusReader t m)
 
 -- | A widget that has access to theme information
 newtype ThemeReader t m a = ThemeReader
-  { unThemeReader :: ReaderT (Behavior t V.Attr) m a }
+  { unThemeReader :: ReaderT (Behavior t Theme) m a }
   deriving
     ( Functor
     , Applicative
@@ -597,6 +608,7 @@ newtype ThemeReader t m a = ThemeReader
 
 instance (Monad m, Reflex t) => HasTheme t (ThemeReader t m) where
   theme = ThemeReader ask
+  themeAttr = Reflex.Vty.Theme.themeToAttr <$> ThemeReader ask
   localTheme f = ThemeReader . local f . unThemeReader
 
 deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (ThemeReader t m)
@@ -623,13 +635,94 @@ instance MFunctor (ThemeReader t) where
 
 instance MonadNodeId m => MonadNodeId (ThemeReader t m)
 
--- | Run a 'ThemeReader' action with the given focus value
+-- | Run a 'ThemeReader' action with the given theme
 runThemeReader
   :: (Reflex t, Monad m)
-  => Behavior t V.Attr
+  => Behavior t Theme
   -> ThemeReader t m a
   -> m a
 runThemeReader b = flip runReaderT b . unThemeReader
+
+-- * Color profile
+
+-- | A class for widgets that need to know the terminal's color capability.
+-- Widgets build with true-color 'V.Attr's and the host downsamples via
+-- 'Reflex.Vty.ColorProfile.applyProfile' at the 'V.Picture' boundary, so
+-- most widgets never need to call 'colorProfile' directly: it is useful
+-- when a widget wants to make a structural decision based on capability
+-- (e.g. choosing a different glyph for an 8-color terminal).
+class (Reflex t, Monad m) => HasColorProfile t m | m -> t where
+  colorProfile :: m (Behavior t ColorProfile)
+  default colorProfile :: (f m' ~ m, Monad m', MonadTrans f, HasColorProfile t m') => m (Behavior t ColorProfile)
+  colorProfile = lift colorProfile
+  localColorProfile :: (Behavior t ColorProfile -> Behavior t ColorProfile) -> m a -> m a
+  default localColorProfile :: (f m' ~ m, Monad m', MFunctor f, HasColorProfile t m') => (Behavior t ColorProfile -> Behavior t ColorProfile) -> m a -> m a
+  localColorProfile f = hoist (localColorProfile f)
+
+instance HasColorProfile t m => HasColorProfile t (ReaderT x m)
+instance HasColorProfile t m => HasColorProfile t (BehaviorWriterT t x m)
+instance HasColorProfile t m => HasColorProfile t (DynamicWriterT t x m)
+instance HasColorProfile t m => HasColorProfile t (EventWriterT t x m)
+instance HasColorProfile t m => HasColorProfile t (NodeIdT m)
+instance HasColorProfile t m => HasColorProfile t (Input t m)
+instance HasColorProfile t m => HasColorProfile t (ImageWriter t m)
+instance HasColorProfile t m => HasColorProfile t (DisplayRegion t m)
+instance HasColorProfile t m => HasColorProfile t (FocusReader t m)
+instance HasColorProfile t m => HasColorProfile t (ThemeReader t m)
+
+-- | A widget that has access to the terminal's 'ColorProfile'.
+newtype ColorProfileReader t m a = ColorProfileReader
+  { unColorProfileReader :: ReaderT (Behavior t ColorProfile) m a }
+  deriving
+    ( Functor
+    , Applicative
+    , Monad
+    , MonadFix
+    , MonadHold t
+    , MonadIO
+    , MonadRef
+    , MonadSample t
+    , MonadCatch
+    , MonadThrow
+    , MonadMask
+    )
+
+instance (Monad m, Reflex t) => HasColorProfile t (ColorProfileReader t m) where
+  colorProfile = ColorProfileReader ask
+  localColorProfile f = ColorProfileReader . local f . unColorProfileReader
+
+deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (ColorProfileReader t m)
+deriving instance NotReady t m => NotReady t (ColorProfileReader t m)
+deriving instance PerformEvent t m => PerformEvent t (ColorProfileReader t m)
+deriving instance PostBuild t m => PostBuild t (ColorProfileReader t m)
+deriving instance TriggerEvent t m => TriggerEvent t (ColorProfileReader t m)
+instance HasImageWriter t m => HasImageWriter t (ColorProfileReader t m) where
+  captureImages x = ColorProfileReader $ do
+    a <- ask
+    lift $ captureImages $ flip runReaderT a $ unColorProfileReader x
+instance HasTheme t m => HasTheme t (ColorProfileReader t m)
+
+instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (ColorProfileReader t m) where
+  runWithReplace (ColorProfileReader a) e = ColorProfileReader $ runWithReplace a $ fmap unColorProfileReader e
+  traverseIntMapWithKeyWithAdjust f m e = ColorProfileReader $ traverseIntMapWithKeyWithAdjust (\k v -> unColorProfileReader $ f k v) m e
+  traverseDMapWithKeyWithAdjust f m e = ColorProfileReader $ traverseDMapWithKeyWithAdjust (\k v -> unColorProfileReader $ f k v) m e
+  traverseDMapWithKeyWithAdjustWithMove f m e = ColorProfileReader $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unColorProfileReader $ f k v) m e
+
+instance MonadTrans (ColorProfileReader t) where
+  lift = ColorProfileReader . lift
+
+instance MFunctor (ColorProfileReader t) where
+  hoist f = ColorProfileReader . hoist f . unColorProfileReader
+
+instance MonadNodeId m => MonadNodeId (ColorProfileReader t m)
+
+-- | Run a 'ColorProfileReader' action with the given profile.
+runColorProfileReader
+  :: (Reflex t, Monad m)
+  => Behavior t ColorProfile
+  -> ColorProfileReader t m a
+  -> m a
+runColorProfileReader b = flip runReaderT b . unColorProfileReader
 
 
 -- ** Manipulating images

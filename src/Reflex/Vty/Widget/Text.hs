@@ -18,7 +18,7 @@ fill :: (HasDisplayRegion t m, HasImageWriter t m, HasTheme t m) => Behavior t C
 fill bc = do
   dw <- displayWidth
   dh <- displayHeight
-  bt <- theme
+  bt <- themeAttr
   let fillImg =
         (\attr w h c -> [V.charFill attr c w h])
         <$> bt
@@ -36,7 +36,6 @@ instance Reflex t => Default (RichTextConfig t) where
   def = RichTextConfig $ pure V.defAttr
 
 
--- TODO delete this and use new local theming
 -- | A widget that displays text with custom time-varying attributes
 richText
   :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m)
@@ -45,24 +44,48 @@ richText
   -> m ()
 richText cfg t = do
   dw <- displayWidth
-  let img = (\w a s -> [wrapText w a s])
+  let img = (\w a s -> [wrapTextImage TextAlignment_Left w a s])
         <$> current dw
         <*> _richTextConfig_attributes cfg
         <*> t
   tellImages img
-  where
-    wrapText maxWidth attrs = V.vertCat
-      . concatMap (fmap (V.string attrs . T.unpack) . TZ.wrapWithOffset maxWidth 0)
-      . T.split (=='\n')
 
 -- | Renders text, wrapped to the container width
 text
   :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m)
   => Behavior t Text
   -> m ()
-text t = do
-  bt <- theme
-  richText (RichTextConfig bt) t
+text = textWithAlignment TextAlignment_Left
+
+-- | Like 'text' but with explicit 'TextAlignment'. The alignment is
+-- applied to each logical line after wrapping; see
+-- 'Data.Text.Zipper.wrapWithOffsetAndAlignment' for details.
+textWithAlignment
+  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m)
+  => TextAlignment
+  -> Behavior t Text
+  -> m ()
+textWithAlignment alignment t = do
+  dw <- displayWidth
+  bt <- themeAttr
+  let img = (\w a s -> [wrapTextImage alignment w a s])
+        <$> current dw
+        <*> bt
+        <*> t
+  tellImages img
+
+-- | Pure helper: wrap a 'Text' to the given width with the given
+-- 'TextAlignment' and render it as a single 'V.Image' using the supplied
+-- 'V.Attr'. Newlines split logical lines; each logical line is wrapped and
+-- aligned independently.
+wrapTextImage :: TextAlignment -> Int -> V.Attr -> Text -> V.Image
+wrapTextImage alignment maxWidth attrs =
+  V.vertCat
+    . concatMap (fmap (V.string attrs . T.unpack) . wrapLine)
+    . T.split (=='\n')
+  where
+    wrapLine = map _wrappedLines_text
+      . wrapWithOffsetAndAlignment alignment maxWidth 0
 
 -- | Renders any behavior whose value can be converted to
 -- 'String' as text

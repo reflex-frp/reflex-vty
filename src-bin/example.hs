@@ -29,6 +29,7 @@ type VtyExample t m =
   , HasFocus t m
   , HasFocusReader t m
   , HasTheme t m
+  , HasColorProfile t m
   )
 
 type Manager t m =
@@ -42,6 +43,7 @@ data Example = Example_TextEditor
              | Example_ClickButtonsGetEmojis
              | Example_CPUStat
              | Example_Scrollable
+             | Example_Showcase
   deriving (Show, Read, Eq, Ord, Enum, Bounded)
 
 withCtrlC :: (Monad m, HasInput t m, Reflex t) => m () -> m (Event t ())
@@ -51,14 +53,6 @@ withCtrlC f = do
   return $ fforMaybe inp $ \case
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
-
-darkTheme :: V.Attr
-darkTheme = V.Attr {
-  V.attrStyle = V.SetTo V.standout
-  , V.attrForeColor = V.SetTo V.black
-  , V.attrBackColor = V.SetTo V.green
-  , V.attrURL = V.Default
-}
 
 main :: IO ()
 main = mainWidget $ withCtrlC $ do
@@ -77,6 +71,7 @@ main = mainWidget $ withCtrlC $ do
           d <- t $ textButtonStatic def "Clickable buttons"
           e <- t $ textButtonStatic def "CPU Usage"
           f <- t $ textButtonStatic def "Scrollable"
+          g <- t $ textButtonStatic def "Showcase"
           return $ leftmost
             [ Left Example_Todo <$ a
             , Left Example_TextEditor <$ b
@@ -84,6 +79,7 @@ main = mainWidget $ withCtrlC $ do
             , Left Example_ClickButtonsGetEmojis <$ d
             , Left Example_CPUStat <$ e
             , Left Example_Scrollable <$ f
+            , Left Example_Showcase <$ g
             ]
     let escapable w = do
           void w
@@ -98,6 +94,7 @@ main = mainWidget $ withCtrlC $ do
           Left Example_ClickButtonsGetEmojis -> escapable easyExample
           Left Example_CPUStat -> escapable cpuStats
           Left Example_Scrollable -> escapable scrollingWithLayout
+          Left Example_Showcase -> escapable showcaseDemo
           Right () -> buttons
     return ()
 
@@ -113,7 +110,7 @@ scrollingWithLayout
      , PerformEvent t m
      ) => m ()
 scrollingWithLayout = col $ do
-  (s, x) <- tile flex $ boxTitle (constant def) (constant "Tracks") $ scrollable def $ do
+  (s, _) <- tile flex $ boxTitle (constant def) (constant "Tracks") $ scrollable def $ do
     result <- do
       forM_ [(0::Int)..10] $ \n -> do
         tile (fixed 5) $ do
@@ -333,11 +330,6 @@ testBoxes = do
     div' :: (Integral a, Applicative f) => f a -> f a -> f a
     div' = liftA2 div
 
-debugFocus :: (VtyExample t m) => m ()
-debugFocus = do
-  f <- focus
-  text $ T.pack . show <$> current f
-
 debugInput :: (VtyExample t m, MonadHold t m) => m ()
 debugInput = do
   lastEvent <- hold "No event yet" . fmap show =<< input
@@ -348,6 +340,97 @@ dragTest = do
   lastEvent <- hold "No event yet" . fmap show =<< drag V.BLeft
   text $ T.pack <$> lastEvent
 
-testStringBox :: VtyExample t m => m ()
-testStringBox = boxStatic singleBoxStyle .
-  text . pure . T.pack . take 500 $ cycle ('\n' : ['a'..'z'])
+-- * Showcase: one screen showing off all styling, theming, and color
+-- profiling. Tab cycles the predefined themes; the whole screen is
+-- rendered under the current theme.
+showcaseDemo :: (VtyExample t m, MonadHold t m, HasLayout t m, HasColorProfile t m) => m ()
+showcaseDemo = do
+  tab <- key (V.KChar '\t')
+  nDyn <- foldDyn (\_ n -> n + 1) 0 tab
+  prof <- colorProfile
+  let themes = cycle
+        [ ("default", defTheme)
+        , ("dark", darkTheme)
+        , ("charm", charmTheme)
+        , ("dracula", draculaTheme)
+        , ("nord", nordTheme)
+        , ("zenburn", zenburnTheme)
+        , ("gruvbox", gruvboxTheme)
+        ]
+      pick n = drop (n `mod` 7) themes
+      curTheme n = case pick n of
+        (_, th) : _ -> th
+        [] -> defTheme
+      curLabel n = case pick n of
+        (label, _) : _ -> label
+        [] -> ""
+      themeBeh = curTheme <$> current nDyn
+      headerBeh = (\n p -> T.pack ("Theme: " <> curLabel n <> "  |  Profile: " <> show p <> "  |  Tab cycles  |  Esc back"))
+        <$> current nDyn <*> prof
+  localTheme (const themeBeh) $ do
+    fill (pure ' ')
+    col $ do
+      grout (fixed 1) $ text headerBeh
+      grout flex $ row $ do
+        -- Left column: style samples
+        grout flex $ col $ do
+          grout (fixed 1) $ text "Borders:"
+          grout (fixed 3) $ row $ do
+            grout flex $ styledImage "single" (withBorder singleBorder def)
+            grout flex $ styledImage "rounded" (withBorder roundedBorder def)
+            grout flex $ styledImage "thick" (withBorder thickBorder def)
+            grout flex $ styledImage "double" (withBorder doubleBorder def)
+            grout flex $ styledImage "ascii" (withBorder asciiBorder def)
+          grout (fixed 1) $ text "Padding/Margin:"
+          grout (fixed 3) $ row $ do
+            grout flex $ styledImage "pad 1" (withPadding 1 1 1 1 def)
+            grout flex $ styledImage "pad 2" (withPadding 2 2 2 2 def)
+            grout flex $ styledImage "margin 1" (withMargin 1 1 1 1 def)
+          grout (fixed 1) $ text "Colors:"
+          grout (fixed 3) $ row $ do
+            grout flex $ styledImage "red fg" (withForeground red def)
+            grout flex $ styledImage "blue bg" (withBackground blue def)
+            grout flex $ styledImage "rgb" (withForeground (rgbColor 200 100 50) def)
+          grout (fixed 1) $ text "Transforms:"
+          grout (fixed 3) $ row $ do
+            grout flex $ styledImage "bold" (withBold def)
+            grout flex $ styledImage "italic" (withItalic def)
+            grout flex $ styledImage "underline" (withUnderline UnderlineSingle def)
+            grout flex $ styledImage "reverse" (withReverse def)
+          grout (fixed 1) $ text "Alignment:"
+          grout (fixed 3) $ row $ do
+            grout flex $ styledImage "left" (withAlignH HAlignLeft . withWidth 20 $ def)
+            grout flex $ styledImage "center" (withAlignH HAlignCenter . withWidth 20 $ def)
+            grout flex $ styledImage "right" (withAlignH HAlignRight . withWidth 20 $ def)
+          grout (fixed 1) $ text "Combined & Hyperlink:"
+          grout (fixed 5) $ row $ do
+            grout flex $ styledImage "combined"
+              ( withBorder roundedBorder
+              . withPadding 1 2 1 2
+              . withForeground brightGreen
+              . withBorderForeground brightMagenta
+              $ def )
+            grout flex $ styledImage "link"
+              (withHyperlink "https://reflex-frp.org" . withUnderline UnderlineSingle $ def)
+        -- Right column: themed widgets + color profile swatches
+        grout flex $ col $ do
+          grout (fixed 1) $ text "Themed Widgets:"
+          void $ grout (fixed 3) $ textButtonStatic def "A button"
+          void $ grout (fixed 3) $ checkbox def False
+          void $ grout (fixed 3) $ linkStatic "A link"
+          void $ grout (fixed 3) $ textInput def
+          grout (fixed 1) $ text "Color Profile Swatches:"
+          grout (fixed 2) $ row $ do
+            grout flex $ profileSwatch "TrueColor" ColorProfile_TrueColor
+            grout flex $ profileSwatch "Ansi256" ColorProfile_Ansi256
+            grout flex $ profileSwatch "Ansi16" ColorProfile_Ansi16
+            grout flex $ profileSwatch "Ascii" ColorProfile_Ascii
+            grout flex $ profileSwatch "NoTTY" ColorProfile_NoTTY
+  where
+    orange = rgbColor 200 100 50
+    styledImage label s = do
+      th <- theme
+      tellImages $ (\t -> [render (inherit (_theme_default t) s) label]) <$> th
+    profileSwatch label prof = do
+      bt <- themeAttr
+      tellImages $ (\a -> [V.text' (applyProfile prof (V.withForeColor a orange)) (label <> " ")]) <$> bt

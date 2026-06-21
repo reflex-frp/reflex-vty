@@ -2,7 +2,7 @@
 Module: Reflex.Vty
 Description: A library for building vty apps with reflex
 Copyright   : (c) Obsidian Systems LLC
-License     : GPL-3
+License     : BSD-3
 Maintainer  : maintainer@obsidian.systems
 Stability   : experimental
 Portability : POSIX
@@ -12,7 +12,10 @@ Portability : POSIX
 -}
 module Reflex.Vty
   ( module Reflex
+  , module Reflex.Vty.ColorProfile
   , module Reflex.Vty.Host
+  , module Reflex.Vty.Style
+  , module Reflex.Vty.Theme
   , module Reflex.Vty.Widget
   , module Reflex.Vty.Widget.Box
   , module Reflex.Vty.Widget.Input
@@ -24,7 +27,10 @@ module Reflex.Vty
   ) where
 
 import Reflex
+import Reflex.Vty.ColorProfile
 import Reflex.Vty.Host
+import Reflex.Vty.Style
+import Reflex.Vty.Theme
 import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Box
 import Reflex.Vty.Widget.Input
