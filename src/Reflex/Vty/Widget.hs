@@ -28,6 +28,7 @@ import Reflex.Class ()
 import Reflex.Host.Class (MonadReflexCreateTrigger)
 import Reflex.Vty.ColorProfile
 import Reflex.Vty.Host
+import Reflex.Vty.Theme (Theme(..), defTheme, themeToAttr)
 
 -- * Running a vty application
 
@@ -54,7 +55,7 @@ mainWidgetWithHandle vty child =
     let inp' = fforMaybe inp $ \case
           V.EvResize {} -> Nothing
           x -> Just x
-    (shutdown, images) <- runThemeReader (constant V.defAttr) $
+    (shutdown, images) <- runThemeReader (constant defTheme) $
       runColorProfileReader (constant profile) $
         runFocusReader (pure True) $
           runDisplayRegion (fmap (\(w, h) -> Region 0 0 w h) size) $
@@ -566,11 +567,16 @@ runImageWriter = runBehaviorWriterT . unImageWriter
 
 -- | A class for things that can be visually styled
 class (Reflex t, Monad m) => HasTheme t m | m -> t where
-  theme :: m (Behavior t V.Attr)
-  default theme :: (f m' ~ m, Monad m', MonadTrans f, HasTheme t m') => m (Behavior t V.Attr)
+  theme :: m (Behavior t Theme)
+  default theme :: (f m' ~ m, Monad m', MonadTrans f, HasTheme t m') => m (Behavior t Theme)
   theme = lift theme
-  localTheme :: (Behavior t V.Attr -> Behavior t V.Attr) -> m a -> m a
-  default localTheme :: (f m' ~ m, Monad m', MFunctor f, HasTheme t m') => (Behavior t V.Attr -> Behavior t V.Attr) -> m a -> m a
+  -- | Convenience: the ambient 'V.Attr' from '_theme_default'. Most widgets
+  -- only need this.
+  themeAttr :: m (Behavior t V.Attr)
+  default themeAttr :: (f m' ~ m, Monad m', MonadTrans f, HasTheme t m') => m (Behavior t V.Attr)
+  themeAttr = lift themeAttr
+  localTheme :: (Behavior t Theme -> Behavior t Theme) -> m a -> m a
+  default localTheme :: (f m' ~ m, Monad m', MFunctor f, HasTheme t m') => (Behavior t Theme -> Behavior t Theme) -> m a -> m a
   localTheme f = hoist (localTheme f)
 
 instance HasTheme t m => HasTheme t (ReaderT x m)
@@ -585,7 +591,7 @@ instance HasTheme t m => HasTheme t (FocusReader t m)
 
 -- | A widget that has access to theme information
 newtype ThemeReader t m a = ThemeReader
-  { unThemeReader :: ReaderT (Behavior t V.Attr) m a }
+  { unThemeReader :: ReaderT (Behavior t Theme) m a }
   deriving
     ( Functor
     , Applicative
@@ -602,6 +608,7 @@ newtype ThemeReader t m a = ThemeReader
 
 instance (Monad m, Reflex t) => HasTheme t (ThemeReader t m) where
   theme = ThemeReader ask
+  themeAttr = Reflex.Vty.Theme.themeToAttr <$> ThemeReader ask
   localTheme f = ThemeReader . local f . unThemeReader
 
 deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (ThemeReader t m)
@@ -628,10 +635,10 @@ instance MFunctor (ThemeReader t) where
 
 instance MonadNodeId m => MonadNodeId (ThemeReader t m)
 
--- | Run a 'ThemeReader' action with the given focus value
+-- | Run a 'ThemeReader' action with the given theme
 runThemeReader
   :: (Reflex t, Monad m)
-  => Behavior t V.Attr
+  => Behavior t Theme
   -> ThemeReader t m a
   -> m a
 runThemeReader b = flip runReaderT b . unThemeReader

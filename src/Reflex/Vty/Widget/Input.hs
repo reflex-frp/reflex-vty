@@ -16,8 +16,11 @@ import Control.Monad.Fix (MonadFix)
 import Data.Default (Default(..))
 import Data.List (foldl')
 import Data.Text (Text)
+import Data.Text.Zipper (TextAlignment(..))
 import qualified Graphics.Vty as V
 import Reflex
+import Reflex.Vty.Style (applyAttr)
+import Reflex.Vty.Theme (Theme(..))
 import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Box
 import Reflex.Vty.Widget.Text
@@ -57,7 +60,7 @@ textButton
   => ButtonConfig t
   -> Behavior t Text
   -> m (Event t ())
-textButton cfg = button cfg . text -- TODO Centering etc.
+textButton cfg = button cfg . textWithAlignment TextAlignment_Center
 
 -- | A button widget that displays a static bit of text
 textButtonStatic
@@ -75,11 +78,10 @@ link
   => Behavior t Text
   -> m (Event t MouseUp)
 link t = do
-  bt <- theme
-  let cfg = RichTextConfig
-        { _richTextConfig_attributes = fmap (\attr -> V.withStyle attr V.underline) bt
-        }
-  richText cfg t
+  th <- theme
+  let linkStyle = fmap _theme_link th
+      attrs = fmap (flip applyAttr V.defAttr) linkStyle
+  richText (RichTextConfig attrs) t
   mouseUp
 
 -- | A clickable link widget with a static label
@@ -117,15 +119,12 @@ checkboxStyleTick = CheckboxStyle
 -- | Configuration options for a checkbox
 data CheckboxConfig t = CheckboxConfig
   { _checkboxConfig_checkboxStyle :: Behavior t CheckboxStyle
-  -- TODO DELETE and use HasTheme instead
-  , _checkboxConfig_attributes :: Behavior t V.Attr
   , _checkboxConfig_setValue :: Event t Bool
   }
 
 instance (Reflex t) => Default (CheckboxConfig t) where
   def = CheckboxConfig
     { _checkboxConfig_checkboxStyle = pure def
-    , _checkboxConfig_attributes = pure V.defAttr
     , _checkboxConfig_setValue = never
     }
 
@@ -150,9 +149,8 @@ checkbox cfg v0 = do
     , V.defaultStyleMask <$ mu
     ]
   let focused = ffor (current f) $ \x -> if x then V.bold else V.defaultStyleMask
-  let attrs = combineStyles
-        <$> _checkboxConfig_attributes cfg
-        <*> sequence [depressed, focused]
+  bt <- themeAttr
+  let attrs = combineStyles <$> bt <*> sequence [depressed, focused]
   richText (RichTextConfig attrs) $ join . current $ ffor v $ \checked ->
     if checked
       then _checkboxStyle_checked <$> _checkboxConfig_checkboxStyle cfg

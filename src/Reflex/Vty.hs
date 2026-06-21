@@ -15,6 +15,7 @@ module Reflex.Vty
   , module Reflex.Vty.ColorProfile
   , module Reflex.Vty.Host
   , module Reflex.Vty.Style
+  , module Reflex.Vty.Theme
   , module Reflex.Vty.Widget
   , module Reflex.Vty.Widget.Box
   , module Reflex.Vty.Widget.Input
@@ -29,6 +30,7 @@ import Reflex
 import Reflex.Vty.ColorProfile
 import Reflex.Vty.Host
 import Reflex.Vty.Style
+import Reflex.Vty.Theme
 import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Box
 import Reflex.Vty.Widget.Input

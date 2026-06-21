@@ -29,6 +29,7 @@ library
                  , Reflex.Vty.ColorProfile
                  , Reflex.Vty.Host
                  , Reflex.Vty.Style
+                 , Reflex.Vty.Theme
                  , Reflex.Vty.Widget
                  , Reflex.Vty.Widget.Box
                  , Reflex.Vty.Widget.Input

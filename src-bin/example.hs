@@ -55,14 +55,6 @@ withCtrlC f = do
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
 
-darkTheme :: V.Attr
-darkTheme = V.Attr {
-  V.attrStyle = V.SetTo V.standout
-  , V.attrForeColor = V.SetTo V.black
-  , V.attrBackColor = V.SetTo V.green
-  , V.attrURL = V.Default
-}
-
 main :: IO ()
 main = mainWidget $ withCtrlC $ do
   initManager_ $ do

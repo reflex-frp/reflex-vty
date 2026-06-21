@@ -16,6 +16,8 @@ import Data.Text.Zipper
 import qualified Graphics.Vty as V
 import Reflex
 
+import Reflex.Vty.Style (applyAttr)
+import Reflex.Vty.Theme (Theme(..))
 import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Layout
 import Reflex.Vty.Widget.Input.Mouse
@@ -82,8 +84,10 @@ textInput cfg = do
   f <- focus
   dh <- displayHeight
   dw <- displayWidth
-  bt <- theme
+  bt <- themeAttr
+  th <- theme
   attr0 <- sample bt
+  cursorStyle0 <- sample (fmap _theme_textInputCursor th)
   rec
       -- we split up the events from vty and the one users provide to avoid cyclical
       -- update dependencies. This way, users may subscribe only to UI updates.
@@ -100,8 +104,7 @@ textInput cfg = do
         ]
       click <- mouseDown V.BLeft
 
-      -- TODO reverseVideo is prob not what we want. Does not work with `darkTheme` in example.hs (cursor is dark rather than light bg)
-      let toCursorAttrs attr = V.withStyle attr V.reverseVideo
+      let toCursorAttrs attr = applyAttr cursorStyle0 attr
           rowInputDyn = (,,)
             <$> dw
             <*> (mapZipper <$> _textInputConfig_display cfg <*> v)

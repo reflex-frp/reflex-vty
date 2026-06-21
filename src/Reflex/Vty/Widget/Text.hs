@@ -18,7 +18,7 @@ fill :: (HasDisplayRegion t m, HasImageWriter t m, HasTheme t m) => Behavior t C
 fill bc = do
   dw <- displayWidth
   dh <- displayHeight
-  bt <- theme
+  bt <- themeAttr
   let fillImg =
         (\attr w h c -> [V.charFill attr c w h])
         <$> bt
@@ -36,7 +36,6 @@ instance Reflex t => Default (RichTextConfig t) where
   def = RichTextConfig $ pure V.defAttr
 
 
--- TODO delete this and use new local theming
 -- | A widget that displays text with custom time-varying attributes
 richText
   :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m)
@@ -68,7 +67,7 @@ textWithAlignment
   -> m ()
 textWithAlignment alignment t = do
   dw <- displayWidth
-  bt <- theme
+  bt <- themeAttr
   let img = (\w a s -> [wrapTextImage alignment w a s])
         <$> current dw
         <*> bt
