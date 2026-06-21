@@ -1,26 +1,25 @@
-{-|
+{- |
 Module: Reflex.Vty.Widget.Input
 Description: User input widgets for reflex-vty
 -}
-module Reflex.Vty.Widget.Input
-  ( module Export
-  , module Reflex.Vty.Widget.Input
-  ) where
-
+module Reflex.Vty.Widget.Input (
+  module Export,
+  module Reflex.Vty.Widget.Input,
+) where
 
 import Reflex.Vty.Widget.Input.Mouse as Export
 import Reflex.Vty.Widget.Input.Text as Export
 
 import Control.Monad (join)
 import Control.Monad.Fix (MonadFix)
-import Data.Default (Default(..))
+import Data.Default (Default (..))
 import Data.List (foldl')
 import Data.Text (Text)
-import Data.Text.Zipper (TextAlignment(..))
+import Data.Text.Zipper (TextAlignment (..))
 import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Vty.Style (applyAttr)
-import Reflex.Vty.Theme (Theme(..))
+import Reflex.Vty.Theme (Theme (..))
 import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Box
 import Reflex.Vty.Widget.Text
@@ -33,15 +32,15 @@ data ButtonConfig t = ButtonConfig
   , _buttonConfig_focusStyle :: Behavior t BoxStyle
   }
 
-instance Reflex t => Default (ButtonConfig t) where
+instance (Reflex t) => Default (ButtonConfig t) where
   def = ButtonConfig (pure singleBoxStyle) (pure thickBoxStyle)
 
 -- | A button widget that contains a sub-widget
-button
-  :: (MonadFix m, MonadHold t m, HasFocusReader t m, HasTheme t m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m)
-  => ButtonConfig t
-  -> m ()
-  -> m (Event t ())
+button ::
+  (MonadFix m, MonadHold t m, HasFocusReader t m, HasTheme t m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m) =>
+  ButtonConfig t ->
+  m () ->
+  m (Event t ())
 button cfg child = do
   f <- focus
   let style = do
@@ -55,28 +54,28 @@ button cfg child = do
   return $ leftmost [() <$ k, () <$ m]
 
 -- | A button widget that displays text that can change
-textButton
-  :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m, HasImageWriter t m, HasInput t m)
-  => ButtonConfig t
-  -> Behavior t Text
-  -> m (Event t ())
+textButton ::
+  (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m, HasImageWriter t m, HasInput t m) =>
+  ButtonConfig t ->
+  Behavior t Text ->
+  m (Event t ())
 textButton cfg = button cfg . textWithAlignment TextAlignment_Center
 
 -- | A button widget that displays a static bit of text
-textButtonStatic
-  :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m, HasImageWriter t m, HasInput t m)
-  => ButtonConfig t
-  -> Text
-  -> m (Event t ())
+textButtonStatic ::
+  (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m, HasImageWriter t m, HasInput t m) =>
+  ButtonConfig t ->
+  Text ->
+  m (Event t ())
 textButtonStatic cfg = textButton cfg . pure
 
 -- * Links
 
 -- | A clickable link widget
-link
-  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasTheme t m)
-  => Behavior t Text
-  -> m (Event t MouseUp)
+link ::
+  (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasTheme t m) =>
+  Behavior t Text ->
+  m (Event t MouseUp)
 link t = do
   th <- theme
   bt <- themeAttr
@@ -86,10 +85,10 @@ link t = do
   mouseUp
 
 -- | A clickable link widget with a static label
-linkStatic
-  :: (Reflex t, Monad m, HasImageWriter t m, HasDisplayRegion t m, HasInput t m, HasTheme t m)
-  => Text
-  -> m (Event t MouseUp)
+linkStatic ::
+  (Reflex t, Monad m, HasImageWriter t m, HasDisplayRegion t m, HasInput t m, HasTheme t m) =>
+  Text ->
+  m (Event t MouseUp)
 linkStatic = link . pure
 
 -- * Checkboxes
@@ -105,17 +104,19 @@ instance Default CheckboxStyle where
 
 -- | This checkbox style uses an "x" to indicate the checked state
 checkboxStyleX :: CheckboxStyle
-checkboxStyleX = CheckboxStyle
-  { _checkboxStyle_unchecked = "[ ]"
-  , _checkboxStyle_checked = "[x]"
-  }
+checkboxStyleX =
+  CheckboxStyle
+    { _checkboxStyle_unchecked = "[ ]"
+    , _checkboxStyle_checked = "[x]"
+    }
 
 -- | This checkbox style uses a unicode tick mark to indicate the checked state
 checkboxStyleTick :: CheckboxStyle
-checkboxStyleTick = CheckboxStyle
-  { _checkboxStyle_unchecked = "[ ]"
-  , _checkboxStyle_checked = "[✓]"
-  }
+checkboxStyleTick =
+  CheckboxStyle
+    { _checkboxStyle_unchecked = "[ ]"
+    , _checkboxStyle_checked = "[✓]"
+    }
 
 -- | Configuration options for a checkbox
 data CheckboxConfig t = CheckboxConfig
@@ -124,31 +125,36 @@ data CheckboxConfig t = CheckboxConfig
   }
 
 instance (Reflex t) => Default (CheckboxConfig t) where
-  def = CheckboxConfig
-    { _checkboxConfig_checkboxStyle = pure def
-    , _checkboxConfig_setValue = never
-    }
+  def =
+    CheckboxConfig
+      { _checkboxConfig_checkboxStyle = pure def
+      , _checkboxConfig_setValue = never
+      }
 
 -- | A checkbox widget
-checkbox
-  :: (MonadHold t m, MonadFix m, Reflex t, HasInput t m, HasDisplayRegion t m, HasImageWriter t m, HasFocusReader t m, HasTheme t m)
-  => CheckboxConfig t
-  -> Bool
-  -> m (Dynamic t Bool)
+checkbox ::
+  (MonadHold t m, MonadFix m, Reflex t, HasInput t m, HasDisplayRegion t m, HasImageWriter t m, HasFocusReader t m, HasTheme t m) =>
+  CheckboxConfig t ->
+  Bool ->
+  m (Dynamic t Bool)
 checkbox cfg v0 = do
   md <- mouseDown V.BLeft
   mu <- mouseUp
   space <- key (V.KChar ' ')
   f <- focus
-  v <- foldDyn ($) v0 $ leftmost
-    [ not <$ mu
-    , not <$ space
-    , const <$> _checkboxConfig_setValue cfg
-    ]
-  depressed <- hold V.defaultStyleMask $ leftmost
-    [ V.bold <$ md
-    , V.defaultStyleMask <$ mu
-    ]
+  v <-
+    foldDyn ($) v0 $
+      leftmost
+        [ not <$ mu
+        , not <$ space
+        , const <$> _checkboxConfig_setValue cfg
+        ]
+  depressed <-
+    hold V.defaultStyleMask $
+      leftmost
+        [ V.bold <$ md
+        , V.defaultStyleMask <$ mu
+        ]
   let focused = ffor (current f) $ \x -> if x then V.bold else V.defaultStyleMask
   bt <- themeAttr
   let attrs = combineStyles <$> bt <*> sequence [depressed, focused]
@@ -157,9 +163,9 @@ checkbox cfg v0 = do
       then _checkboxStyle_checked <$> _checkboxConfig_checkboxStyle cfg
       else _checkboxStyle_unchecked <$> _checkboxConfig_checkboxStyle cfg
   return v
-  where
-    combineStyles :: V.Attr -> [V.Style] -> V.Attr
-    combineStyles x xs = foldl' V.withStyle x xs
+ where
+  combineStyles :: V.Attr -> [V.Style] -> V.Attr
+  combineStyles x xs = foldl' V.withStyle x xs
 
 -- | The ctrl-c keypress event
 ctrlc :: (Monad m, HasInput t m, Reflex t) => m (Event t ())

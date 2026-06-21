@@ -2,7 +2,6 @@
 -- does not work with current CircleCI image so instead we do it manually for now
 -- {-# OPTIONS_GHC -F -pgmF hspec-discover #-}
 
-
 import Test.Hspec
 
 import qualified Data.Text.ZipperSpec
@@ -14,6 +13,6 @@ main = hspec spec
 
 spec :: Spec
 spec = do
-  describe "Data.Text.ZipperSpec"       Data.Text.ZipperSpec.spec
+  describe "Data.Text.ZipperSpec" Data.Text.ZipperSpec.spec
   describe "Reflex.Vty.ColorProfileSpec" Reflex.Vty.ColorProfileSpec.spec
-  describe "Reflex.Vty.StyleSpec"       Reflex.Vty.StyleSpec.spec
+  describe "Reflex.Vty.StyleSpec" Reflex.Vty.StyleSpec.spec

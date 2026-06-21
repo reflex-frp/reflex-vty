@@ -1,5 +1,4 @@
-{-| Description: Widgets that scroll when their contents don't fit
--}
+-- | Description: Widgets that scroll when their contents don't fit
 module Reflex.Vty.Widget.Scroll where
 
 import Control.Monad.Fix
@@ -12,11 +11,12 @@ import Reflex.Vty.Widget.Input.Mouse
 
 -- | Configuration options for automatic scroll-to-bottom behavior
 data ScrollToBottom
-  = ScrollToBottom_Always
-  -- ^ Always scroll to the bottom on new output
-  | ScrollToBottom_Maintain
-  -- ^ Scroll down with new output only when, prior to the new output being
-  -- added, the widget was scrolled all the way to the bottom.
+  = -- | Always scroll to the bottom on new output
+    ScrollToBottom_Always
+  | {- | Scroll down with new output only when, prior to the new output being
+    added, the widget was scrolled all the way to the bottom.
+    -}
+    ScrollToBottom_Maintain
   deriving (Eq, Ord, Show)
 
 -- | Configuration for the scrollable element. Controls scroll behavior.
@@ -31,7 +31,7 @@ data ScrollableConfig t = ScrollableConfig
   -- ^ How the scroll position should be adjusted as new content is added
   }
 
-instance Reflex t => Default (ScrollableConfig t) where
+instance (Reflex t) => Default (ScrollableConfig t) where
   def = ScrollableConfig never never ScrollPos_Top (pure Nothing)
 
 -- | The scroll position
@@ -45,85 +45,101 @@ data Scrollable t = Scrollable
   , _scrollable_scrollHeight :: Behavior t Int
   }
 
--- | Scrollable widget. The output exposes the current scroll position and
--- total number of lines (including those that are hidden)
-scrollable
-  :: forall t m a.
-  ( Reflex t, MonadHold t m, MonadFix m
-  , HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasTheme t m)
-  => ScrollableConfig t
-  -> (m (Event t (), a))
-  -> m (Scrollable t, a)
+{- | Scrollable widget. The output exposes the current scroll position and
+total number of lines (including those that are hidden)
+-}
+scrollable ::
+  forall t m a.
+  ( Reflex t
+  , MonadHold t m
+  , MonadFix m
+  , HasDisplayRegion t m
+  , HasInput t m
+  , HasImageWriter t m
+  , HasTheme t m
+  ) =>
+  ScrollableConfig t ->
+  (m (Event t (), a)) ->
+  m (Scrollable t, a)
 scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend) mkImg = do
   dh <- displayHeight
   kup <- key V.KUp
   kdown <- key V.KDown
   m <- mouseScroll
   let requestedScroll :: Event t Int
-      requestedScroll = leftmost
-        [ 1 <$ kdown
-        , (-1) <$ kup
-        , ffor m $ \case
-            ScrollDirection_Up -> (-1)
-            ScrollDirection_Down -> 1
-        , scrollBy
-        ]
-  rec
-    ((update, a), imgs) <- captureImages $ localInput (translateMouseEvents translation) $ mkImg
-    let sz = foldl' max 0 . fmap V.imageHeight <$> imgs
-    lineIndex <- foldDynMaybe ($) startingPos $ leftmost
-      [ (\(totalLines, (h, d)) sp -> Just $ scrollByLines sp totalLines h d) <$> attach sz (attachPromptlyDyn dh requestedScroll)
-      , (\(totalLines, (h, newScrollPosition)) _ -> Just $ case newScrollPosition of
-          ScrollPos_Line n -> scrollToLine totalLines h n
-          ScrollPos_Top -> ScrollPos_Top
-          ScrollPos_Bottom -> ScrollPos_Bottom
-        ) <$> attach sz (attachPromptlyDyn dh scrollTo)
-      , (\cfg sp -> case cfg of
-          Just ScrollToBottom_Always -> case sp of
-            ScrollPos_Bottom -> Nothing
-            _ -> Just ScrollPos_Bottom
-          _ -> Nothing) <$> tag onAppend update
-      ]
-    let translation = calculateTranslation
-          <$> current dh
-          <*> current lineIndex
-          <*> sz
+      requestedScroll =
+        leftmost
+          [ 1 <$ kdown
+          , (-1) <$ kup
+          , ffor m $ \case
+              ScrollDirection_Up -> (-1)
+              ScrollDirection_Down -> 1
+          , scrollBy
+          ]
+  rec ((update, a), imgs) <- captureImages $ localInput (translateMouseEvents translation) $ mkImg
+      let sz = foldl' max 0 . fmap V.imageHeight <$> imgs
+      lineIndex <-
+        foldDynMaybe ($) startingPos $
+          leftmost
+            [ (\(totalLines, (h, d)) sp -> Just $ scrollByLines sp totalLines h d) <$> attach sz (attachPromptlyDyn dh requestedScroll)
+            , ( \(totalLines, (h, newScrollPosition)) _ -> Just $ case newScrollPosition of
+                  ScrollPos_Line n -> scrollToLine totalLines h n
+                  ScrollPos_Top -> ScrollPos_Top
+                  ScrollPos_Bottom -> ScrollPos_Bottom
+              )
+                <$> attach sz (attachPromptlyDyn dh scrollTo)
+            , ( \cfg sp -> case cfg of
+                  Just ScrollToBottom_Always -> case sp of
+                    ScrollPos_Bottom -> Nothing
+                    _ -> Just ScrollPos_Bottom
+                  _ -> Nothing
+              )
+                <$> tag onAppend update
+            ]
+      let translation =
+            calculateTranslation
+              <$> current dh
+              <*> current lineIndex
+              <*> sz
   let cropImages dy images = cropFromTop dy <$> images
   tellImages $ cropImages <$> translation <*> imgs
-  return $ (,a) $ Scrollable
-    { _scrollable_scrollPosition = current lineIndex
-    , _scrollable_totalLines = sz
-    , _scrollable_scrollHeight = current dh
-    }
-  where
-    cropFromTop :: Int -> V.Image -> V.Image
-    cropFromTop rows i =
-      V.cropTop (max 0 $ V.imageHeight i - rows) i
-    calculateTranslation height scrollPos totalLines = case scrollPos of
-      ScrollPos_Bottom -> max 0 (totalLines - height)
-      ScrollPos_Top -> 0
-      ScrollPos_Line n -> max 0 n
-    translateMouseEvents translation vtyEvent =
-          let e = attach translation vtyEvent
-          in ffor e $ \case
-                (dy, V.EvMouseDown x y btn mods) -> V.EvMouseDown x (y + dy) btn mods
-                (dy, V.EvMouseUp x y btn) -> V.EvMouseUp x (y + dy) btn
-                (_, otherEvent) -> otherEvent
+  return $
+    (,a) $
+      Scrollable
+        { _scrollable_scrollPosition = current lineIndex
+        , _scrollable_totalLines = sz
+        , _scrollable_scrollHeight = current dh
+        }
+ where
+  cropFromTop :: Int -> V.Image -> V.Image
+  cropFromTop rows i =
+    V.cropTop (max 0 $ V.imageHeight i - rows) i
+  calculateTranslation height scrollPos totalLines = case scrollPos of
+    ScrollPos_Bottom -> max 0 (totalLines - height)
+    ScrollPos_Top -> 0
+    ScrollPos_Line n -> max 0 n
+  translateMouseEvents translation vtyEvent =
+    let e = attach translation vtyEvent
+     in ffor e $ \case
+          (dy, V.EvMouseDown x y btn mods) -> V.EvMouseDown x (y + dy) btn mods
+          (dy, V.EvMouseUp x y btn) -> V.EvMouseUp x (y + dy) btn
+          (_, otherEvent) -> otherEvent
 
 -- | Modify the scroll position by the given number of lines
 scrollByLines :: ScrollPos -> Int -> Int -> Int -> ScrollPos
 scrollByLines sp totalLines height delta =
   let newPos = min (max 0 (start sp + delta)) totalLines
-  in scrollToLine totalLines height newPos
-  where
-    start ScrollPos_Top = 0
-    start ScrollPos_Bottom = totalLines - height
-    start (ScrollPos_Line n) = n
+   in scrollToLine totalLines height newPos
+ where
+  start ScrollPos_Top = 0
+  start ScrollPos_Bottom = totalLines - height
+  start (ScrollPos_Line n) = n
 
 -- | Scroll to a particular line
 scrollToLine :: Int -> Int -> Int -> ScrollPos
-scrollToLine totalLines height newPos = if
-  | totalLines <= height -> ScrollPos_Top
-  | newPos == 0 -> ScrollPos_Top
-  | newPos + height >= totalLines -> ScrollPos_Bottom
-  | otherwise -> ScrollPos_Line newPos
+scrollToLine totalLines height newPos =
+  if
+    | totalLines <= height -> ScrollPos_Top
+    | newPos == 0 -> ScrollPos_Top
+    | newPos + height >= totalLines -> ScrollPos_Bottom
+    | otherwise -> ScrollPos_Line newPos

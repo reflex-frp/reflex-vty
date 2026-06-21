@@ -1,15 +1,15 @@
-{-|
+{- |
 Module: Reflex.Vty.Widget.Input.Text
 Description: Widgets for accepting text input from users and manipulating text within those inputs
 -}
-module Reflex.Vty.Widget.Input.Text
-  ( module Reflex.Vty.Widget.Input.Text
-  , def
-  ) where
+module Reflex.Vty.Widget.Input.Text (
+  module Reflex.Vty.Widget.Input.Text,
+  def,
+) where
 
 import Control.Monad (join)
 import Control.Monad.Fix (MonadFix)
-import Data.Default (Default(..))
+import Data.Default (Default (..))
 import Data.Function ((&))
 import Data.Text (Text)
 import Data.Text.Zipper
@@ -17,68 +17,75 @@ import qualified Graphics.Vty as V
 import Reflex
 
 import Reflex.Vty.Style (applyAttr)
-import Reflex.Vty.Theme (Theme(..))
+import Reflex.Vty.Theme (Theme (..))
 import Reflex.Vty.Widget
-import Reflex.Vty.Widget.Layout
 import Reflex.Vty.Widget.Input.Mouse
+import Reflex.Vty.Widget.Layout
 
--- | Configuration options for a 'textInput'. For more information on
--- 'TextZipper', see 'Data.Text.Zipper'.
+{- | Configuration options for a 'textInput'. For more information on
+'TextZipper', see 'Data.Text.Zipper'.
+-}
 data TextInputConfig t = TextInputConfig
   { _textInputConfig_initialValue :: TextZipper
-  -- ^ Initial value. This is a 'TextZipper' because it is more flexible
-  -- than plain 'Text'. For example, this allows to set the Cursor position,
-  -- by choosing appropriate values for '_textZipper_before' and '_textZipper_after'.
+  {- ^ Initial value. This is a 'TextZipper' because it is more flexible
+  than plain 'Text'. For example, this allows to set the Cursor position,
+  by choosing appropriate values for '_textZipper_before' and '_textZipper_after'.
+  -}
   , _textInputConfig_modify :: Event t (TextZipper -> TextZipper)
-  -- ^ Event to update the value of the 'textInput'.
-  --
-  -- Event is applied after other Input sources have been applied to the 'TextZipper',
-  -- thus you may modify the final value that is displayed to the user.
-  --
-  -- You may set the value of the displayed text in 'textInput' by ignoring the input parameter.
-  --
-  -- Additionally, you can modify the updated value before displaying it to the user.
-  -- For example, the following 'TextInputConfig' inserts an additional 'a'
-  -- when the letter 'b' is entered into 'textInput':
-  --
-  -- @
-  --   i <- input
-  --   textInput def
-  --     { _textInputConfig_modify = fforMaybe i $ \case
-  --         V.EvKey (V.KChar 'b') _ -> Just (insert "a")
-  --         _ -> Nothing
-  --     }
-  -- @
+  {- ^ Event to update the value of the 'textInput'.
+
+  Event is applied after other Input sources have been applied to the 'TextZipper',
+  thus you may modify the final value that is displayed to the user.
+
+  You may set the value of the displayed text in 'textInput' by ignoring the input parameter.
+
+  Additionally, you can modify the updated value before displaying it to the user.
+  For example, the following 'TextInputConfig' inserts an additional 'a'
+  when the letter 'b' is entered into 'textInput':
+
+  @
+  i <- input
+  textInput def
+    { _textInputConfig_modify = fforMaybe i $ \case
+        V.EvKey (V.KChar 'b') _ -> Just (insert "a")
+        _ -> Nothing
+    }
+  @
+  -}
   , _textInputConfig_tabWidth :: Int
   , _textInputConfig_display :: Dynamic t (Char -> Char)
-  -- ^ Transform the characters in a text input before displaying them. This is useful, e.g., for
-  -- masking characters when entering passwords.
+  {- ^ Transform the characters in a text input before displaying them. This is useful, e.g., for
+  masking characters when entering passwords.
+  -}
   , _textInputConfig_alignment :: TextAlignment
-  -- ^ How to align the entered text within the input region. Defaults to
-  -- 'TextAlignment_Left'. See 'Data.Text.Zipper.displayLinesWithAlignment'.
+  {- ^ How to align the entered text within the input region. Defaults to
+  'TextAlignment_Left'. See 'Data.Text.Zipper.displayLinesWithAlignment'.
+  -}
   }
 
-instance Reflex t => Default (TextInputConfig t) where
+instance (Reflex t) => Default (TextInputConfig t) where
   def = TextInputConfig empty never 4 (pure id) TextAlignment_Left
 
--- | The output produced by text input widgets, including the text
--- value and the number of display lines (post-wrapping). Note that some
--- display lines may not be visible due to scrolling.
+{- | The output produced by text input widgets, including the text
+value and the number of display lines (post-wrapping). Note that some
+display lines may not be visible due to scrolling.
+-}
 data TextInput t = TextInput
   { _textInput_value :: Dynamic t Text
   -- ^ The current value of the textInput as Text.
   , _textInput_userInput :: Event t TextZipper
-  -- ^ UI Event updates with the current 'TextZipper'.
-  -- This does not include Events added by '_textInputConfig_setValue', but
-  -- it does include '_textInputConfig_modify' Events.
+  {- ^ UI Event updates with the current 'TextZipper'.
+  This does not include Events added by '_textInputConfig_setValue', but
+  it does include '_textInputConfig_modify' Events.
+  -}
   , _textInput_lines :: Dynamic t Int
   }
 
 -- | A widget that allows text input
-textInput
-  :: (Reflex t, MonadHold t m, MonadFix m, HasInput t m, HasFocusReader t m, HasTheme t m, HasDisplayRegion t m, HasImageWriter t m, HasDisplayRegion t m)
-  => TextInputConfig t
-  -> m (TextInput t)
+textInput ::
+  (Reflex t, MonadHold t m, MonadFix m, HasInput t m, HasFocusReader t m, HasTheme t m, HasDisplayRegion t m, HasImageWriter t m, HasDisplayRegion t m) =>
+  TextInputConfig t ->
+  m (TextInput t)
 textInput cfg = do
   i <- input
   f <- focus
@@ -88,30 +95,35 @@ textInput cfg = do
   th <- theme
   attr0 <- sample bt
   cursorStyle0 <- sample (fmap _theme_textInputCursor th)
-  rec
-      -- we split up the events from vty and the one users provide to avoid cyclical
+  rec -- we split up the events from vty and the one users provide to avoid cyclical
       -- update dependencies. This way, users may subscribe only to UI updates.
       let valueChangedByCaller = _textInputConfig_modify cfg
-      let valueChangedByUI = mergeWith (.)
-            [ uncurry (updateTextZipper (_textInputConfig_tabWidth cfg)) <$> attach (current dh) i
-            , let displayInfo = (,) <$> current rows <*> scrollTop
-              in ffor (attach displayInfo click) $ \((dl, st), MouseDown _ (mx, my) _) ->
-                goToDisplayLinePosition mx (st + my) dl
+      let valueChangedByUI =
+            mergeWith
+              (.)
+              [ uncurry (updateTextZipper (_textInputConfig_tabWidth cfg)) <$> attach (current dh) i
+              , let displayInfo = (,) <$> current rows <*> scrollTop
+                 in ffor (attach displayInfo click) $ \((dl, st), MouseDown _ (mx, my) _) ->
+                      goToDisplayLinePosition mx (st + my) dl
+              ]
+      v <-
+        foldDyn ($) (_textInputConfig_initialValue cfg) $
+          mergeWith
+            (.)
+            [ valueChangedByCaller
+            , valueChangedByUI
             ]
-      v <- foldDyn ($) (_textInputConfig_initialValue cfg) $ mergeWith (.)
-        [ valueChangedByCaller
-        , valueChangedByUI
-        ]
       click <- mouseDown V.BLeft
 
       let toCursorAttrs attr = applyAttr cursorStyle0 attr
-          rowInputDyn = (,,)
-            <$> dw
-            <*> (mapZipper <$> _textInputConfig_display cfg <*> v)
-            <*> f
-          toDisplayLines attr (w, s, x)  =
+          rowInputDyn =
+            (,,)
+              <$> dw
+              <*> (mapZipper <$> _textInputConfig_display cfg <*> v)
+              <*> f
+          toDisplayLines attr (w, s, x) =
             let c = if x then toCursorAttrs attr else attr
-            in displayLinesWithAlignment (_textInputConfig_alignment cfg) w attr c s
+             in displayLinesWithAlignment (_textInputConfig_alignment cfg) w attr c s
       attrDyn <- holdDyn attr0 $ pushAlways (\_ -> sample bt) (updated rowInputDyn)
       let rows = ffor2 attrDyn rowInputDyn toDisplayLines
           img = images . _displayLines_spans <$> rows
@@ -123,37 +135,42 @@ textInput cfg = do
             | otherwise = st
       let hy = attachWith newScrollTop scrollTop $ updated $ zipDyn dh y
       scrollTop <- hold 0 hy
-      tellImages $ (\imgs st -> (:[]) . V.vertCat $ drop st imgs) <$> current img <*> scrollTop
-  return $ TextInput
-    { _textInput_value = value <$> v
-    , _textInput_userInput = attachWith (&) (current v) valueChangedByUI
-    , _textInput_lines = length . _displayLines_spans <$> rows
-    }
+      tellImages $ (\imgs st -> (: []) . V.vertCat $ drop st imgs) <$> current img <*> scrollTop
+  return $
+    TextInput
+      { _textInput_value = value <$> v
+      , _textInput_userInput = attachWith (&) (current v) valueChangedByUI
+      , _textInput_lines = length . _displayLines_spans <$> rows
+      }
 
 -- | A widget that allows multiline text input
-multilineTextInput
-  :: (Reflex t, MonadHold t m, MonadFix m, HasInput t m, HasFocusReader t m, HasTheme t m, HasDisplayRegion t m, HasImageWriter t m)
-  => TextInputConfig t
-  -> m (TextInput t)
+multilineTextInput ::
+  (Reflex t, MonadHold t m, MonadFix m, HasInput t m, HasFocusReader t m, HasTheme t m, HasDisplayRegion t m, HasImageWriter t m) =>
+  TextInputConfig t ->
+  m (TextInput t)
 multilineTextInput cfg = do
   i <- input
-  textInput $ cfg
-    { _textInputConfig_modify = mergeWith (.)
-      [ fforMaybe i $ \case
-          V.EvKey V.KEnter [] -> Just $ insert "\n"
-          _ -> Nothing
-      , _textInputConfig_modify cfg
-      ]
-    }
+  textInput $
+    cfg
+      { _textInputConfig_modify =
+          mergeWith
+            (.)
+            [ fforMaybe i $ \case
+                V.EvKey V.KEnter [] -> Just $ insert "\n"
+                _ -> Nothing
+            , _textInputConfig_modify cfg
+            ]
+      }
 
--- | Wraps a 'textInput' or 'multilineTextInput' in a tile. Uses
--- the computed line count to greedily size the tile when vertically
--- oriented, and uses the fallback width when horizontally oriented.
-textInputTile
-  :: (MonadFix m, MonadHold t m, HasLayout t m, HasInput t m, HasFocus t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m)
-  => m (TextInput t)
-  -> Dynamic t Int
-  -> m (TextInput t)
+{- | Wraps a 'textInput' or 'multilineTextInput' in a tile. Uses
+the computed line count to greedily size the tile when vertically
+oriented, and uses the fallback width when horizontally oriented.
+-}
+textInputTile ::
+  (MonadFix m, MonadHold t m, HasLayout t m, HasInput t m, HasFocus t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m) =>
+  m (TextInput t) ->
+  Dynamic t Int ->
+  m (TextInput t)
 textInputTile txt width = do
   o <- askOrientation
   rec t <- tile (Constraint_Fixed <$> sz) txt
@@ -175,12 +192,16 @@ spanToImage :: Span V.Attr -> V.Image
 spanToImage (Span attrs t) = V.text' attrs t
 
 -- | Default vty event handler for text inputs
-updateTextZipper
-  :: Int -- ^ Tab width
-  -> Int -- ^ Page size
-  -> V.Event -- ^ The vty event to handle
-  -> TextZipper -- ^ The zipper to modify
-  -> TextZipper
+updateTextZipper ::
+  -- | Tab width
+  Int ->
+  -- | Page size
+  Int ->
+  -- | The vty event to handle
+  V.Event ->
+  -- | The zipper to modify
+  TextZipper ->
+  TextZipper
 updateTextZipper tabWidth pageSize ev = case ev of
   -- Special characters
   V.EvKey (V.KChar '\t') [] -> tab tabWidth
