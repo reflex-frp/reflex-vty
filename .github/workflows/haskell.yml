@@ -40,3 +40,5 @@ jobs:
       # disable doc builds on older ghcs because some dependency docs aren't compatible
       name: Build Docs
       run: cabal haddock
+    - name: Run Fourmolu
+      uses: haskell-actions/run-fourmolu@v12
