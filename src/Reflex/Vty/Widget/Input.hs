@@ -79,8 +79,9 @@ link
   -> m (Event t MouseUp)
 link t = do
   th <- theme
+  bt <- themeAttr
   let linkStyle = fmap _theme_link th
-      attrs = fmap (flip applyAttr V.defAttr) linkStyle
+      attrs = applyAttr <$> linkStyle <*> bt
   richText (RichTextConfig attrs) t
   mouseUp
 

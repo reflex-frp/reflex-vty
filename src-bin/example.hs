@@ -428,8 +428,9 @@ showcaseDemo = do
             grout flex $ profileSwatch "NoTTY" ColorProfile_NoTTY
   where
     orange = rgbColor 200 100 50
-    styledImage label s =
-      tellImages . pure . pure $ render s label
-    profileSwatch label prof =
-      tellImages . pure . pure $
-        V.text' (applyProfile prof (V.withForeColor V.defAttr orange)) (label <> " ")
+    styledImage label s = do
+      th <- theme
+      tellImages $ (\t -> [render (inherit (_theme_default t) s) label]) <$> th
+    profileSwatch label prof = do
+      bt <- themeAttr
+      tellImages $ (\a -> [V.text' (applyProfile prof (V.withForeColor a orange)) (label <> " ")]) <$> bt

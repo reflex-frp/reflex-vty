@@ -55,7 +55,7 @@ defTheme = Theme
 -- | A dark-background theme matching the legacy @darkTheme :: V.Attr@.
 darkTheme :: Theme
 darkTheme = defTheme
-  { _theme_default = withForeground black . withBackground green . withReverse $ def
+  { _theme_default = withForeground green . withBackground black $ def
   }
 
 -- | The Charm theme: magenta/purple accents on a dark background.

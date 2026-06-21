@@ -496,7 +496,9 @@ render s content =
     -- themed fill) show through where the Style doesn't explicitly set a
     -- color or style.
     baseAttr = applyAttr s transparentAttr
-    borderAttr = applyAttr (borderStyleAttr s) transparentAttr
+    -- Layer border-specific colors on top of the content attr so borders
+    -- inherit themed foreground/background unless explicitly overridden.
+    borderAttr = applyAttr (borderStyleAttr s) baseAttr
     contentImage = V.Image.text' baseAttr content
     -- Whitespace fill of a given width/height using the whitespace char.
     fillImage :: V.Attr -> Int -> Int -> V.Image
@@ -615,26 +617,27 @@ drawBorder attr b mTop mBot mLeft mRight img =
     leftOn   = sideOn _border_left   mLeft
     rightOn  = sideOn _border_right  mRight
     sideOn f mt = maybe (isJust (f b)) id mt
-    topChar    = _border_top b    >>= \c -> if topOn    then Just (V.Image.char attr c)    else Nothing
-    bottomChar = _border_bottom b >>= \c -> if bottomOn then Just (V.Image.char attr c)    else Nothing
-    leftChar   = _border_left b   >>= \c -> if leftOn   then Just (V.Image.char attr c)    else Nothing
-    rightChar  = _border_right b  >>= \c -> if rightOn  then Just (V.Image.char attr c)    else Nothing
+    hFill c n = V.Image.charFill attr c (max 0 n) 1
+    vFill c n = V.Image.charFill attr c 1 (max 0 n)
+    topChar    = _border_top b    >>= \c -> if topOn    then Just c else Nothing
+    bottomChar = _border_bottom b >>= \c -> if bottomOn then Just c else Nothing
+    leftChar   = _border_left b   >>= \c -> if leftOn   then Just c else Nothing
+    rightChar  = _border_right b  >>= \c -> if rightOn  then Just c else Nothing
     topLeftChar     = _border_topLeft b     >>= \c -> if topOn    && leftOn  then Just (V.Image.char attr c) else Nothing
     topRightChar    = _border_topRight b    >>= \c -> if topOn    && rightOn then Just (V.Image.char attr c) else Nothing
     bottomLeftChar  = _border_bottomLeft b  >>= \c -> if bottomOn && leftOn  then Just (V.Image.char attr c) else Nothing
     bottomRightChar = _border_bottomRight b >>= \c -> if bottomOn && rightOn then Just (V.Image.char attr c) else Nothing
-    -- Top row: corner, horizontal fill, corner
     topRow = V.Image.horizCat $
       maybe [] (:[]) topLeftChar ++
-      maybe [] (\c -> [V.Image.horizCat (replicate (max 0 w) c)]) topChar ++
+      maybe [] (\c -> [hFill c w]) topChar ++
       maybe [] (:[]) topRightChar
-    -- Middle row: left char, content, right char
     middleRow = V.Image.horizCat $
-      maybe [] (:[]) leftChar ++ [img] ++ maybe [] (:[]) rightChar
-    -- Bottom row: corner, horizontal fill, corner
+      maybe [] (\c -> [vFill c (V.Image.imageHeight img)]) leftChar
+      ++ [img]
+      ++ maybe [] (\c -> [vFill c (V.Image.imageHeight img)]) rightChar
     bottomRow = V.Image.horizCat $
       maybe [] (:[]) bottomLeftChar ++
-      maybe [] (\c -> [V.Image.horizCat (replicate (max 0 w) c)]) bottomChar ++
+      maybe [] (\c -> [hFill c w]) bottomChar ++
       maybe [] (:[]) bottomRightChar
 
 -- | Reactive variant of 'render' for the common widget case.
