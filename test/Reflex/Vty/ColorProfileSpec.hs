@@ -3,10 +3,9 @@
 
 module Reflex.Vty.ColorProfileSpec (spec) where
 
-import Test.Hspec
-
 import qualified Graphics.Vty as V
 import qualified Graphics.Vty.Attributes.Color as V.Color
+import Test.Hspec
 
 import Reflex.Vty.ColorProfile
 
@@ -31,7 +30,7 @@ spec = describe "Reflex.Vty.ColorProfile" $ do
     it "downsamples RGB to Color240 for Ansi256" $
       convertColor ColorProfile_Ansi256 (V.Color.RGBColor 10 20 30)
         `shouldSatisfy` \case
-          V.Color.Color240{} -> True
+          V.Color.Color240 {} -> True
           _ -> False
     it "is identity for ISOColor under Ansi16" $
       convertColor ColorProfile_Ansi16 V.Color.red `shouldBe` V.Color.red

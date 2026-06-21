@@ -1,24 +1,23 @@
-{- |
-  Description: Widgets that split the display vertically or horizontally.
--}
+-- |
+--   Description: Widgets that split the display vertically or horizontally.
 module Reflex.Vty.Widget.Split where
 
 import Control.Monad.Fix
 import Graphics.Vty as V
 import Reflex
+
 import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Input.Mouse
 
-{- | A split of the available space into two parts with a draggable separator.
-Starts with half the space allocated to each, and the first pane has focus.
-Clicking in a pane switches focus.
--}
-splitVDrag ::
-  (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasFocusReader t m) =>
-  m () ->
-  m a ->
-  m b ->
-  m (a, b)
+-- | A split of the available space into two parts with a draggable separator.
+-- Starts with half the space allocated to each, and the first pane has focus.
+-- Clicking in a pane switches focus.
+splitVDrag
+  :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasFocusReader t m)
+  => m ()
+  -> m a
+  -> m b
+  -> m (a, b)
 splitVDrag wS wA wB = do
   dh <- displayHeight
   dw <- displayWidth
@@ -47,26 +46,25 @@ splitVDrag wS wA wB = do
       pane regS (pure False) wS
       (mB, rB) <- pane regB (not <$> focA) $ withMouseDown wB
   return (rA, rB)
- where
-  withMouseDown x = do
-    m <- mouseDown V.BLeft
-    x' <- x
-    return (m, x')
+  where
+    withMouseDown x = do
+      m <- mouseDown V.BLeft
+      x' <- x
+      return (m, x')
 
-{- | A plain split of the available space into vertically stacked panes.
-No visual separator is built in here.
--}
-splitV ::
-  (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasFocusReader t m) =>
-  -- | Function used to determine size of first pane based on available size
-  Dynamic t (Int -> Int) ->
-  -- | How to focus the two sub-panes, given that we are focused.
-  Dynamic t (Bool, Bool) ->
-  -- | Widget for first pane
-  m a ->
-  -- | Widget for second pane
-  m b ->
-  m (a, b)
+-- | A plain split of the available space into vertically stacked panes.
+-- No visual separator is built in here.
+splitV
+  :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasFocusReader t m)
+  => Dynamic t (Int -> Int)
+  -- ^ Function used to determine size of first pane based on available size
+  -> Dynamic t (Bool, Bool)
+  -- ^ How to focus the two sub-panes, given that we are focused.
+  -> m a
+  -- ^ Widget for first pane
+  -> m b
+  -- ^ Widget for second pane
+  -> m (a, b)
 splitV sizeFunD focD wA wB = do
   dw <- displayWidth
   dh <- displayHeight
@@ -76,20 +74,19 @@ splitV sizeFunD focD wA wB = do
   rb <- pane regB (snd <$> focD) wB
   return (ra, rb)
 
-{- | A plain split of the available space into horizontally stacked panes.
-No visual separator is built in here.
--}
-splitH ::
-  (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasFocusReader t m) =>
-  -- | Function used to determine size of first pane based on available size
-  Dynamic t (Int -> Int) ->
-  -- | How to focus the two sub-panes, given that we are focused.
-  Dynamic t (Bool, Bool) ->
-  -- | Widget for first pane
-  m a ->
-  -- | Widget for second pane
-  m b ->
-  m (a, b)
+-- | A plain split of the available space into horizontally stacked panes.
+-- No visual separator is built in here.
+splitH
+  :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasFocusReader t m)
+  => Dynamic t (Int -> Int)
+  -- ^ Function used to determine size of first pane based on available size
+  -> Dynamic t (Bool, Bool)
+  -- ^ How to focus the two sub-panes, given that we are focused.
+  -> m a
+  -- ^ Widget for first pane
+  -> m b
+  -- ^ Widget for second pane
+  -> m (a, b)
 splitH sizeFunD focD wA wB = do
   dw <- displayWidth
   dh <- displayHeight

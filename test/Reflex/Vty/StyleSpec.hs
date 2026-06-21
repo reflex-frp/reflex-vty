@@ -2,11 +2,10 @@
 
 module Reflex.Vty.StyleSpec (spec) where
 
-import Test.Hspec
-
 import qualified Graphics.Vty as V
 import qualified Graphics.Vty.Attributes.Color as V.Color
 import qualified Graphics.Vty.Image as V.Image
+import Test.Hspec
 
 import Reflex.Vty.Style
 
