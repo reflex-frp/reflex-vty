@@ -1,26 +1,25 @@
 {-# LANGUAGE RecordWildCards #-}
 
-{- |
-Description: Rendering snapshot harness for testing vty Image output
-
-Converts a 'V.Image' into a 2D grid of cells, each carrying the display
-character and its 'V.Attr'. This lets tests assert on rendered output
-without a real terminal — useful for golden-file comparison and precise
-cell-level checks.
-
-Golden file format (produced by 'renderGrid'):
-
-> 4x3
-> ┌──┐
-> │hi│
-> └──┘
-> --- attrs ---
-> 1,1 'h' fg=red style=bold
-
-The text grid is always shown. The @--- attrs ---@ section appears only
-when at least one cell has an explicit ('SetTo') attribute, keeping
-goldens clean for unstyled output.
--}
+-- |
+-- Description: Rendering snapshot harness for testing vty Image output
+--
+-- Converts a 'V.Image' into a 2D grid of cells, each carrying the display
+-- character and its 'V.Attr'. This lets tests assert on rendered output
+-- without a real terminal — useful for golden-file comparison and precise
+-- cell-level checks.
+--
+-- Golden file format (produced by 'renderGrid'):
+--
+-- > 4x3
+-- > ┌──┐
+-- > │hi│
+-- > └──┘
+-- > --- attrs ---
+-- > 1,1 'h' fg=red style=bold
+--
+-- The text grid is always shown. The @--- attrs ---@ section appears only
+-- when at least one cell has an explicit ('SetTo') attribute, keeping
+-- goldens clean for unstyled output.
 module Reflex.Vty.Test.Snapshot
   ( Cell (..)
   , Grid
@@ -35,11 +34,11 @@ import Data.List (foldl')
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Lazy as TL
+import Graphics.Text.Width (wcwidth)
 import qualified Graphics.Vty as V
 import Graphics.Vty.Image.Internal (Image (..))
-import Graphics.Text.Width (wcwidth)
 import System.Directory (createDirectoryIfMissing, doesFileExist)
-import System.FilePath ((</>), (<.>))
+import System.FilePath ((<.>), (</>))
 import Test.Hspec (Expectation, shouldBe)
 
 -- | A single rendered cell: the display character and its vty attribute.
@@ -61,11 +60,11 @@ imageToGrid img =
   let w = V.imageWidth img
       h = V.imageHeight img
       cells = walkImage img 0 0 Map.empty
-   in [ [ Map.findWithDefault blankCell (x, y) cells
-        | x <- [0 .. max 0 (w - 1)]
-        ]
-      | y <- [0 .. max 0 (h - 1)]
-      ]
+  in [ [ Map.findWithDefault blankCell (x, y) cells
+       | x <- [0 .. max 0 (w - 1)]
+       ]
+     | y <- [0 .. max 0 (h - 1)]
+     ]
   where
     blankCell = Cell ' ' V.defAttr
 
@@ -163,16 +162,16 @@ type CellMap = Map (Int, Int) Cell
 walkImage :: Image -> Int -> Int -> CellMap -> CellMap
 walkImage img x y acc =
   case img of
-    HorizText{..} ->
+    HorizText {..} ->
       let chars = TL.unpack displayText
-       in placeText attr chars x y acc
-    HorizJoin{..} ->
+      in placeText attr chars x y acc
+    HorizJoin {..} ->
       let acc' = walkImage partLeft x y acc
-       in walkImage partRight (x + V.imageWidth partLeft) y acc'
-    VertJoin{..} ->
+      in walkImage partRight (x + V.imageWidth partLeft) y acc'
+    VertJoin {..} ->
       let acc' = walkImage partTop x y acc
-       in walkImage partBottom x (y + V.imageHeight partTop) acc'
-    BGFill{..} ->
+      in walkImage partBottom x (y + V.imageHeight partTop) acc'
+    BGFill {..} ->
       foldl'
         (\m (dx, dy) -> Map.insertWith (\_ old -> old) (x + dx, y + dy) blank m)
         acc
@@ -182,7 +181,7 @@ walkImage img x y acc =
         ]
       where
         blank = Cell ' ' V.defAttr
-    Crop{..} ->
+    Crop {..} ->
       let innerCells = walkImage croppedImage 0 0 Map.empty
           visible =
             [ ( (x + kx - leftSkip, y + ky - topSkip)
@@ -194,7 +193,7 @@ walkImage img x y acc =
             , ky >= topSkip
             , ky < topSkip + outputHeight
             ]
-       in foldl' (\m (pos, cell) -> Map.insert pos cell m) acc visible
+      in foldl' (\m (pos, cell) -> Map.insert pos cell m) acc visible
     EmptyImage -> acc
 
 placeText :: V.Attr -> String -> Int -> Int -> CellMap -> CellMap
@@ -204,11 +203,11 @@ placeText attr chars x y =
     go [] _ acc = acc
     go (c : cs) dx acc =
       let w = wcwidth c
-       in if w <= 0
-            then go cs dx acc
-            else
-              go cs (dx + w) $
-                Map.insert (x + dx, y) (Cell c attr) acc
+      in if w <= 0
+           then go cs dx acc
+           else
+             go cs (dx + w) $
+               Map.insert (x + dx, y) (Cell c attr) acc
 
 ----------------------------------------------------------------------------
 -- Internal: attr serialization
@@ -243,7 +242,7 @@ showAttr a =
             , ("strikethrough", V.strikethrough)
             ]
           active = [name | (name, s) <- styles, V.hasStyle styleMask s]
-       in if null active then "none" else unwords active
+      in if null active then "none" else unwords active
 
 ----------------------------------------------------------------------------
 -- Golden file comparison

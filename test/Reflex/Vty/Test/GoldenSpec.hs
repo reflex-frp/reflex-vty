@@ -41,10 +41,10 @@ spec = describe "Golden snapshots" $ do
   golden "combined" $
     render
       ( withBorder roundedBorder
-      . withPadding 1 2 1 2
-      . withForeground brightGreen
-      . withBorderForeground brightMagenta
-      $ def
+          . withPadding 1 2 1 2
+          . withForeground brightGreen
+          . withBorderForeground brightMagenta
+          $ def
       )
       "Combined"
 

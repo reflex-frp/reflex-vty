@@ -7,8 +7,8 @@ import Test.Hspec
 import qualified Data.Text.ZipperSpec
 import qualified Reflex.Vty.ColorProfileSpec
 import qualified Reflex.Vty.StyleSpec
-import qualified Reflex.Vty.Test.SnapshotSpec
 import qualified Reflex.Vty.Test.GoldenSpec
+import qualified Reflex.Vty.Test.SnapshotSpec
 
 main :: IO ()
 main = hspec spec

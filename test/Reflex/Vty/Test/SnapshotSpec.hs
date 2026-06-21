@@ -17,6 +17,7 @@ import Reflex.Vty.Style
   )
 import qualified Reflex.Vty.Style as Style (red)
 import Reflex.Vty.Test.Snapshot
+
 spec :: Spec
 spec = describe "Reflex.Vty.Test.Snapshot" $ do
   describe "imageToGrid" $ do

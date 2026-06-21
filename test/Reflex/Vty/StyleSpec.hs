@@ -124,7 +124,7 @@ spec = describe "Reflex.Vty.Style" $ do
       V.attrForeColor result `shouldBe` V.SetTo red
       V.attrBackColor result `shouldBe` V.SetTo blue
     it "falls through to base when overlay is KeepCurrent" $ do
-      let overlay = V.Attr { V.attrStyle = V.KeepCurrent, V.attrForeColor = V.KeepCurrent, V.attrBackColor = V.KeepCurrent, V.attrURL = V.KeepCurrent }
+      let overlay = V.Attr {V.attrStyle = V.KeepCurrent, V.attrForeColor = V.KeepCurrent, V.attrBackColor = V.KeepCurrent, V.attrURL = V.KeepCurrent}
           result = mergeAttr base overlay
       V.attrForeColor result `shouldBe` V.SetTo red
 
