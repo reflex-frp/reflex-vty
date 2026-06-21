@@ -29,7 +29,7 @@ let
     rpGhc = rp.ghc.override {
       overrides = commonOverrides;
     };
-    nixGhc945 = (import ./dep/nixpkgs { inherit system; }).haskell.packages.ghc945.override {
+    nixGhc94 = (import ./dep/nixpkgs { inherit system; }).haskell.packages.ghc94.override {
       overrides = self: super: commonOverrides self super // {
         hlint = self.callHackageDirect {
           pkg = "hlint";
@@ -47,7 +47,7 @@ let
 
       };
     };
-    nixGhc961 = (import ./dep/nixpkgs { inherit system; }).haskell.packages.ghc961.override {
+    nixGhc96 = (import ./dep/nixpkgs { inherit system; }).haskell.packages.ghc96.override {
       overrides = self: super: commonOverrides self super // {
 
         reflex = self.callCabal2nix "reflex" (rp.hackGet ./dep/reflex) {};
@@ -94,12 +94,14 @@ let
 
       };
     };
+    nixGhc98 = (import ./dep/nixpkgs { inherit system; }).haskell.packages.ghc98;
   in
   {
     recurseForDerivations = true;
     ghc810 = rpGhc.callCabal2nix "reflex-vty" (import ./src.nix) {};
-    ghc945 = nixGhc945.callCabal2nix "reflex-vty" (import ./src.nix) {};
-    ghc961 = nixGhc961.callCabal2nix "reflex-vty" (import ./src.nix) {};
+    ghc94 = nixGhc94.callCabal2nix "reflex-vty" (import ./src.nix) {};
+    ghc96 = nixGhc96.callCabal2nix "reflex-vty" (import ./src.nix) {};
+    ghc98 = nixGhc98.callCabal2nix "reflex-vty" (import ./src.nix) {};
   });
   in
     ghcs
