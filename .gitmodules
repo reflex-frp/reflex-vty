@@ -1,0 +1,3 @@
+[submodule "dep/style.hs"]
+	path = dep/style.hs
+	url = https://github.com/obsidiansystems/style.hs.git
