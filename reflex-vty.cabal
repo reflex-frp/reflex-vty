@@ -1,3 +1,4 @@
+cabal-version: 3.0
 name: reflex-vty
 version: 0.7.0.0
 synopsis: Reflex FRP host and widgets for VTY applications
@@ -5,18 +6,18 @@ description:
   Build terminal applications using functional reactive programming (FRP) with Reflex FRP (<https://reflex-frp.org>).
   .
   <<https://i.imgur.com/FULQNtu.gif>>
-license: BSD3
+license: BSD-3-Clause
 license-file: LICENSE
 author: Obsidian Systems LLC
 maintainer: maintainer@obsidian.systems
 copyright: 2020 Obsidian Systems LLC
 category: FRP
 build-type: Simple
-cabal-version: 1.18
 extra-source-files:
   README.md
+extra-doc-files:
+  doc/tasks.png
   ChangeLog.md
-extra-doc-files: doc/tasks.png
 tested-with:
   GHC ==9.8.4 || ==9.10.1 || == 9.12.2
 
