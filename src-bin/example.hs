@@ -469,5 +469,5 @@ showcaseDemo = do
       dw <- displayWidth
       let grad = gradient1D [(0.0, RGB 255 0 0), (0.5, RGB 0 255 0), (1.0, RGB 0 0 255)]
           sampleAt w i = sampleGradient1D grad (fromIntegral i / fromIntegral (max 1 (w - 1)))
-          bar t w = map (\i -> render (inherit (_theme_default t) (withForeground (fromRGB (sampleAt w i)) def)) " ") [0 .. max 1 (w - 1)]
+          bar t w = [V.horizCat $ map (\i -> render (inherit (_theme_default t) (withBackground (fromRGB (sampleAt w i)) def)) " ") [0 .. max 1 (w - 1)]]
       tellImages $ bar <$> th <*> current dw
