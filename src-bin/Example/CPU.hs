@@ -7,13 +7,13 @@ import Control.Monad.Fix
 import Control.Monad.IO.Class
 import Data.Ratio
 import qualified Data.Text as T
-import Data.Text.Zipper (TextAlignment (..))
 import Data.Time
 import Data.Word
 import qualified Graphics.Vty as V
 import Reflex
 import Text.Printf
 
+import Data.Text.Zipper (TextAlignment (..))
 import Reflex.Vty
 
 -- | Each constructor represents a cpu statistic column as presented in @/proc/stat@

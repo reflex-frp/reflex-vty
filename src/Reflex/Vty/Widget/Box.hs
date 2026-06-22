@@ -6,11 +6,11 @@ import Control.Monad.Fix (MonadFix)
 import Data.Default
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Zipper (TextAlignment (..), textWidth)
 import Graphics.Vty (Image)
 import qualified Graphics.Vty as V
 import Reflex
 
+import Data.Text.Zipper (TextAlignment (..), textWidth)
 import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Text
 
