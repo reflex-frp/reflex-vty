@@ -50,6 +50,8 @@ module Reflex.Vty.Style
   , asciiBorder
   , markdownBorder
   , noBorder
+  , innerHalfBorder
+  , outerHalfBlockBorder
 
     -- * Setters
 
@@ -105,6 +107,15 @@ module Reflex.Vty.Style
 
     -- ** Whitespace
   , withWhitespace
+
+    -- ** Text transform
+  , withTransform
+
+    -- ** Tab width
+  , withTabWidth
+
+    -- ** Margin background
+  , withMarginBackground
 
     -- * Composition
   , inherit
@@ -229,6 +240,9 @@ data Style = Style
   , _style_alignHorizontal :: !(Maybe HAlign)
   , _style_alignVertical :: !(Maybe VAlign)
   , _style_whitespaceChar :: !(Maybe Char)
+  , _style_transform :: !(Maybe (Text -> Text))
+  , _style_tabWidth :: !(Maybe Int)
+  , _style_marginBackground :: !(Maybe Color)
   }
 
 instance Default Style where
@@ -261,6 +275,9 @@ instance Default Style where
       , _style_alignHorizontal = Nothing
       , _style_alignVertical = Nothing
       , _style_whitespaceChar = Nothing
+      , _style_transform = Nothing
+      , _style_tabWidth = Nothing
+      , _style_marginBackground = Nothing
       }
 
 -- | Fill the gaps in @child@ with values from @parent@. Only 'Nothing'
@@ -296,6 +313,9 @@ inherit parent child =
     , _style_alignHorizontal = pick _style_alignHorizontal
     , _style_alignVertical = pick _style_alignVertical
     , _style_whitespaceChar = pick _style_whitespaceChar
+    , _style_transform = pick _style_transform
+    , _style_tabWidth = pick _style_tabWidth
+    , _style_marginBackground = pick _style_marginBackground
     }
   where
     pick :: forall a. (Style -> Maybe a) -> Maybe a
@@ -443,6 +463,32 @@ markdownBorder =
 noBorder :: BorderStyle
 noBorder = BorderStyle Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
 
+-- | Inner half-block border using half-block characters: @▀▄▌▐@.
+innerHalfBorder :: BorderStyle
+innerHalfBorder =
+  BorderStyle
+    (Just '▀')
+    (Just '▄')
+    (Just '▌')
+    (Just '▐')
+    (Just '▀')
+    (Just '▀')
+    (Just '▄')
+    (Just '▄')
+
+-- | Outer half-block border using lower-eighth block characters: @▔▁@.
+outerHalfBlockBorder :: BorderStyle
+outerHalfBlockBorder =
+  BorderStyle
+    (Just '▔')
+    (Just '▁')
+    (Just '▏')
+    (Just '▕')
+    (Just '▔')
+    (Just '▔')
+    (Just '▁')
+    (Just '▁')
+
 ----------------------------------------------------------------------------
 -- Setters
 ----------------------------------------------------------------------------
@@ -552,6 +598,15 @@ withAlignV a s = s {_style_alignVertical = Just a}
 withWhitespace :: Char -> Style -> Style
 withWhitespace c s = s {_style_whitespaceChar = Just c}
 
+withTransform :: (Text -> Text) -> Style -> Style
+withTransform fn s = s {_style_transform = Just fn}
+
+withTabWidth :: Int -> Style -> Style
+withTabWidth w s = s {_style_tabWidth = Just w}
+
+withMarginBackground :: Color -> Style -> Style
+withMarginBackground c s = s {_style_marginBackground = Just c}
+
 ----------------------------------------------------------------------------
 -- Rendering
 ----------------------------------------------------------------------------
@@ -639,7 +694,13 @@ render s content =
     -- inherit themed foreground/background unless explicitly overridden.
     borderAttr = applyAttr (borderStyleAttr s) baseAttr
     -- Render text with newlines
-    contentImage = V.vertCat $ map (V.text' baseAttr) (T.split (== '\n') content)
+    contentImage = V.vertCat $ map (V.text' baseAttr) (T.split (== '\n') processedContent)
+    processedContent = expandTabs $ case _style_transform s of
+      Just fn -> fn content
+      Nothing -> content
+    expandTabs txt = case _style_tabWidth s of
+      Just w -> T.replace "\t" (T.replicate w " ") txt
+      Nothing -> txt
     -- Whitespace fill of a given width/height using the whitespace char.
     fillImage :: V.Attr -> Int -> Int -> V.Image
     fillImage a w h
@@ -719,10 +780,22 @@ render s content =
             (_style_borderLeft s)
             (_style_borderRight s)
             img
-    -- Margin (transparent: uses pad so underlying layers show through).
+    -- Margin. Uses colored fill when _style_marginBackground is set,
+    -- otherwise transparent pad so underlying layers show through.
     applyMargin img =
       let m = _style_margin s
-      in V.pad (_margin_left m) (_margin_top m) (_margin_right m) (_margin_bottom m) img
+      in case _style_marginBackground s of
+        Nothing -> V.pad (_margin_left m) (_margin_top m) (_margin_right m) (_margin_bottom m) img
+        Just _ ->
+          let marginAttr = applyAttr (borderStyleAttr s { _style_border = Nothing, _style_borderForeground = _style_marginBackground s }) baseAttr
+              w = V.imageWidth img
+              h = V.imageHeight img
+              leftPad = fillImage marginAttr (_margin_left m) h
+              rightPad = fillImage marginAttr (_margin_right m) h
+              topW = w + _margin_left m + _margin_right m
+              topPad = fillImage marginAttr topW (_margin_top m)
+              bottomPad = fillImage marginAttr topW (_margin_bottom m)
+          in V.vertCat [topPad, V.horizCat [leftPad, img, rightPad], bottomPad]
     -- Max-width / max-height clipping.
     applyMaxSize img =
       let clipW = maybe img (\w -> V.crop w (V.imageHeight img) img) (_style_maxWidth s)
@@ -804,7 +877,14 @@ measure :: Style -> Text -> (Int, Int)
 measure s content =
   (totalW, totalH)
   where
-    contentLines = T.split (== '\n') content
+    contentLines = T.split (== '\n') processedContent
+    processedContent = case _style_tabWidth s of
+      Just w -> T.replace "\t" (T.replicate w " ") $ case _style_transform s of
+        Just fn -> fn content
+        Nothing -> content
+      Nothing -> case _style_transform s of
+        Just fn -> fn content
+        Nothing -> content
     contentW = maximum (0 : map textWidth contentLines)
     contentH = length contentLines
     p = _style_padding s
