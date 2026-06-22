@@ -415,6 +415,8 @@ showcaseDemo = do
               grout flex $ styledImage "complement" (withForeground (fromRGB (complementary (RGB 255 128 0))) def)
             grout (fixed 1) $ text "Gradient (1D):"
             grout (fixed 3) $ gradientSwatch
+            grout (fixed 1) $ text "Canvas overlay:"
+            grout (fixed 3) $ canvasOverlayDemo
             grout (fixed 1) $ text "Transforms:"
             grout (fixed 3) $ row $ do
               grout flex $ styledImage "bold" (withBold def)
@@ -471,3 +473,18 @@ showcaseDemo = do
           sampleAt w i = sampleGradient1D grad (fromIntegral i / fromIntegral (max 1 (w - 1)))
           bar t w = [V.horizCat $ map (\i -> render (inherit (_theme_default t) (withBackground (fromRGB (sampleAt w i)) def)) " ") [0 .. max 1 (w - 1)]]
       tellImages $ bar <$> th <*> current dw
+    canvasOverlayDemo = do
+      th <- theme
+      let bgText = "background text shows through around the overlay"
+          mkCanvas t =
+            let bgRow = render (inherit (_theme_default t) def) bgText
+                bg = imageToCanvas $ V.vertCat [bgRow, bgRow, bgRow]
+                overlayStyle =
+                  withBorder roundedBorder
+                    . withBackground (fromRGB (RGB 40 42 54))
+                    . withForeground (fromRGB (RGB 255 184 108))
+                    $ def
+                overlayCanvas = imageToCanvas $ render overlayStyle " Overlay "
+                result = place 3 0 overlayCanvas bg
+            in [canvasToImage result]
+      tellImages $ mkCanvas <$> th
