@@ -14,6 +14,7 @@
 * Add `Reflex.Vty.Style`: Lip Gloss-inspired declarative styling.
 * Add `Reflex.Vty.Theme.darkTheme`
 * Add `Reflex.Vty.Theme` presets: `charmTheme`, `draculaTheme`, `nordTheme`, `zenburnTheme`, `gruvboxTheme`.
+* Add `Reflex.Vty.Color` module: `RGB` color type with `darken`, `lighten`, `complementary`, `mix`, `alpha` operations; `Gradient1D` (n-stop linear interpolation) and `Gradient2D` (bilinear corner interpolation); `toRGB`/`fromRGB` conversions to/from vty `Color`.
 * Add visual scrollbar to `Reflex.Vty.Widget.Scroll.scrollable` with four visibility settings: `ScrollbarAlways` (gutter + thumb), `ScrollbarThumbOnly` (thumb only), `ScrollbarWhileScrolling` (thumb only while actively scrolling), `ScrollbarHidden` (no scrollbar). Default is `ScrollbarThumbOnly`. Controlled via `_scrollableConfig_scrollbarVisibility` on `ScrollableConfig`.
 * *Breaking change*: `boxTitle` now takes a `Behavior t TextAlignment` as its first argument, controlling title alignment within the top border. Pass `pure TextAlignment_Center` to preserve the old behavior. `box` and `boxStatic` are unchanged.
 * Add `Reflex.Vty.Widget.Box.alignText`, a general-purpose text alignment function.
