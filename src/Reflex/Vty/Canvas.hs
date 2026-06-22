@@ -1,5 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
-
 -- |
 -- Module: Reflex.Vty.Canvas
 -- Description: Per-cell compositing with transparency
@@ -16,7 +14,7 @@ module Reflex.Vty.Canvas
   ( Canvas (..)
   , canvasCellAt
   , blankCanvas
-  , place
+  , placeCanvas
   , translate
   , stack
   , imageToCanvas
@@ -29,7 +27,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Graphics.Vty as V
-import Graphics.Vty.Image.Internal (Image (..))
+import Graphics.Vty.Image.Internal (Image (BGFill, Crop, EmptyImage, HorizJoin, HorizText, VertJoin))
 import Graphics.Text.Width (wcwidth)
 
 -- | A 2D grid of cells. Cells not in the 'Map' are transparent
@@ -53,8 +51,8 @@ canvasCellAt x y (Canvas _ _ cells) = Map.lookup (x, y) cells
 -- | Place a source canvas onto a destination at offset @(dx, dy)@.
 -- Transparent cells in the source do not overwrite the destination.
 -- Cells outside the destination bounds are clipped.
-place :: Int -> Int -> Canvas -> Canvas -> Canvas
-place dx dy src dst =
+placeCanvas :: Int -> Int -> Canvas -> Canvas -> Canvas
+placeCanvas dx dy src dst =
   dst {canvasCells = foldl' insert (canvasCells dst) visibleCells}
   where
     insert m (pos, cell) = Map.insert pos cell m
@@ -84,7 +82,7 @@ translate dx dy src =
 -- the same dimensions; later canvases overlay earlier ones.
 stack :: [Canvas] -> Canvas
 stack [] = blankCanvas 0 0
-stack (c : cs) = foldl' (\dst src -> place 0 0 src dst) c cs
+stack (c : cs) = foldl' (\dst src -> placeCanvas 0 0 src dst) c cs
 
 ----------------------------------------------------------------------------
 -- Conversions
@@ -140,20 +138,20 @@ type CellMap = Map (Int, Int) (Char, V.Attr)
 walkImage :: Image -> Int -> Int -> CellMap -> CellMap
 walkImage img x y acc =
   case img of
-    HorizText{..} ->
+    HorizText attr displayText _ _ ->
       placeText attr (TL.unpack displayText) x y acc
-    HorizJoin{..} ->
+    HorizJoin partLeft partRight _ _ ->
       let acc' = walkImage partLeft x y acc
        in walkImage partRight (x + V.imageWidth partLeft) y acc'
-    VertJoin{..} ->
+    VertJoin partTop partBottom _ _ ->
       let acc' = walkImage partTop x y acc
        in walkImage partBottom x (y + V.imageHeight partTop) acc'
-    BGFill{..} ->
+    BGFill outputWidth outputHeight ->
       foldl'
         (\m (dx, dy) -> Map.insertWith (\_ old -> old) (x + dx, y + dy) (' ', V.defAttr) m)
         acc
         [(dx, dy) | dx <- [0 .. outputWidth - 1], dy <- [0 .. outputHeight - 1]]
-    Crop{..} ->
+    Crop croppedImage leftSkip topSkip outputWidth outputHeight ->
       let innerCells = walkImage croppedImage 0 0 Map.empty
           visible =
             [ ((x + kx - leftSkip, y + ky - topSkip), cell)

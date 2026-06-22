@@ -115,6 +115,12 @@ module Reflex.Vty.Style
   , applyAttr
   , mergeAttr
   , measure
+    -- * Image composition
+  , joinHorizontal
+  , joinVertical
+  , placeHorizontal
+  , placeVertical
+  , place
   ) where
 
 import Data.Default (Default (..))
@@ -820,3 +826,68 @@ measure s content =
     innerH = max minH contentH + _padding_top p + _padding_bottom p
     totalW = innerW + borderWidth + _margin_left m + _margin_right m
     totalH = innerH + borderHeight + _margin_top m + _margin_bottom m
+
+----------------------------------------------------------------------------
+-- Image composition
+----------------------------------------------------------------------------
+
+-- | Join images horizontally, aligning them vertically by the given
+-- 'VAlign'. Shorter images are padded with spaces to match the tallest.
+joinHorizontal :: VAlign -> [V.Image] -> V.Image
+joinHorizontal _ [] = V.emptyImage
+joinHorizontal align imgs = V.horizCat (map pad imgs)
+  where
+    maxH = maximum (map V.imageHeight imgs)
+    pad img = placeVertical align maxH img
+
+-- | Join images vertically, aligning them horizontally by the given
+-- 'HAlign'. Narrower images are padded with spaces to match the widest.
+joinVertical :: HAlign -> [V.Image] -> V.Image
+joinVertical _ [] = V.emptyImage
+joinVertical align imgs = V.vertCat (map pad imgs)
+  where
+    maxW = maximum (map V.imageWidth imgs)
+    pad img = placeHorizontal align maxW img
+
+-- | Place an image within a target width, horizontally aligned.
+-- Pads with spaces on the appropriate side(s).
+placeHorizontal :: HAlign -> Int -> V.Image -> V.Image
+placeHorizontal align targetW img
+  | imgW >= targetW = img
+  | otherwise = V.horizCat [leftPad, img, rightPad]
+  where
+    imgW = V.imageWidth img
+    slack = targetW - imgW
+    (leftW, rightW) = case align of
+      HAlignLeft -> (0, slack)
+      HAlignCenter -> (slack `div` 2, slack - slack `div` 2)
+      HAlignRight -> (slack, 0)
+    leftPad = padImg leftW (V.imageHeight img)
+    rightPad = padImg rightW (V.imageHeight img)
+
+-- | Place an image within a target height, vertically aligned.
+-- Pads with spaces above and/or below.
+placeVertical :: VAlign -> Int -> V.Image -> V.Image
+placeVertical align targetH img
+  | imgH >= targetH = img
+  | otherwise = V.vertCat [topPad, img, bottomPad]
+  where
+    imgH = V.imageHeight img
+    slack = targetH - imgH
+    (topH, bottomH) = case align of
+      VAlignTop -> (0, slack)
+      VAlignMiddle -> (slack `div` 2, slack - slack `div` 2)
+      VAlignBottom -> (slack, 0)
+    topPad = padImg (V.imageWidth img) topH
+    bottomPad = padImg (V.imageWidth img) bottomH
+
+-- | Place an image within a target @(width, height)@ with both
+-- horizontal and vertical alignment.
+place :: HAlign -> VAlign -> Int -> Int -> V.Image -> V.Image
+place hAlign vAlign targetW targetH =
+  placeHorizontal hAlign targetW . placeVertical vAlign targetH
+
+padImg :: Int -> Int -> V.Image
+padImg w h
+  | w <= 0 || h <= 0 = V.emptyImage
+  | otherwise = V.charFill V.defAttr ' ' w h

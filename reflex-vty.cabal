@@ -156,6 +156,7 @@ test-suite reflex-vty-test
     Reflex.Vty.ColorProfileSpec
     Reflex.Vty.ColorSpec
     Reflex.Vty.StyleSpec
+    Reflex.Vty.StyleJoinSpec
     Reflex.Vty.Test.Snapshot
     Reflex.Vty.Test.SnapshotSpec
     Reflex.Vty.Test.GoldenSpec

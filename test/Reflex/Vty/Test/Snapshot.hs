@@ -1,5 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
-
 -- |
 -- Description: Rendering snapshot harness for testing vty Image output
 --
@@ -36,7 +34,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Text.Lazy as TL
 import Graphics.Text.Width (wcwidth)
 import qualified Graphics.Vty as V
-import Graphics.Vty.Image.Internal (Image (..))
+import Graphics.Vty.Image.Internal (Image (BGFill, Crop, EmptyImage, HorizJoin, HorizText, VertJoin))
 import System.Directory (createDirectoryIfMissing, doesFileExist)
 import System.FilePath ((<.>), (</>))
 import Test.Hspec (Expectation, shouldBe)
@@ -162,16 +160,16 @@ type CellMap = Map (Int, Int) Cell
 walkImage :: Image -> Int -> Int -> CellMap -> CellMap
 walkImage img x y acc =
   case img of
-    HorizText {..} ->
+    HorizText attr displayText _ _ ->
       let chars = TL.unpack displayText
       in placeText attr chars x y acc
-    HorizJoin {..} ->
+    HorizJoin partLeft partRight _ _ ->
       let acc' = walkImage partLeft x y acc
       in walkImage partRight (x + V.imageWidth partLeft) y acc'
-    VertJoin {..} ->
+    VertJoin partTop partBottom _ _ ->
       let acc' = walkImage partTop x y acc
       in walkImage partBottom x (y + V.imageHeight partTop) acc'
-    BGFill {..} ->
+    BGFill outputWidth outputHeight ->
       foldl'
         (\m (dx, dy) -> Map.insertWith (\_ old -> old) (x + dx, y + dy) blank m)
         acc
@@ -181,7 +179,7 @@ walkImage img x y acc =
         ]
       where
         blank = Cell ' ' V.defAttr
-    Crop {..} ->
+    Crop croppedImage leftSkip topSkip outputWidth outputHeight ->
       let innerCells = walkImage croppedImage 0 0 Map.empty
           visible =
             [ ( (x + kx - leftSkip, y + ky - topSkip)

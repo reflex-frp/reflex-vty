@@ -477,7 +477,8 @@ showcaseDemo = do
       th <- theme
       let bgText = "background text shows through around the overlay"
           mkCanvas t =
-            let bgRow = render (inherit (_theme_default t) def) bgText
+            let bgBase = applyAttr (inherit (_theme_default t) def) V.defAttr
+                bgRow = V.text' bgBase bgText
                 bg = imageToCanvas $ V.vertCat [bgRow, bgRow, bgRow]
                 overlayStyle =
                   withBorder roundedBorder
@@ -485,6 +486,6 @@ showcaseDemo = do
                     . withForeground (fromRGB (RGB 255 184 108))
                     $ def
                 overlayCanvas = imageToCanvas $ render overlayStyle " Overlay "
-                result = place 3 0 overlayCanvas bg
+                result = placeCanvas 3 0 overlayCanvas bg
             in [canvasToImage result]
       tellImages $ mkCanvas <$> th

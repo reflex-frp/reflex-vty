@@ -26,23 +26,23 @@ spec = describe "Reflex.Vty.Canvas" $ do
       let c = blankCanvas 3 3
       canvasCellAt 1 1 c `shouldBe` Nothing
 
-  describe "place" $ do
+  describe "placeCanvas" $ do
     it "overlays opaque cells" $ do
       let dst = blankCanvas 5 3
           src = Canvas 2 1 (fromList [((0, 0), ('X', red))])
-          result = place 1 0 src dst
+          result = placeCanvas 1 0 src dst
       canvasCellAt 1 0 result `shouldBe` Just ('X', red)
 
     it "transparent source cells don't overwrite" $ do
       let dst = Canvas 3 1 (fromList [((0, 0), ('A', blue))])
           src = blankCanvas 3 1
-          result = place 0 0 src dst
+          result = placeCanvas 0 0 src dst
       canvasCellAt 0 0 result `shouldBe` Just ('A', blue)
 
     it "clips cells outside destination bounds" $ do
       let dst = blankCanvas 3 3
           src = Canvas 2 1 (fromList [((0, 0), ('X', red))])
-          result = place 5 5 src dst
+          result = placeCanvas 5 5 src dst
       canvasCells result `shouldBe` mempty
 
   describe "translate" $ do
