@@ -15,6 +15,7 @@ import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Network
 
+import Data.Text.Zipper (TextAlignment (..))
 import qualified Data.Text.Zipper as TZ
 import Example.CPU
 import Reflex.Vty
@@ -43,7 +44,7 @@ data Example
   | Example_ScrollableTextDisplay
   | Example_ClickButtonsGetEmojis
   | Example_CPUStat
-  | Example_Scrollable
+  | Example_Scrollbar
   | Example_Showcase
   deriving (Bounded, Enum, Eq, Ord, Read, Show)
 
@@ -71,7 +72,7 @@ main = mainWidget $ withCtrlC $ do
           c <- t $ textButtonStatic def "Scrollable text display"
           d <- t $ textButtonStatic def "Clickable buttons"
           e <- t $ textButtonStatic def "CPU Usage"
-          f <- t $ textButtonStatic def "Scrollable"
+          f <- t $ textButtonStatic def "Scrollbar modes"
           g <- t $ textButtonStatic def "Showcase"
           return $
             leftmost
@@ -80,7 +81,7 @@ main = mainWidget $ withCtrlC $ do
               , Left Example_ScrollableTextDisplay <$ c
               , Left Example_ClickButtonsGetEmojis <$ d
               , Left Example_CPUStat <$ e
-              , Left Example_Scrollable <$ f
+              , Left Example_Scrollbar <$ f
               , Left Example_Showcase <$ g
               ]
     let escapable w = do
@@ -95,41 +96,24 @@ main = mainWidget $ withCtrlC $ do
           Left Example_ScrollableTextDisplay -> escapable scrolling
           Left Example_ClickButtonsGetEmojis -> escapable easyExample
           Left Example_CPUStat -> escapable cpuStats
-          Left Example_Scrollable -> escapable scrollingWithLayout
+          Left Example_Scrollbar -> escapable scrollbarDemo
           Left Example_Showcase -> escapable showcaseDemo
           Right () -> buttons
     return ()
 
-scrollingWithLayout
-  :: forall t m
-   . ( VtyExample t m
-     , HasInput t m
-     , MonadHold t m
-     , Manager t m
-     , PostBuild t m
-     , MonadIO (Performable m)
-     , TriggerEvent t m
-     , PerformEvent t m
-     )
-  => m ()
-scrollingWithLayout = col $ do
-  (s, _) <- tile flex $ boxTitle (constant def) (constant "Tracks") $ scrollable def $ do
-    result <- do
-      forM_ [(0 :: Int) .. 10] $ \n -> do
-        tile (fixed 5) $ do
-          tile (fixed 4) $ textButtonStatic def $ T.pack (show n)
-      askRegion
-    pure (never, result)
-  grout (fixed 1) $
-    text $
-      ("Total Lines: " <>) . T.pack . show <$> _scrollable_totalLines s
-  grout (fixed 1) $
-    text $
-      ("Scroll Pos: " <>) . T.pack . show <$> _scrollable_scrollPosition s
-  grout (fixed 1) $
-    text $
-      ("Scroll Height: " <>) . T.pack . show <$> _scrollable_scrollHeight s
-  pure ()
+scrollbarDemo :: (VtyExample t m, Manager t m, MonadHold t m, PostBuild t m, PerformEvent t m, TriggerEvent t m, MonadIO (Performable m)) => m ()
+scrollbarDemo = col $ do
+  grout (fixed 1) $ text "Four scrollbar modes. Use arrow keys or mouse wheel to scroll each panel:"
+  grout flex $ row $ do
+    grout flex $ void $ sbPanel "Always" ScrollbarAlways
+    grout flex $ void $ sbPanel "Thumb Only" ScrollbarThumbOnly
+    grout flex $ void $ sbPanel "While Scrolling" ScrollbarWhileScrolling
+    grout flex $ void $ sbPanel "Hidden" ScrollbarHidden
+  where
+    sampleText = T.unlines $ map (\n -> "Line " <> T.pack (show n)) [(1 :: Int) .. 50]
+    sbPanel label vis =
+      boxTitle (pure TextAlignment_Center) (pure singleBoxStyle) (pure label) $
+        scrollableText (def {_scrollableConfig_scrollbarVisibility = vis}) (constDyn sampleText)
 
 -- * Mouse button and emojis example
 easyExample :: (VtyExample t m, Manager t m, MonadHold t m) => m (Event t ())
@@ -150,7 +134,7 @@ easyExample = do
       b <- tile flex $ btn "RHYME"
       c <- tile flex $ btn "A BIG CRIME"
       return (a, b, c)
-    tile (fixed 7) $ boxTitle (constant def) "CLICK BUTTONS TO DRAW*" $ do
+    tile (fixed 7) $ boxTitle (constant TextAlignment_Center) (constant def) "CLICK BUTTONS TO DRAW*" $ do
       outputDyn <-
         foldDyn (<>) "" $
           mergeWith
@@ -316,7 +300,7 @@ scrolling = col $ do
     grout (fixed 1) $ text "This one scrolls automatically as the output grows:"
     Scrollable pos total h <-
       tile flex $
-        scrollableText (ScrollableConfig never never ScrollPos_Bottom (pure $ Just ScrollToBottom_Maintain)) $
+        scrollableText (ScrollableConfig never never ScrollPos_Bottom (pure $ Just ScrollToBottom_Maintain) ScrollbarAlways) $
           T.unlines <$> xs
     grout (fixed 5) $ boxStatic def $ do
       grout (fixed 1) $ row $ do
@@ -348,7 +332,7 @@ testBoxes = do
                   "This box is a text input. The box below responds to mouse drag inputs. You can also drag the separator between the boxes to resize them."
               }
           textBox =
-            boxTitle (pure roundedBoxStyle) "Text Edit" $
+            boxTitle (pure TextAlignment_Center) (pure roundedBoxStyle) "Text Edit" $
               multilineTextInput cfg
           dragBox = boxStatic roundedBoxStyle dragTest
       in splitVDrag (hRule doubleBoxStyle) textBox dragBox

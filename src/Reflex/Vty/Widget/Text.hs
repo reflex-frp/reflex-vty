@@ -3,6 +3,7 @@
 module Reflex.Vty.Widget.Text where
 
 import Control.Monad.Fix
+import Control.Monad.IO.Class
 import Data.Default
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -104,7 +105,7 @@ display a = text $ T.pack . show <$> a
 -- total number of lines (including those that are hidden)
 scrollableText
   :: forall t m
-   . (Reflex t, MonadHold t m, MonadFix m, HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasTheme t m, PostBuild t m)
+   . (Reflex t, MonadHold t m, MonadFix m, PerformEvent t m, TriggerEvent t m, MonadIO (Performable m), HasDisplayRegion t m, HasInput t m, HasImageWriter t m, HasTheme t m, PostBuild t m)
   => ScrollableConfig t
   -> Dynamic t Text
   -> m (Scrollable t)

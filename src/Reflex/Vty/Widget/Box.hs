@@ -10,6 +10,7 @@ import Graphics.Vty (Image)
 import qualified Graphics.Vty as V
 import Reflex
 
+import Data.Text.Zipper (TextAlignment (..), textWidth)
 import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Text
 
@@ -57,30 +58,31 @@ roundedBoxStyle = BoxStyle '╭' '─' '╮' '│' '╯' '─' '╰' '│'
 -- | Draws a titled box in the provided style and a child widget inside of that box
 boxTitle
   :: (MonadFix m, MonadHold t m, HasDisplayRegion t m, HasImageWriter t m, HasInput t m, HasFocusReader t m, HasTheme t m)
-  => Behavior t BoxStyle
+  => Behavior t TextAlignment
+  -> Behavior t BoxStyle
   -> Behavior t Text
   -> m a
   -> m a
-boxTitle boxStyle title child = do
+boxTitle align boxStyle title child = do
   dh <- displayHeight
   dw <- displayWidth
   bt <- themeAttr
   let boxReg = Region 0 0 <$> dw <*> dh
       innerReg = Region 1 1 <$> (subtract 2 <$> dw) <*> (subtract 2 <$> dh)
 
-  tellImages (boxImages <$> bt <*> title <*> boxStyle <*> current boxReg)
+  tellImages (boxImages <$> bt <*> align <*> title <*> boxStyle <*> current boxReg)
   tellImages (ffor2 (current innerReg) bt (\r attr -> [regionBlankImage attr r]))
 
   pane innerReg (pure True) child
   where
-    boxImages :: V.Attr -> Text -> BoxStyle -> Region -> [Image]
-    boxImages attr title' style (Region left top width height) =
+    boxImages :: V.Attr -> TextAlignment -> Text -> BoxStyle -> Region -> [Image]
+    boxImages attr align' title' style (Region left top width height) =
       let right = left + width - 1
           bottom = top + height - 1
           sides =
             [ withinImage (Region (left + 1) top (width - 2) 1) $
                 V.text' attr $
-                  centerText title' (_boxStyle_n style) (width - 2)
+                  alignText align' title' (_boxStyle_n style) (width - 2)
             , withinImage (Region right (top + 1) 1 (height - 2)) $
                 V.charFill attr (_boxStyle_e style) 1 (height - 2)
             , withinImage (Region (left + 1) bottom (width - 2) 1) $
@@ -100,8 +102,31 @@ boxTitle boxStyle title child = do
             ]
       in sides ++ if width > 1 && height > 1 then corners else []
 
--- | Pad text  on the left and right with the given character so that it is
--- centered
+-- | Pad text on the left and right with the given character so that it
+-- fills the given width, aligned according to the 'TextAlignment'.
+alignText
+  :: TextAlignment
+  -- ^ Alignment
+  -> T.Text
+  -- ^ Text to align
+  -> Char
+  -- ^ Padding character
+  -> Int
+  -- ^ Target width
+  -> T.Text
+  -- ^ Aligned text
+alignText align t c l
+  | tw >= l = t
+  | otherwise = case align of
+      TextAlignment_Left -> t <> pad delta
+      TextAlignment_Right -> pad delta <> t
+      TextAlignment_Center -> pad ((delta + 1) `div` 2) <> t <> pad (delta `div` 2)
+  where
+    tw = textWidth t
+    delta = l - tw
+    pad n = T.replicate n (T.singleton c)
+
+-- | Specialized 'alignText' for center alignment.
 centerText
   :: T.Text
   -- ^ Text to center
@@ -111,16 +136,7 @@ centerText
   -- ^ Width
   -> T.Text
   -- ^ Padded text
-centerText t c l =
-  if lt >= l
-    then t
-    else left <> t <> right
-  where
-    lt = T.length t
-    delta = l - lt
-    mkHalf n = T.replicate (n `div` 2) (T.singleton c)
-    left = mkHalf $ delta + 1
-    right = mkHalf delta
+centerText = alignText TextAlignment_Center
 
 -- | A box without a title
 box
@@ -128,7 +144,7 @@ box
   => Behavior t BoxStyle
   -> m a
   -> m a
-box boxStyle = boxTitle boxStyle mempty
+box boxStyle = boxTitle (pure TextAlignment_Center) boxStyle mempty
 
 -- | A box whose style is static
 boxStatic

@@ -2,7 +2,9 @@
 module Reflex.Vty.Widget.Scroll where
 
 import Control.Monad.Fix
+import Control.Monad.IO.Class
 import Data.Default
+import Data.Functor (void)
 import Data.List (foldl')
 import qualified Graphics.Vty as V
 import Reflex
@@ -19,6 +21,19 @@ data ScrollToBottom
     ScrollToBottom_Maintain
   deriving (Eq, Ord, Show)
 
+-- | Controls when the scrollbar is visible.
+data ScrollbarVisibility
+  = -- | Always show gutter (track) + thumb when content overflows
+    ScrollbarAlways
+  | -- | Show thumb only (no gutter) when content overflows
+    ScrollbarThumbOnly
+  | -- | Show thumb only while actively scrolling; hides on the next
+    -- non-scroll input. No gutter.
+    ScrollbarWhileScrolling
+  | -- | Never show scrollbar; child gets full width
+    ScrollbarHidden
+  deriving (Eq, Ord, Show)
+
 -- | Configuration for the scrollable element. Controls scroll behavior.
 data ScrollableConfig t = ScrollableConfig
   { _scrollableConfig_scrollBy :: Event t Int
@@ -29,10 +44,12 @@ data ScrollableConfig t = ScrollableConfig
   -- ^ The initial scroll position
   , _scrollableConfig_scrollToBottom :: Behavior t (Maybe ScrollToBottom)
   -- ^ How the scroll position should be adjusted as new content is added
+  , _scrollableConfig_scrollbarVisibility :: ScrollbarVisibility
+  -- ^ When to show the scrollbar
   }
 
 instance Reflex t => Default (ScrollableConfig t) where
-  def = ScrollableConfig never never ScrollPos_Top (pure Nothing)
+  def = ScrollableConfig never never ScrollPos_Top (pure Nothing) ScrollbarThumbOnly
 
 -- | The scroll position
 data ScrollPos = ScrollPos_Top | ScrollPos_Line Int | ScrollPos_Bottom
@@ -52,6 +69,9 @@ scrollable
    . ( Reflex t
      , MonadHold t m
      , MonadFix m
+     , PerformEvent t m
+     , TriggerEvent t m
+     , MonadIO (Performable m)
      , HasDisplayRegion t m
      , HasInput t m
      , HasImageWriter t m
@@ -60,8 +80,10 @@ scrollable
   => ScrollableConfig t
   -> (m (Event t (), a))
   -> m (Scrollable t, a)
-scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend) mkImg = do
+scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend sbVisibility) mkImg = do
   dh <- displayHeight
+  dw <- displayWidth
+  bt <- themeAttr
   kup <- key V.KUp
   kdown <- key V.KDown
   m <- mouseScroll
@@ -75,7 +97,16 @@ scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend) mkImg = do
               ScrollDirection_Down -> 1
           , scrollBy
           ]
-  rec ((update, a), imgs) <- captureImages $ localInput (translateMouseEvents translation) $ mkImg
+      regionTransform = case sbVisibility of
+        ScrollbarHidden -> id
+        _ -> fmap shrinkRegionForScrollbar
+  scrollingNow <- case sbVisibility of
+    ScrollbarWhileScrolling -> do
+      let scrollActivity = void requestedScroll
+      hideAfterQuiet <- debounce 1.5 scrollActivity
+      hold False $ leftmost [True <$ scrollActivity, False <$ hideAfterQuiet]
+    _ -> pure (pure True)
+  rec ((update, a), imgs) <- captureImages $ localRegion regionTransform $ localInput (translateMouseEvents translation) $ mkImg
       let sz = foldl' max 0 . fmap V.imageHeight <$> imgs
       lineIndex <-
         foldDynMaybe ($) startingPos $
@@ -102,6 +133,12 @@ scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend) mkImg = do
               <*> sz
   let cropImages dy images = cropFromTop dy <$> images
   tellImages $ cropImages <$> translation <*> imgs
+  let sbImgs = scrollbarImages sbVisibility <$> bt <*> current dh <*> sz <*> translation <*> current dw
+      sbGated = case sbVisibility of
+        ScrollbarWhileScrolling ->
+          (\vis imgs' -> if vis then imgs' else []) <$> scrollingNow <*> sbImgs
+        _ -> sbImgs
+  tellImages sbGated
   return $
     (,a) $
       Scrollable
@@ -110,6 +147,7 @@ scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend) mkImg = do
         , _scrollable_scrollHeight = current dh
         }
   where
+    shrinkRegionForScrollbar (Region l t w h) = Region l t (max 0 (w - 1)) h
     cropFromTop :: Int -> V.Image -> V.Image
     cropFromTop rows i =
       V.cropTop (max 0 $ V.imageHeight i - rows) i
@@ -142,3 +180,41 @@ scrollToLine totalLines height newPos =
     | newPos == 0 -> ScrollPos_Top
     | newPos + height >= totalLines -> ScrollPos_Bottom
     | otherwise -> ScrollPos_Line newPos
+
+-- | Build the scrollbar images (gutter + thumb). Returns empty list when
+-- the scrollbar is hidden, the content fits within the viewport, or the
+-- viewport is too narrow. In 'ScrollbarThumbOnly' and
+-- 'ScrollbarWhileScrolling' modes, only the thumb is drawn (no gutter).
+scrollbarImages
+  :: ScrollbarVisibility
+  -> V.Attr
+  -- ^ Attribute for both gutter and thumb
+  -> Int
+  -- ^ Viewport height
+  -> Int
+  -- ^ Total content lines
+  -> Int
+  -- ^ Current scroll offset (lines scrolled from top)
+  -> Int
+  -- ^ Viewport width
+  -> [V.Image]
+scrollbarImages visibility attr vpHeight totalLines scrollLine vpWidth
+  | visibility == ScrollbarHidden = []
+  | totalLines <= vpHeight = []
+  | vpWidth <= 1 = []
+  | otherwise =
+      let maxScroll = max 1 (totalLines - vpHeight)
+          thumbLen = max 1 (vpHeight * vpHeight `div` totalLines)
+          thumbTrack = vpHeight - thumbLen
+          thumbTop = min thumbTrack (scrollLine * thumbTrack `div` maxScroll)
+          gutterCol = vpWidth - 1
+          thumbImg =
+            withinImage (Region gutterCol thumbTop 1 thumbLen) $
+              V.charFill attr '█' 1 thumbLen
+          gutterImgs = case visibility of
+            ScrollbarAlways ->
+              [ withinImage (Region gutterCol 0 1 vpHeight) $
+                  V.charFill attr '░' 1 vpHeight
+              ]
+            _ -> []
+      in gutterImgs ++ [thumbImg]

@@ -49,10 +49,13 @@ Once it's done you can test the following:
     * Make sure that resizing your terminal window causes the chart to resize as well.
     * Type <kbd>Esc</kbd>.
 
-  * Click on `Scrollable`.
-    * Make sure the titled "Tracks" box contains 11 numbered, focusable buttons stacked vertically.
-    * Make sure you can scroll through them with the mouse wheel or arrow keys, and that focus tracks the visible buttons.
-    * Make sure the "Total Lines", "Scroll Pos", and "Scroll Height" readouts below the box update as you scroll.
+  * Click on `Scrollbar modes`.
+    * Make sure you see four side-by-side panels labeled "Always", "Thumb Only", "While Scrolling", and "Hidden", each containing 50 lines of numbered text.
+    * Make sure the "Always" panel shows a gutter (░) with a solid thumb (█) on the right side.
+    * Make sure the "Thumb Only" panel shows just the thumb (█), no gutter.
+    * Make sure the "While Scrolling" panel shows a thumb only while you are actively scrolling (arrow keys or mouse wheel); it should disappear when you press a non-scroll key.
+    * Make sure the "Hidden" panel has no scrollbar at all and its text uses the full width.
+    * Make sure that resizing your terminal window causes the panels to resize as well.
     * Type <kbd>Esc</kbd>.
 
   * Click on `Styles`.

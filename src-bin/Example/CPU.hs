@@ -13,6 +13,7 @@ import qualified Graphics.Vty as V
 import Reflex
 import Text.Printf
 
+import Data.Text.Zipper (TextAlignment (..))
 import Reflex.Vty
 
 -- | Each constructor represents a cpu statistic column as presented in @/proc/stat@
@@ -134,7 +135,7 @@ chart pct = do
           , T.pack (printf "%3d" $ (ceiling $ x * 100 :: Int))
           , "% "
           ]
-  boxTitle (pure doubleBoxStyle) (current title) $ col $ do
+  boxTitle (pure TextAlignment_Center) (pure doubleBoxStyle) (current title) $ col $ do
     grout flex blank
     dh <- displayHeight
     let heights = calcRowHeights <$> dh <*> pct
