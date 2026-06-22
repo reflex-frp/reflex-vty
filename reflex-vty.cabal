@@ -27,6 +27,7 @@ source-repository head
 
 library
   exposed-modules: Reflex.Vty
+                 , Reflex.Vty.Canvas
                  , Reflex.Vty.Color
                  , Reflex.Vty.ColorProfile
                  , Reflex.Vty.Host
@@ -151,9 +152,11 @@ test-suite reflex-vty-test
   ghc-options: -threaded
   other-modules:
     Data.Text.ZipperSpec
+    Reflex.Vty.CanvasSpec
     Reflex.Vty.ColorProfileSpec
     Reflex.Vty.ColorSpec
     Reflex.Vty.StyleSpec
+    Reflex.Vty.StyleJoinSpec
     Reflex.Vty.Test.Snapshot
     Reflex.Vty.Test.SnapshotSpec
     Reflex.Vty.Test.GoldenSpec
