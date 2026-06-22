@@ -81,8 +81,8 @@ textInput
 textInput cfg = do
   i <- input
   f <- focus
-  dh <- displayHeight
-  dw <- displayWidth
+  dh <- viewportHeight
+  dw <- viewportWidth
   bt <- themeAttr
   th <- theme
   attr0 <- sample bt

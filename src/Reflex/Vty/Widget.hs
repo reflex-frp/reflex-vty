@@ -335,15 +335,34 @@ regionBlankImage attr r@(Region _ _ width height) =
 
 -- | A class for things that know their own display size dimensions
 class (Reflex t, Monad m) => HasDisplayRegion t m | m -> t where
-  -- | Retrieve the display region
+  -- | Retrieve the display region. This is the "layout region" — the
+  -- space the layout system uses to distribute among children. Inside
+  -- 'scrollable', this may be larger than the actual viewport.
   askRegion :: m (Dynamic t Region)
   default askRegion :: (f m' ~ m, MonadTrans f, HasDisplayRegion t m') => m (Dynamic t Region)
   askRegion = lift askRegion
 
-  -- | Run an action in a local region, by applying a transformation to the region
+  -- | Run an action in a local region, by applying a transformation to
+  -- the region. Affects both layout and viewport.
   localRegion :: (Dynamic t Region -> Dynamic t Region) -> m a -> m a
   default localRegion :: (f m' ~ m, Monad m', MFunctor f, HasDisplayRegion t m') => (Dynamic t Region -> Dynamic t Region) -> m a -> m a
   localRegion f = hoist (localRegion f)
+
+  -- | The actual on-screen viewport region. May differ from 'askRegion'
+  -- inside containers that inflate the layout region (e.g. 'scrollable').
+  -- Use this for rendering decisions: how many rows\/cols to fill, how
+  -- tall to draw a box, etc.
+  askViewport :: m (Dynamic t Region)
+  default askViewport :: (f m' ~ m, MonadTrans f, HasDisplayRegion t m') => m (Dynamic t Region)
+  askViewport = lift askViewport
+
+  -- | Run an action with a modified layout region only, leaving the
+  -- viewport unchanged. Used by 'scrollable' to give children more
+  -- layout height than is visible, while widgets still know the real
+  -- viewport size for rendering.
+  localLayoutRegion :: (Dynamic t Region -> Dynamic t Region) -> m a -> m a
+  default localLayoutRegion :: (f m' ~ m, Monad m', MFunctor f, HasDisplayRegion t m') => (Dynamic t Region -> Dynamic t Region) -> m a -> m a
+  localLayoutRegion f = hoist (localLayoutRegion f)
 
 -- | Retrieve the display width
 displayWidth :: HasDisplayRegion t m => m (Dynamic t Int)
@@ -353,6 +372,14 @@ displayWidth = fmap _region_width <$> askRegion
 displayHeight :: HasDisplayRegion t m => m (Dynamic t Int)
 displayHeight = fmap _region_height <$> askRegion
 
+-- | Retrieve the viewport width (actual on-screen width)
+viewportWidth :: HasDisplayRegion t m => m (Dynamic t Int)
+viewportWidth = fmap _region_width <$> askViewport
+
+-- | Retrieve the viewport height (actual on-screen height)
+viewportHeight :: HasDisplayRegion t m => m (Dynamic t Int)
+viewportHeight = fmap _region_height <$> askViewport
+
 instance HasDisplayRegion t m => HasDisplayRegion t (ReaderT x m)
 instance HasDisplayRegion t m => HasDisplayRegion t (BehaviorWriterT t x m)
 instance HasDisplayRegion t m => HasDisplayRegion t (DynamicWriterT t x m)
@@ -361,7 +388,7 @@ instance HasDisplayRegion t m => HasDisplayRegion t (NodeIdT m)
 
 -- | A widget that has access to a particular region of the vty display
 newtype DisplayRegion t m a = DisplayRegion
-  {unDisplayRegion :: ReaderT (Dynamic t Region) m a}
+  {unDisplayRegion :: ReaderT (Dynamic t (Region, Region)) m a}
   deriving
     ( Applicative
     , Functor
@@ -377,8 +404,10 @@ newtype DisplayRegion t m a = DisplayRegion
     )
 
 instance (Monad m, Reflex t) => HasDisplayRegion t (DisplayRegion t m) where
-  askRegion = DisplayRegion ask
-  localRegion f = DisplayRegion . local f . unDisplayRegion
+  askRegion = DisplayRegion $ fmap fst <$> ask
+  localRegion f = DisplayRegion . local (\dr -> (,) <$> f (fst <$> dr) <*> f (snd <$> dr)) . unDisplayRegion
+  askViewport = DisplayRegion $ fmap snd <$> ask
+  localLayoutRegion f = DisplayRegion . local (\dr -> (,) <$> f (fst <$> dr) <*> (snd <$> dr)) . unDisplayRegion
 
 deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (DisplayRegion t m)
 deriving instance NotReady t m => NotReady t (DisplayRegion t m)
@@ -388,7 +417,8 @@ deriving instance TriggerEvent t m => TriggerEvent t (DisplayRegion t m)
 instance HasImageWriter t m => HasImageWriter t (DisplayRegion t m) where
   captureImages x = do
     reg <- askRegion
-    lift $ captureImages $ runDisplayRegion reg x
+    vp <- askViewport
+    lift $ captureImages $ runDisplayRegionBoth reg vp x
 instance HasFocusReader t m => HasFocusReader t (DisplayRegion t m)
 
 instance (Adjustable t m, MonadFix m, MonadHold t m) => Adjustable t (DisplayRegion t m) where
@@ -405,13 +435,26 @@ instance MFunctor (DisplayRegion t) where
 
 instance MonadNodeId m => MonadNodeId (DisplayRegion t m)
 
--- | Run a 'DisplayRegion' action with a given 'Region'
+-- | Run a 'DisplayRegion' action with a given 'Region'. Sets both the
+-- layout region and viewport to the same value.
 runDisplayRegion
   :: (Reflex t, Monad m)
   => Dynamic t Region
   -> DisplayRegion t m a
   -> m a
-runDisplayRegion r = flip runReaderT r . unDisplayRegion
+runDisplayRegion r = runDisplayRegionBoth r r
+
+-- | Run a 'DisplayRegion' action with separate layout and viewport regions.
+runDisplayRegionBoth
+  :: (Reflex t, Monad m)
+  => Dynamic t Region
+  -- ^ Layout region (what 'askRegion' returns)
+  -> Dynamic t Region
+  -- ^ Viewport region (what 'askViewport' returns)
+  -> DisplayRegion t m a
+  -> m a
+runDisplayRegionBoth layout viewport =
+  flip runReaderT ((,) <$> layout <*> viewport) . unDisplayRegion
 
 -- * Getting focus state
 

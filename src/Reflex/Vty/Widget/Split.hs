@@ -19,8 +19,8 @@ splitVDrag
   -> m b
   -> m (a, b)
 splitVDrag wS wA wB = do
-  dh <- displayHeight
-  dw <- displayWidth
+  dh <- viewportHeight
+  dw <- viewportWidth
   h0 <- sample $ current dh -- TODO
   dragE <- drag V.BLeft
   let splitter0 = h0 `div` 2
@@ -66,8 +66,8 @@ splitV
   -- ^ Widget for second pane
   -> m (a, b)
 splitV sizeFunD focD wA wB = do
-  dw <- displayWidth
-  dh <- displayHeight
+  dw <- viewportWidth
+  dh <- viewportHeight
   let regA = Region 0 0 <$> dw <*> (sizeFunD <*> dh)
       regB = Region 0 <$> (_region_height <$> regA) <*> dw <*> liftA2 (-) dh (_region_height <$> regA)
   ra <- pane regA (fst <$> focD) wA
@@ -88,8 +88,8 @@ splitH
   -- ^ Widget for second pane
   -> m (a, b)
 splitH sizeFunD focD wA wB = do
-  dw <- displayWidth
-  dh <- displayHeight
+  dw <- viewportWidth
+  dh <- viewportHeight
   let regA = Region 0 0 <$> (sizeFunD <*> dw) <*> dh
       regB = Region <$> (_region_width <$> regA) <*> 0 <*> liftA2 (-) dw (_region_width <$> regA) <*> dh
   liftA2 (,) (pane regA (fmap fst focD) wA) (pane regB (fmap snd focD) wB)

@@ -2,9 +2,9 @@
 
 module Reflex.Vty.ColorSpec (spec) where
 
+import qualified Graphics.Vty as V
 import Test.Hspec
 
-import qualified Graphics.Vty as V
 import Reflex.Vty.Color
 
 spec :: Spec
