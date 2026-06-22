@@ -98,8 +98,10 @@ scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend sbVisibility
           , scrollBy
           ]
       regionTransform = case sbVisibility of
-        ScrollbarHidden -> id
-        _ -> fmap shrinkRegionForScrollbar
+        ScrollbarHidden -> fmap (\r -> r {_region_height = largeScrollHeight})
+        _ -> fmap (\r -> shrinkRegionForScrollbar r {_region_height = largeScrollHeight})
+        where
+          largeScrollHeight = 10000
   scrollingNow <- case sbVisibility of
     ScrollbarWhileScrolling -> do
       let scrollActivity = void requestedScroll
