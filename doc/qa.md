@@ -59,7 +59,8 @@ Once it's done you can test the following:
     * Type <kbd>Esc</kbd>.
 
   * Click on `Styles`.
-    * Make sure you see a grid of labeled boxes demonstrating every border style preset (single, rounded, thick, double, ascii), padding and margin, foreground/background colors (including an RGB true-color swatch), text transforms (bold, italic, underline, reverse), horizontal alignment within a fixed-width box (left/center/right), a combined rounded-border + padded + colored box, and a hyperlink (underline + OSC 8 clickable in supporting terminals).
+    * Make sure you see a grid of labeled boxes demonstrating every border style preset (single, rounded, thick, double, ascii), padding and margin, foreground/background colors (including an RGB true-color swatch), color operations (darken, lighten, mix, complementary), a 1D gradient swatch (red→green→blue), text transforms (bold, italic, underline, reverse), horizontal alignment within a fixed-width box (left/center/right), a combined rounded-border + padded + colored box, and a hyperlink (underline + OSC 8 clickable in supporting terminals).
+    * Make sure the gradient swatch fills the width of its row and smoothly transitions from red through green to blue.
     * Make sure that resizing your terminal window causes the layout to resize as well.
     * Type <kbd>Esc</kbd>.
 

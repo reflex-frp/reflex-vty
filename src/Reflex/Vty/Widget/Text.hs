@@ -18,8 +18,8 @@ import Reflex.Vty.Widget.Scroll
 -- | Fill the background with a particular character.
 fill :: (HasDisplayRegion t m, HasImageWriter t m, HasTheme t m) => Behavior t Char -> m ()
 fill bc = do
-  dw <- displayWidth
-  dh <- displayHeight
+  dw <- viewportWidth
+  dh <- viewportHeight
   bt <- themeAttr
   let fillImg =
         (\attr w h c -> [V.charFill attr c w h])

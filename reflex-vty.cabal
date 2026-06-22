@@ -27,6 +27,7 @@ source-repository head
 
 library
   exposed-modules: Reflex.Vty
+                 , Reflex.Vty.Color
                  , Reflex.Vty.ColorProfile
                  , Reflex.Vty.Host
                  , Reflex.Vty.Style
@@ -151,6 +152,7 @@ test-suite reflex-vty-test
   other-modules:
     Data.Text.ZipperSpec
     Reflex.Vty.ColorProfileSpec
+    Reflex.Vty.ColorSpec
     Reflex.Vty.StyleSpec
     Reflex.Vty.Test.Snapshot
     Reflex.Vty.Test.SnapshotSpec

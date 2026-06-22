@@ -10,6 +10,7 @@
 -- <<./doc/tasks.png>>
 module Reflex.Vty
   ( module Reflex
+  , module Reflex.Vty.Color
   , module Reflex.Vty.ColorProfile
   , module Reflex.Vty.Host
   , module Reflex.Vty.Style
@@ -27,6 +28,7 @@ module Reflex.Vty
 import Reflex
 
 import Control.Monad.NodeId
+import Reflex.Vty.Color
 import Reflex.Vty.ColorProfile
 import Reflex.Vty.Host
 import Reflex.Vty.Style
