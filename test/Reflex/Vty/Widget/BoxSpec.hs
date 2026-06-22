@@ -2,10 +2,10 @@
 
 module Reflex.Vty.Widget.BoxSpec (spec) where
 
-import Data.Text.Zipper (TextAlignment (..))
 import qualified Data.Text as T
 import Test.Hspec
 
+import Data.Text.Zipper (TextAlignment (..))
 import Reflex.Vty.Widget.Box (alignText, centerText)
 
 spec :: Spec

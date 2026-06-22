@@ -5,11 +5,11 @@ module Reflex.Vty.Widget.ScrollSpec (spec) where
 import qualified Graphics.Vty as V
 import Test.Hspec
 
+import Reflex.Vty.Test.Snapshot
 import Reflex.Vty.Widget.Scroll
   ( ScrollbarVisibility (..)
   , scrollbarImages
   )
-import Reflex.Vty.Test.Snapshot
 
 spec :: Spec
 spec = describe "Reflex.Vty.Widget.Scroll" $ do
@@ -27,16 +27,13 @@ spec = describe "Reflex.Vty.Widget.Scroll" $ do
 
     it "produces a thumb for ScrollbarAlways" $ do
       let imgs = scrollbarImages ScrollbarAlways attr 10 50 0 20
-      length imgs `shouldBe` 2  -- gutter + thumb
-
+      length imgs `shouldBe` 2 -- gutter + thumb
     it "produces only a thumb for ScrollbarThumbOnly" $ do
       let imgs = scrollbarImages ScrollbarThumbOnly attr 10 50 0 20
-      length imgs `shouldBe` 1  -- thumb only
-
+      length imgs `shouldBe` 1 -- thumb only
     it "produces only a thumb for ScrollbarWhileScrolling" $ do
       let imgs = scrollbarImages ScrollbarWhileScrolling attr 10 50 0 20
-      length imgs `shouldBe` 1  -- thumb only
-
+      length imgs `shouldBe` 1 -- thumb only
     it "places thumb at top when scrollLine is 0" $ do
       let imgs = scrollbarImages ScrollbarThumbOnly attr 10 50 0 20
           grid = imageToGrid $ V.vertCat imgs
