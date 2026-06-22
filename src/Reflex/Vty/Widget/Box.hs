@@ -64,8 +64,8 @@ boxTitle
   -> m a
   -> m a
 boxTitle align boxStyle title child = do
-  dh <- displayHeight
-  dw <- displayWidth
+  dh <- viewportHeight
+  dw <- viewportWidth
   bt <- themeAttr
   let boxReg = Region 0 0 <$> dw <*> dh
       innerReg = Region 1 1 <$> (subtract 2 <$> dw) <*> (subtract 2 <$> dh)

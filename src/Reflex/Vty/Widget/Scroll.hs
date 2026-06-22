@@ -97,9 +97,10 @@ scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend sbVisibility
               ScrollDirection_Down -> 1
           , scrollBy
           ]
-      regionTransform = case sbVisibility of
-        ScrollbarHidden -> fmap (\r -> r {_region_height = largeScrollHeight})
-        _ -> fmap (\r -> shrinkRegionForScrollbar r {_region_height = largeScrollHeight})
+      widthTransform = case sbVisibility of
+        ScrollbarHidden -> id
+        _ -> fmap shrinkRegionForScrollbar
+      heightTransform = fmap (\r -> r {_region_height = largeScrollHeight})
         where
           largeScrollHeight = 10000
   scrollingNow <- case sbVisibility of
@@ -108,7 +109,7 @@ scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend sbVisibility
       hideAfterQuiet <- debounce 1.5 scrollActivity
       hold False $ leftmost [True <$ scrollActivity, False <$ hideAfterQuiet]
     _ -> pure (pure True)
-  rec ((update, a), imgs) <- captureImages $ localRegion regionTransform $ localInput (translateMouseEvents translation) $ mkImg
+  rec ((update, a), imgs) <- captureImages $ localLayoutRegion heightTransform $ localRegion widthTransform $ localInput (translateMouseEvents translation) $ mkImg
       let sz = foldl' max 0 . fmap V.imageHeight <$> imgs
       lineIndex <-
         foldDynMaybe ($) startingPos $

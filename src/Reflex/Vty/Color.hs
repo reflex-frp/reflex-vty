@@ -6,12 +6,14 @@ module Reflex.Vty.Color
     RGB (..)
   , toRGB
   , fromRGB
+
     -- * Color operations
   , darken
   , lighten
   , complementary
   , mix
   , alpha
+
     -- * Gradients
   , Gradient1D (..)
   , gradient1D
