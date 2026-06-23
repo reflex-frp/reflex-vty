@@ -11,6 +11,8 @@ import Control.Monad.Fix (MonadFix)
 import Data.Default (Default (..))
 import Data.Function ((&))
 import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import Data.Text.Encoding.Error (lenientDecode)
 import qualified Graphics.Vty as V
 import Reflex
 
@@ -97,6 +99,9 @@ textInput cfg = do
               , let displayInfo = (,) <$> current rows <*> scrollTop
                 in ffor (attach displayInfo click) $ \((dl, st), MouseDown _ (mx, my) _) ->
                      goToDisplayLinePosition mx (st + my) dl
+              , fforMaybe i $ \case
+                  V.EvPaste bs -> Just (insert (TE.decodeUtf8With lenientDecode bs))
+                  _ -> Nothing
               ]
       v <-
         foldDyn ($) (_textInputConfig_initialValue cfg) $

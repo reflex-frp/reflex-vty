@@ -17,6 +17,7 @@ import Control.Monad.Ref
 import Control.Monad.Trans (MonadTrans, lift)
 import Control.Monad.Trans.State.Strict
 import Data.Kind (Type)
+import qualified Data.ByteString as BS
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Graphics.Vty (Image)
@@ -310,6 +311,15 @@ lostFocus = do
   inp <- input
   return $ fforMaybe inp $ \case
     V.EvLostFocus -> Just ()
+    _ -> Nothing
+
+-- | Fires when text is pasted (bracketed paste mode). Carries the pasted
+-- bytes. Enable bracketed paste via 'getDefaultVty' (on by default).
+paste :: (Monad m, Reflex t, HasInput t m) => m (Event t BS.ByteString)
+paste = do
+  inp <- input
+  return $ fforMaybe inp $ \case
+    V.EvPaste bs -> Just bs
     _ -> Nothing
 
 -- * Getting and setting the display region
