@@ -222,10 +222,14 @@ runVtyApp app = do
   vty <- getDefaultVty
   runVtyAppWithHandle vty app
 
--- | Returns the standard vty configuration with mouse mode enabled.
+-- | Returns the standard vty configuration with mouse, focus tracking,
+-- and bracketed paste enabled.
 getDefaultVty :: IO V.Vty
 getDefaultVty = do
   cfg <- V.userConfig
   vty <- V.mkVty cfg
-  liftIO $ V.setMode (V.outputIface vty) V.Mouse True
+  liftIO $ do
+    V.setMode (V.outputIface vty) V.Mouse True
+    V.setMode (V.outputIface vty) V.Focus True
+    V.setMode (V.outputIface vty) V.BracketedPaste True
   return vty

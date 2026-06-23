@@ -47,6 +47,7 @@ library
   build-depends:
     base >= 4.10.0 && < 4.22,
     bimap >= 0.3.3 && < 0.6,
+    bytestring >= 0.12,
     containers >= 0.5.0 && < 0.8,
     mtl >= 2.2.2 && < 2.4,
     transformers >= 0.5.5 && < 0.7,

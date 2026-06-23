@@ -33,6 +33,9 @@
 * Fix `Reflex.Vty.Widget.Text.richText`: now merges config attrs on `themeAttr` via `mergeAttr`, so `RichTextConfig def` inherits the ambient theme.
 * Fix `textButton` centering: now uses `textWithAlignment TextAlignment_Center`.
 * Fix `textInput` cursor: uses `_theme_textInputCursor` instead of hardcoded `reverseVideo`.
+* Debounce terminal resize events (50ms) to reduce lag and flicker during window drag.
+* Enable terminal focus tracking mode by default. Add `gainedFocus` and `lostFocus` helpers to `Reflex.Vty.Widget`.
+* Enable bracketed paste by default. Add `paste` helper to `Reflex.Vty.Widget`. `textInput` now handles paste events.
 
 ## 0.6.2.1
 
