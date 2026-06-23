@@ -50,6 +50,8 @@ module Reflex.Vty.Style
   , asciiBorder
   , markdownBorder
   , noBorder
+  , innerHalfBorder
+  , outerHalfBlockBorder
 
     -- * Setters
 
@@ -106,6 +108,31 @@ module Reflex.Vty.Style
     -- ** Whitespace
   , withWhitespace
 
+    -- ** Text transform
+  , withTransform
+
+    -- ** Tab width
+  , withTabWidth
+
+    -- ** Margin background
+  , withMarginBackground
+
+    -- ** Inline mode
+  , withInline
+
+    -- ** Color whitespace
+  , withColorWhitespace
+
+    -- ** Per-side border colors
+  , withBorderTopForeground
+  , withBorderTopBackground
+  , withBorderBottomForeground
+  , withBorderBottomBackground
+  , withBorderLeftForeground
+  , withBorderLeftBackground
+  , withBorderRightForeground
+  , withBorderRightBackground
+
     -- * Composition
   , inherit
 
@@ -115,14 +142,21 @@ module Reflex.Vty.Style
   , applyAttr
   , mergeAttr
   , measure
+
     -- * Image composition
   , joinHorizontal
   , joinVertical
   , placeHorizontal
   , placeVertical
   , place
+
+    -- * Text utilities
+  , truncateWith
+  , textHeight
+  , textSize
   ) where
 
+import Control.Applicative ((<|>))
 import Data.Default (Default (..))
 import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
@@ -130,7 +164,7 @@ import qualified Data.Text as T
 import qualified Graphics.Vty as V
 import Reflex (Behavior, Reflex)
 
-import Data.Text.Zipper (textWidth)
+import Data.Text.Zipper (charWidth, textWidth)
 
 -- | A terminal color. Currently an alias for vty's 'V.Color'; this keeps the
 -- public API stable if vty's representation changes later.
@@ -229,6 +263,19 @@ data Style = Style
   , _style_alignHorizontal :: !(Maybe HAlign)
   , _style_alignVertical :: !(Maybe VAlign)
   , _style_whitespaceChar :: !(Maybe Char)
+  , _style_transform :: !(Maybe (Text -> Text))
+  , _style_tabWidth :: !(Maybe Int)
+  , _style_marginBackground :: !(Maybe Color)
+  , _style_inline :: !(Maybe Bool)
+  , _style_colorWhitespace :: !(Maybe Bool)
+  , _style_borderTopForeground :: !(Maybe Color)
+  , _style_borderTopBackground :: !(Maybe Color)
+  , _style_borderBottomForeground :: !(Maybe Color)
+  , _style_borderBottomBackground :: !(Maybe Color)
+  , _style_borderLeftForeground :: !(Maybe Color)
+  , _style_borderLeftBackground :: !(Maybe Color)
+  , _style_borderRightForeground :: !(Maybe Color)
+  , _style_borderRightBackground :: !(Maybe Color)
   }
 
 instance Default Style where
@@ -261,6 +308,19 @@ instance Default Style where
       , _style_alignHorizontal = Nothing
       , _style_alignVertical = Nothing
       , _style_whitespaceChar = Nothing
+      , _style_transform = Nothing
+      , _style_tabWidth = Nothing
+      , _style_marginBackground = Nothing
+      , _style_inline = Nothing
+      , _style_colorWhitespace = Nothing
+      , _style_borderTopForeground = Nothing
+      , _style_borderTopBackground = Nothing
+      , _style_borderBottomForeground = Nothing
+      , _style_borderBottomBackground = Nothing
+      , _style_borderLeftForeground = Nothing
+      , _style_borderLeftBackground = Nothing
+      , _style_borderRightForeground = Nothing
+      , _style_borderRightBackground = Nothing
       }
 
 -- | Fill the gaps in @child@ with values from @parent@. Only 'Nothing'
@@ -296,6 +356,19 @@ inherit parent child =
     , _style_alignHorizontal = pick _style_alignHorizontal
     , _style_alignVertical = pick _style_alignVertical
     , _style_whitespaceChar = pick _style_whitespaceChar
+    , _style_transform = pick _style_transform
+    , _style_tabWidth = pick _style_tabWidth
+    , _style_marginBackground = pick _style_marginBackground
+    , _style_inline = pick _style_inline
+    , _style_colorWhitespace = pick _style_colorWhitespace
+    , _style_borderTopForeground = pick _style_borderTopForeground
+    , _style_borderTopBackground = pick _style_borderTopBackground
+    , _style_borderBottomForeground = pick _style_borderBottomForeground
+    , _style_borderBottomBackground = pick _style_borderBottomBackground
+    , _style_borderLeftForeground = pick _style_borderLeftForeground
+    , _style_borderLeftBackground = pick _style_borderLeftBackground
+    , _style_borderRightForeground = pick _style_borderRightForeground
+    , _style_borderRightBackground = pick _style_borderRightBackground
     }
   where
     pick :: forall a. (Style -> Maybe a) -> Maybe a
@@ -443,6 +516,32 @@ markdownBorder =
 noBorder :: BorderStyle
 noBorder = BorderStyle Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
 
+-- | Inner half-block border using half-block characters: @▀▄▌▐@.
+innerHalfBorder :: BorderStyle
+innerHalfBorder =
+  BorderStyle
+    (Just '▀')
+    (Just '▄')
+    (Just '▌')
+    (Just '▐')
+    (Just '▀')
+    (Just '▀')
+    (Just '▄')
+    (Just '▄')
+
+-- | Outer half-block border using lower-eighth block characters: @▔▁@.
+outerHalfBlockBorder :: BorderStyle
+outerHalfBlockBorder =
+  BorderStyle
+    (Just '▔')
+    (Just '▁')
+    (Just '▏')
+    (Just '▕')
+    (Just '▔')
+    (Just '▔')
+    (Just '▁')
+    (Just '▁')
+
 ----------------------------------------------------------------------------
 -- Setters
 ----------------------------------------------------------------------------
@@ -552,6 +651,45 @@ withAlignV a s = s {_style_alignVertical = Just a}
 withWhitespace :: Char -> Style -> Style
 withWhitespace c s = s {_style_whitespaceChar = Just c}
 
+withTransform :: (Text -> Text) -> Style -> Style
+withTransform fn s = s {_style_transform = Just fn}
+
+withTabWidth :: Int -> Style -> Style
+withTabWidth w s = s {_style_tabWidth = Just w}
+
+withMarginBackground :: Color -> Style -> Style
+withMarginBackground c s = s {_style_marginBackground = Just c}
+
+withInline :: Bool -> Style -> Style
+withInline b s = s {_style_inline = Just b}
+
+withColorWhitespace :: Bool -> Style -> Style
+withColorWhitespace b s = s {_style_colorWhitespace = Just b}
+
+withBorderTopForeground :: Color -> Style -> Style
+withBorderTopForeground c s = s {_style_borderTopForeground = Just c}
+
+withBorderTopBackground :: Color -> Style -> Style
+withBorderTopBackground c s = s {_style_borderTopBackground = Just c}
+
+withBorderBottomForeground :: Color -> Style -> Style
+withBorderBottomForeground c s = s {_style_borderBottomForeground = Just c}
+
+withBorderBottomBackground :: Color -> Style -> Style
+withBorderBottomBackground c s = s {_style_borderBottomBackground = Just c}
+
+withBorderLeftForeground :: Color -> Style -> Style
+withBorderLeftForeground c s = s {_style_borderLeftForeground = Just c}
+
+withBorderLeftBackground :: Color -> Style -> Style
+withBorderLeftBackground c s = s {_style_borderLeftBackground = Just c}
+
+withBorderRightForeground :: Color -> Style -> Style
+withBorderRightForeground c s = s {_style_borderRightForeground = Just c}
+
+withBorderRightBackground :: Color -> Style -> Style
+withBorderRightBackground c s = s {_style_borderRightBackground = Just c}
+
 ----------------------------------------------------------------------------
 -- Rendering
 ----------------------------------------------------------------------------
@@ -628,18 +766,36 @@ mergeAttr base overlay =
 -- minimums and max-width/max-height clipping.
 render :: Style -> Text -> V.Image
 render s content =
-  applyMaxSize $ applySize $ applyMargin $ applyBorder $ applyPadding $ contentImage
+  if fromMaybe False (_style_inline s)
+    then applyMaxSize contentImage
+    else applyMaxSize $ applySize $ applyMargin $ applyBorder $ applyPadding $ contentImage
   where
     ws = fromMaybe ' ' (_style_whitespaceChar s)
     -- Use KeepCurrent for all unset attrs so underlying layers (e.g. the
     -- themed fill) show through where the Style doesn't explicitly set a
     -- color or style.
     baseAttr = applyAttr s transparentAttr
-    -- Layer border-specific colors on top of the content attr so borders
-    -- inherit themed foreground/background unless explicitly overridden.
-    borderAttr = applyAttr (borderStyleAttr s) baseAttr
+    -- Attr for whitespace fills: use transparent when colorWhitespace is False.
+    fillAttr = if fromMaybe True (_style_colorWhitespace s) then baseAttr else transparentAttr
+    -- Per-side border attrs, falling back to the generic border fg/bg,
+    -- layered on top of the content attr.
+    borderAttrTop = applyAttr (borderSideStyle (_style_borderTopForeground s) (_style_borderTopBackground s)) baseAttr
+    borderAttrBottom = applyAttr (borderSideStyle (_style_borderBottomForeground s) (_style_borderBottomBackground s)) baseAttr
+    borderAttrLeft = applyAttr (borderSideStyle (_style_borderLeftForeground s) (_style_borderLeftBackground s)) baseAttr
+    borderAttrRight = applyAttr (borderSideStyle (_style_borderRightForeground s) (_style_borderRightBackground s)) baseAttr
+    borderSideStyle perSideFg perSideBg =
+      def
+        { _style_foreground = perSideFg <|> _style_borderForeground s
+        , _style_background = perSideBg <|> _style_borderBackground s
+        }
     -- Render text with newlines
-    contentImage = V.vertCat $ map (V.text' baseAttr) (T.split (== '\n') content)
+    contentImage = V.vertCat $ map (V.text' baseAttr) (T.split (== '\n') processedContent)
+    processedContent = expandTabs $ case _style_transform s of
+      Just fn -> fn content
+      Nothing -> content
+    expandTabs txt = case _style_tabWidth s of
+      Just w -> T.replace "\t" (T.replicate w " ") txt
+      Nothing -> txt
     -- Whitespace fill of a given width/height using the whitespace char.
     fillImage :: V.Attr -> Int -> Int -> V.Image
     fillImage a w h
@@ -685,20 +841,20 @@ render s content =
           h = fromMaybe (V.imageHeight img) (_style_height s)
           img' =
             if V.imageWidth img < w
-              then placeH baseAttr w img
+              then placeH fillAttr w img
               else img
           img'' =
             if V.imageHeight img' < h
-              then placeV baseAttr h img'
+              then placeV fillAttr h img'
               else img'
       in img''
     -- Padding.
     applyPadding img =
       let p = _style_padding s
-          top = fillImage baseAttr (innerW img) (_padding_top p)
-          bottom = fillImage baseAttr (innerW img) (_padding_bottom p)
-          left = fillImage baseAttr (_padding_left p) (innerH img)
-          right = fillImage baseAttr (_padding_right p) (innerH img)
+          top = fillImage fillAttr (innerW img) (_padding_top p)
+          bottom = fillImage fillAttr (innerW img) (_padding_bottom p)
+          left = fillImage fillAttr (_padding_left p) (innerH img)
+          right = fillImage fillAttr (_padding_right p) (innerH img)
           innerW = V.imageWidth
           innerH = V.imageHeight
       in V.vertCat
@@ -712,17 +868,32 @@ render s content =
         Nothing -> img
         Just b ->
           drawBorder
-            borderAttr
+            borderAttrTop
+            borderAttrBottom
+            borderAttrLeft
+            borderAttrRight
             b
             (_style_borderTop s)
             (_style_borderBottom s)
             (_style_borderLeft s)
             (_style_borderRight s)
             img
-    -- Margin (transparent: uses pad so underlying layers show through).
+    -- Margin. Uses colored fill when _style_marginBackground is set,
+    -- otherwise transparent pad so underlying layers show through.
     applyMargin img =
       let m = _style_margin s
-      in V.pad (_margin_left m) (_margin_top m) (_margin_right m) (_margin_bottom m) img
+      in case _style_marginBackground s of
+           Nothing -> V.pad (_margin_left m) (_margin_top m) (_margin_right m) (_margin_bottom m) img
+           Just _ ->
+             let marginAttr = applyAttr (borderStyleAttr s {_style_border = Nothing, _style_borderForeground = _style_marginBackground s}) baseAttr
+                 w = V.imageWidth img
+                 h = V.imageHeight img
+                 leftPad = fillImage marginAttr (_margin_left m) h
+                 rightPad = fillImage marginAttr (_margin_right m) h
+                 topW = w + _margin_left m + _margin_right m
+                 topPad = fillImage marginAttr topW (_margin_top m)
+                 bottomPad = fillImage marginAttr topW (_margin_bottom m)
+             in V.vertCat [topPad, V.horizCat [leftPad, img, rightPad], bottomPad]
     -- Max-width / max-height clipping.
     applyMaxSize img =
       let clipW = maybe img (\w -> V.crop w (V.imageHeight img) img) (_style_maxWidth s)
@@ -746,6 +917,13 @@ borderStyleAttr s =
 -- corner.
 drawBorder
   :: V.Attr
+  -- ^ top attr
+  -> V.Attr
+  -- ^ bottom attr
+  -> V.Attr
+  -- ^ left attr
+  -> V.Attr
+  -- ^ right attr
   -> BorderStyle
   -> Maybe Bool
   -- ^ top toggle
@@ -757,7 +935,7 @@ drawBorder
   -- ^ right toggle
   -> V.Image
   -> V.Image
-drawBorder attr b mTop mBot mLeft mRight img =
+drawBorder topA bottomA leftA rightA b mTop mBot mLeft mRight img =
   V.vertCat [topRow, middleRow, bottomRow]
   where
     w = V.imageWidth img
@@ -766,30 +944,32 @@ drawBorder attr b mTop mBot mLeft mRight img =
     leftOn = sideOn _border_left mLeft
     rightOn = sideOn _border_right mRight
     sideOn f mt = maybe (isJust (f b)) id mt
-    hFill c n = V.charFill attr c (max 0 n) 1
-    vFill c n = V.charFill attr c 1 (max 0 n)
+    hFillTop c n = V.charFill topA c (max 0 n) 1
+    hFillBottom c n = V.charFill bottomA c (max 0 n) 1
+    vFillLeft c n = V.charFill leftA c 1 (max 0 n)
+    vFillRight c n = V.charFill rightA c 1 (max 0 n)
     topChar = _border_top b >>= \c -> if topOn then Just c else Nothing
     bottomChar = _border_bottom b >>= \c -> if bottomOn then Just c else Nothing
     leftChar = _border_left b >>= \c -> if leftOn then Just c else Nothing
     rightChar = _border_right b >>= \c -> if rightOn then Just c else Nothing
-    topLeftChar = _border_topLeft b >>= \c -> if topOn && leftOn then Just (V.char attr c) else Nothing
-    topRightChar = _border_topRight b >>= \c -> if topOn && rightOn then Just (V.char attr c) else Nothing
-    bottomLeftChar = _border_bottomLeft b >>= \c -> if bottomOn && leftOn then Just (V.char attr c) else Nothing
-    bottomRightChar = _border_bottomRight b >>= \c -> if bottomOn && rightOn then Just (V.char attr c) else Nothing
+    topLeftChar = _border_topLeft b >>= \c -> if topOn && leftOn then Just (V.char topA c) else Nothing
+    topRightChar = _border_topRight b >>= \c -> if topOn && rightOn then Just (V.char topA c) else Nothing
+    bottomLeftChar = _border_bottomLeft b >>= \c -> if bottomOn && leftOn then Just (V.char bottomA c) else Nothing
+    bottomRightChar = _border_bottomRight b >>= \c -> if bottomOn && rightOn then Just (V.char bottomA c) else Nothing
     topRow =
       V.horizCat $
         maybe [] (: []) topLeftChar
-          ++ maybe [] (\c -> [hFill c w]) topChar
+          ++ maybe [] (\c -> [hFillTop c w]) topChar
           ++ maybe [] (: []) topRightChar
     middleRow =
       V.horizCat $
-        maybe [] (\c -> [vFill c (V.imageHeight img)]) leftChar
+        maybe [] (\c -> [vFillLeft c (V.imageHeight img)]) leftChar
           ++ [img]
-          ++ maybe [] (\c -> [vFill c (V.imageHeight img)]) rightChar
+          ++ maybe [] (\c -> [vFillRight c (V.imageHeight img)]) rightChar
     bottomRow =
       V.horizCat $
         maybe [] (: []) bottomLeftChar
-          ++ maybe [] (\c -> [hFill c w]) bottomChar
+          ++ maybe [] (\c -> [hFillBottom c w]) bottomChar
           ++ maybe [] (: []) bottomRightChar
 
 -- | Reactive variant of 'render' for the common widget case.
@@ -804,7 +984,14 @@ measure :: Style -> Text -> (Int, Int)
 measure s content =
   (totalW, totalH)
   where
-    contentLines = T.split (== '\n') content
+    contentLines = T.split (== '\n') processedContent
+    processedContent = case _style_tabWidth s of
+      Just w -> T.replace "\t" (T.replicate w " ") $ case _style_transform s of
+        Just fn -> fn content
+        Nothing -> content
+      Nothing -> case _style_transform s of
+        Just fn -> fn content
+        Nothing -> content
     contentW = maximum (0 : map textWidth contentLines)
     contentH = length contentLines
     p = _style_padding s
@@ -891,3 +1078,39 @@ padImg :: Int -> Int -> V.Image
 padImg w h
   | w <= 0 || h <= 0 = V.emptyImage
   | otherwise = V.charFill V.defAttr ' ' w h
+
+----------------------------------------------------------------------------
+-- Text utilities
+----------------------------------------------------------------------------
+
+-- | Truncate text to fit within a display width, using the given
+-- character as an ellipsis if truncation is needed. Wide characters
+-- are handled correctly via 'textWidth'.
+truncateWith :: Char -> Int -> Text -> Text
+truncateWith ellipsis maxWidth txt
+  | textWidth txt <= maxWidth = txt
+  | maxWidth <= 0 = ""
+  | otherwise = takeToWidth (maxWidth - charWidth ellipsis) txt <> T.singleton ellipsis
+
+-- | Number of lines in the text (counting newlines + 1).
+textHeight :: Text -> Int
+textHeight = length . T.split (== '\n')
+
+-- | Display width and height of the text.
+textSize :: Text -> (Int, Int)
+textSize txt = (maximum (0 : map textWidth (T.split (== '\n') txt)), textHeight txt)
+
+----------------------------------------------------------------------------
+-- Internal helpers for truncateWith
+----------------------------------------------------------------------------
+
+takeToWidth :: Int -> Text -> Text
+takeToWidth targetW txt = go 0 (T.unpack txt)
+  where
+    go _ [] = ""
+    go w (c : cs)
+      | w >= targetW = ""
+      | w + cw > targetW = ""
+      | otherwise = T.singleton c <> go (w + cw) cs
+      where
+        cw = max 1 (charWidth c)

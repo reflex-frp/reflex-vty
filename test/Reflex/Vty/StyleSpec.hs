@@ -2,6 +2,8 @@
 
 module Reflex.Vty.StyleSpec (spec) where
 
+import Data.Maybe (isJust)
+import qualified Data.Text as T
 import qualified Graphics.Vty as V
 import qualified Graphics.Vty.Attributes.Color as V.Color
 import qualified Graphics.Vty.Image as V.Image
@@ -275,6 +277,39 @@ spec = describe "Reflex.Vty.Style" $ do
     it "measures empty content as zero width, one line" $ do
       measure def "" `shouldBe` (0, 1)
 
-isJust :: Maybe a -> Bool
-isJust (Just _) = True
-isJust Nothing = False
+  describe "withTransform" $ do
+    it "applies transform before rendering" $ do
+      let img = render (withTransform T.toUpper def) "hello"
+      V.Image.imageWidth img `shouldBe` 5
+
+    it "renders transformed text" $ do
+      let img = render (withTransform (T.replace "a" "AA") def) "cat"
+      V.Image.imageWidth img `shouldBe` 4
+
+  describe "withTabWidth" $ do
+    it "expands tabs to spaces" $ do
+      let img = render (withTabWidth 4 def) "a\tb"
+      V.Image.imageWidth img `shouldBe` 6
+
+    it "does not expand tabs when not set" $ do
+      let img = render def "a\tb"
+      V.Image.imageWidth img `shouldSatisfy` (< 6)
+
+  describe "withMarginBackground" $ do
+    it "produces correct dimensions with margin background" $ do
+      let s = withMarginBackground red . withMargin 1 1 1 1 $ def
+          (w, h) = measure s "hi"
+      w `shouldBe` 4
+      h `shouldBe` 3
+
+  describe "new border presets" $ do
+    it "innerHalfBorder has all sides" $ do
+      _border_top innerHalfBorder `shouldBe` Just '▀'
+      _border_left innerHalfBorder `shouldBe` Just '▌'
+    it "outerHalfBlockBorder has all sides" $ do
+      _border_top outerHalfBlockBorder `shouldBe` Just '▔'
+      _border_left outerHalfBlockBorder `shouldBe` Just '▏'
+    it "renders innerHalfBorder" $ do
+      let img = render (withBorder innerHalfBorder def) "X"
+      V.Image.imageWidth img `shouldBe` 3
+      V.Image.imageHeight img `shouldBe` 3
