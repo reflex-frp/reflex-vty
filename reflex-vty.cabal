@@ -162,6 +162,7 @@ test-suite reflex-vty-test
     Reflex.Vty.Test.SnapshotSpec
     Reflex.Vty.Test.GoldenSpec
     Reflex.Vty.Widget.BoxSpec
+    Reflex.Vty.Widget.MouseSpec
     Reflex.Vty.Widget.ScrollSpec
   build-depends:
     base,

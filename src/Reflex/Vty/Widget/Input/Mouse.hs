@@ -109,3 +109,17 @@ mouseScroll = do
       [ ScrollDirection_Up <$ up
       , ScrollDirection_Down <$ down
       ]
+
+-- | Track the last known mouse position from any mouse event (down or up).
+-- Note: true hover (motion without a button held) requires terminal mode
+-- 1003, which vty 6.2 does not expose. Position updates only on click/release.
+mousePosition
+  :: (Reflex t, MonadHold t m, HasInput t m)
+  => m (Dynamic t (Int, Int))
+mousePosition = do
+  inp <- input
+  let posEvent = fforMaybe inp $ \case
+        V.EvMouseDown x y _ _ -> Just (x, y)
+        V.EvMouseUp x y _ -> Just (x, y)
+        _ -> Nothing
+  holdDyn (0, 0) posEvent

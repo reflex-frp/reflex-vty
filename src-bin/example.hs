@@ -381,11 +381,13 @@ showcaseDemo = do
   focusGainedE <- gainedFocus
   focusLostE <- lostFocus
   focusedDyn <- holdDyn True $ leftmost [True <$ focusGainedE, False <$ focusLostE]
+  mousePosDyn <- mousePosition
   let headerBeh =
-        (\n p f -> T.pack (curLabel n <> " | " <> show p <> " | Focus: " <> (if f then "●" else "○") <> " | Tab/Esc"))
+        (\n p f (mx, my) -> T.pack (curLabel n <> " | " <> show p <> " | Focus: " <> (if f then "●" else "○") <> " | Mouse: " <> show mx <> "," <> show my <> " | Tab/Esc"))
           <$> current nDyn
           <*> prof
           <*> current focusedDyn
+          <*> current mousePosDyn
   localTheme (const themeBeh) $ do
     fill (pure ' ')
     col $ do
