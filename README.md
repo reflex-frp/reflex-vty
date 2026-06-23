@@ -34,14 +34,19 @@ main = mainWidget $ do
 - **Focus**: tab-cycling focus management across the focusable widgets in a layout (`tabNavigation`).
 - **Text**: word-wrapped text display, rich text with per-span attributes, and single- or multi-line text input backed by a zipper that handles wide characters, tabs, and wrapping.
 - **Inputs**: clickable buttons, hyperlinks, and checkboxes.
-- **Boxes**: single, thick, double, rounded, and ASCII border styles, with optional titles and horizontal rules.
-- **Scrolling**: scrollable containers with programmatic scrolling and an optional auto-scroll-to-bottom mode (handy for logs).
+- **Boxes**: single, thick, double, rounded, ASCII, inner-half, and outer-half border styles, with optional titles and horizontal rules.
+- **Scrolling**: scrollable containers with programmatic scrolling, auto-scroll-to-bottom mode, and a visual scrollbar with four visibility modes (always, thumb-only, while-scrolling, hidden).
 - **Split panes**: fixed horizontal and vertical splits, plus a mouse-draggable splitter you can resize at runtime (`splitVDrag`).
 - **Mouse**: button clicks, drags (with full from/to/button/modifier tracking), and scroll-wheel events.
 - **Keyboard**: individual key and key-combo events, plus input filtering.
-- **Theming**: an ambient attribute context that widgets inherit and can override locally.
+- **Theming**: a `Theme` record with presets (default, dark, charm, dracula, nord, zenburn, gruvbox). Widgets inherit the ambient theme and can override locally.
+- **Declarative styling**: Lip Gloss-inspired `Style` type with foreground/background colors, text transforms (bold/italic/underline/etc.), padding, margin, borders with per-side colors, width/height constraints, alignment, text transforms (`withTransform`), tab expansion, inline mode, whitespace coloring, and 9 border presets. `render` and `measure` produce vty `Image` output.
+- **Color**: `Reflex.Vty.Color` module with `RGB` color type, operations (`darken`, `lighten`, `complementary`, `mix`, `alpha`), and gradients (`Gradient1D`, `Gradient2D`).
+- **Compositing**: `Reflex.Vty.Canvas` module with per-cell transparency for overlays and layered rendering.
+- **Image composition**: `joinHorizontal`/`joinVertical`/`place` utilities for composing rendered images.
+- **Color profiles**: automatic terminal color-capability detection (`TrueColor`/`Ansi256`/`Ansi16`/`Ascii`/`NoTTY`) with downsampling.
 
-Run the bundled demo with `cabal run example` to see many of these in action: a text editor, a to-do list, scrollable text, clickable buttons, and a live CPU-usage display.
+Run the bundled demo with `cabal run example` to see many of these in action: a text editor, a to-do list, scrollable text, clickable buttons, a live CPU-usage display, a scrollbar modes demo, and a full styling showcase.
 
 Feature requests, pull requests, and other feedback are welcome and appreciated (see the [contribution guide](CONTRIBUTING.md)). This library is still experimental, so big changes are possible.
 

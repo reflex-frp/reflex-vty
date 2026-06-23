@@ -2,26 +2,33 @@
 
 ## 0.7.0.0
 
-* *Breaking change*: Add `HasColorProfile` class (with `colorProfile`/`localColorProfile` and a `ColorProfileReader` transformer) to `Reflex.Vty.Widget`.Widgets can call `colorProfile` to make decisions based on terminal capability.
-* *Breaking change*: `CheckboxConfig._checkboxConfig_attributes` removed; `checkbox` reads from `HasTheme`.
-* *Breaking change*: `HasTheme` now has a structured `Theme` record (in `Reflex.Vty.Theme`) instead of `Behavior t V.Attr`. Use `themeAttr` to get the `V.Attr`, or `theme` for the full record.
-* *Breaking change*: `Reflex.Vty.Style.render` border attr now inherits from the content `baseAttr` instead of `transparentAttr`, so borders pick up themed foreground/background unless `withBorderForeground`/`withBorderBackground` is explicitly set.
-* *Breaking change*: `Reflex.Vty.Style` re-exports color constants (`red`/`yellow`/`white`/etc.) from `Reflex.Vty`.
-* *Breaking change*: `TextInputConfig` has a new field, `_textInputConfig_alignment :: TextAlignment`, controlling how entered text is aligned within the input region. `def` uses `TextAlignment_Left`.
-* *Breaking change*: `boxTitle` now takes a `Behavior t TextAlignment` as its first argument, controlling title alignment within the top border. Pass `pure TextAlignment_Center` to preserve the old behavior. `box` and `boxStatic` are unchanged.
-* Add `Reflex.Vty.ColorProfile` module: `ColorProfile` datatype (`TrueColor`/`Ansi256`/`Ansi16`/`Ascii`/`NoTTY`), `detectColorProfile`/`colorProfileFromVty` to read the terminal's capability from vty handle, `convertColor` for downsampling, and `applyProfile` to downsample an entire `V.Attr` (resets colors/style to `Default` for `Ascii`/`NoTTY`).
-* Add `Reflex.Vty.Style.mergeAttr`: overlay one `V.Attr` on another, where `SetTo` fields take precedence and `Default`/`KeepCurrent` fall through.
-* Add `Reflex.Vty.Style`: Lip Gloss-inspired declarative styling.
-* Add `Reflex.Vty.Theme.darkTheme`
-* Add `Reflex.Vty.Theme` presets: `charmTheme`, `draculaTheme`, `nordTheme`, `zenburnTheme`, `gruvboxTheme`.
+* Add `Reflex.Vty.Canvas` module: per-cell compositing with transparency. `Canvas` type (sparse `Map` of cells), `placeCanvas`, `translate`, `stack`, `imageToCanvas`/`canvasToImage` conversions.
 * Add `Reflex.Vty.Color` module: `RGB` color type with `darken`, `lighten`, `complementary`, `mix`, `alpha` operations; `Gradient1D` (n-stop linear interpolation) and `Gradient2D` (bilinear corner interpolation); `toRGB`/`fromRGB` conversions to/from vty `Color`.
-* Add visual scrollbar to `Reflex.Vty.Widget.Scroll.scrollable` with four visibility settings: `ScrollbarAlways` (gutter + thumb), `ScrollbarThumbOnly` (thumb only), `ScrollbarWhileScrolling` (thumb only while actively scrolling), `ScrollbarHidden` (no scrollbar). Default is `ScrollbarThumbOnly`. Controlled via `_scrollableConfig_scrollbarVisibility` on `ScrollableConfig`.
+* Add `Reflex.Vty.ColorProfile` module: `ColorProfile` datatype (`TrueColor`/`Ansi256`/`Ansi16`/`Ascii`/`NoTTY`), `detectColorProfile`/`colorProfileFromVty` to read the terminal's capability from vty handle, `convertColor` for downsampling, and `applyProfile` to downsample an entire `V.Attr` (resets colors/style to `Default` for `Ascii`/`NoTTY`).
+* Add `Reflex.Vty.Style`: Lip Gloss-inspired declarative styling.
+* Add `Reflex.Vty.Style` image composition: `joinHorizontal`, `joinVertical`, `placeHorizontal`, `placeVertical`, `place`.
+* Add `Reflex.Vty.Style` text utilities: `truncateWith` (ellipsis truncation respecting display width), `textHeight`, `textSize`.
+* Add `Reflex.Vty.Style` setters: `withTransform` (text transform), `withTabWidth` (tab expansion), `withMarginBackground` (colored margin), `withInline` (skip margin/padding/border), `withColorWhitespace` (toggle fill coloring), `withBorderTopForeground`/`withBorderBottomBackground`/etc (per-side border colors, 8 setters).
+* Add `Reflex.Vty.Style` border presets: `innerHalfBorder` (▀▄▌▐), `outerHalfBlockBorder` (▔▁▏▕).
+* Add `Reflex.Vty.Style.mergeAttr`: overlay one `V.Attr` on another, where `SetTo` fields take precedence and `Default`/`KeepCurrent` fall through.
+* Add `Reflex.Vty.Theme.darkTheme`.
+* Add `Reflex.Vty.Theme` presets: `charmTheme`, `draculaTheme`, `nordTheme`, `zenburnTheme`, `gruvboxTheme`.
+* Add visual scrollbar to `Reflex.Vty.Widget.Scroll.scrollable` with four visibility modes: `ScrollbarAlways` (gutter + thumb), `ScrollbarThumbOnly` (thumb only), `ScrollbarWhileScrolling` (thumb appears while scrolling, hides via `debounce`), `ScrollbarHidden`. Default is `ScrollbarThumbOnly`. Controlled via `_scrollableConfig_scrollbarVisibility` on `ScrollableConfig`.
+* *Breaking change*: Add `HasColorProfile` class (with `colorProfile`/`localColorProfile` and a `ColorProfileReader` transformer) to `Reflex.Vty.Widget`. Widgets can call `colorProfile` to make decisions based on terminal capability.
 * *Breaking change*: `boxTitle` now takes a `Behavior t TextAlignment` as its first argument, controlling title alignment within the top border. Pass `pure TextAlignment_Center` to preserve the old behavior. `box` and `boxStatic` are unchanged.
+* *Breaking change*: `CheckboxConfig._checkboxConfig_attributes` removed; `checkbox` reads from `HasTheme`.
+* *Breaking change*: `HasDisplayRegion` now has `askViewport` and `localLayoutRegion` methods, separating layout height (inflated inside `scrollable`) from viewport height (real terminal size). Rendering widgets use `viewportWidth`/`viewportHeight`; layout system uses `displayWidth`/`displayHeight`.
+* *Breaking change*: `HasTheme` now has a structured `Theme` record (in `Reflex.Vty.Theme`) instead of `Behavior t V.Attr`. Use `themeAttr` to get the `V.Attr`, or `theme` for the full record.
+* *Breaking change*: `Reflex.Vty.Style` re-exports color constants (`red`/`yellow`/`white`/etc.) from `Reflex.Vty`.
+* *Breaking change*: `Reflex.Vty.Style.render` border attr now inherits from the content `baseAttr` instead of `transparentAttr`, so borders pick up themed foreground/background unless `withBorderForeground`/`withBorderBackground` is explicitly set.
+* *Breaking change*: `ScrollableConfig` has a new field `_scrollableConfig_scrollbarVisibility :: ScrollbarVisibility`.
+* *Breaking change*: `TextInputConfig` has a new field, `_textInputConfig_alignment :: TextAlignment`, controlling how entered text is aligned within the input region. `def` uses `TextAlignment_Left`.
+* *Breaking change*: `scrollable` and `scrollableText` now require `PerformEvent t m`, `TriggerEvent t m`, and `MonadIO (Performable m)` constraints (needed for `ScrollbarWhileScrolling` debounce).
 * Add `Reflex.Vty.Widget.Box.alignText`, a general-purpose text alignment function.
-* Add `Reflex.Vty.Widget.Text.textWithAlignment`, an alignable versrion of `text`. `text` is now a synonym for `textWithAlignment TextAlignment_Left`.
+* Add `Reflex.Vty.Widget.Text.textWithAlignment`, an alignable version of `text`. `text` is now a synonym for `textWithAlignment TextAlignment_Left`.
 * Change `Reflex.Vty.Theme.darkTheme`: specify colors directly (`green` on `black`) instead of using `reverseVideo`.
-* Fix `Reflex.Vty.Style.measure`: uses `textWidth` and splits on newlines for correct multi-line and wide-character dimensions.
-* Fix `Reflex.Vty.Style.render`: now handles multi-line tex via `V.vertCat` per-line rendering.
+* Fix `Reflex.Vty.Style.measure`: uses `textWidth` (wcwidth) and splits on newlines for correct multi-line and wide-character dimensions.
+* Fix `Reflex.Vty.Style.render`: now handles multi-line text via `V.vertCat` per-line rendering.
 * Fix `Reflex.Vty.Widget.Input.link`: now uses `_theme_link` on ambient `themeAttr` instead of `V.defAttr` to preserve themed background.
 * Fix `Reflex.Vty.Widget.Text.richText`: now merges config attrs on `themeAttr` via `mergeAttr`, so `RichTextConfig def` inherits the ambient theme.
 * Fix `textButton` centering: now uses `textWithAlignment TextAlignment_Center`.
