@@ -26,9 +26,9 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
+import Graphics.Text.Width (wcwidth)
 import qualified Graphics.Vty as V
 import Graphics.Vty.Image.Internal (Image (BGFill, Crop, EmptyImage, HorizJoin, HorizText, VertJoin))
-import Graphics.Text.Width (wcwidth)
 
 -- | A 2D grid of cells. Cells not in the 'Map' are transparent
 -- ('Nothing'). The 'Map' is keyed by @(x, y)@ where @(0,0)@ is the
@@ -142,10 +142,10 @@ walkImage img x y acc =
       placeText attr (TL.unpack displayText) x y acc
     HorizJoin partLeft partRight _ _ ->
       let acc' = walkImage partLeft x y acc
-       in walkImage partRight (x + V.imageWidth partLeft) y acc'
+      in walkImage partRight (x + V.imageWidth partLeft) y acc'
     VertJoin partTop partBottom _ _ ->
       let acc' = walkImage partTop x y acc
-       in walkImage partBottom x (y + V.imageHeight partTop) acc'
+      in walkImage partBottom x (y + V.imageHeight partTop) acc'
     BGFill outputWidth outputHeight ->
       foldl'
         (\m (dx, dy) -> Map.insertWith (\_ old -> old) (x + dx, y + dy) (' ', V.defAttr) m)
@@ -161,7 +161,7 @@ walkImage img x y acc =
             , ky >= topSkip
             , ky < topSkip + outputHeight
             ]
-       in foldl' (\m (pos, cell) -> Map.insert pos cell m) acc visible
+      in foldl' (\m (pos, cell) -> Map.insert pos cell m) acc visible
     EmptyImage -> acc
 
 placeText :: V.Attr -> String -> Int -> Int -> CellMap -> CellMap
@@ -171,6 +171,6 @@ placeText attr chars x y =
     go [] _ acc = acc
     go (c : cs) dx acc =
       let w = wcwidth c
-       in if w <= 0
-            then go cs dx acc
-            else go cs (dx + w) (Map.insert (x + dx, y) (c, attr) acc)
+      in if w <= 0
+           then go cs dx acc
+           else go cs (dx + w) (Map.insert (x + dx, y) (c, attr) acc)

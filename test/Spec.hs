@@ -10,8 +10,8 @@ import qualified Reflex.Vty.ColorProfileSpec
 import qualified Reflex.Vty.ColorSpec
 import qualified Reflex.Vty.StyleJoinSpec
 import qualified Reflex.Vty.StyleSpec
-import qualified Reflex.Vty.Test.SnapshotSpec
 import qualified Reflex.Vty.Test.GoldenSpec
+import qualified Reflex.Vty.Test.SnapshotSpec
 import qualified Reflex.Vty.Widget.BoxSpec
 import qualified Reflex.Vty.Widget.ScrollSpec
 
