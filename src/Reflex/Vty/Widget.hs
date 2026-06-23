@@ -23,7 +23,7 @@ import Graphics.Vty (Image)
 import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Class ()
-import Reflex.Host.Class (MonadReflexCreateTrigger)
+import Reflex.Host.Class
 
 import Control.Monad.NodeId
 import Reflex.Vty.ColorProfile
@@ -51,9 +51,11 @@ mainWidgetWithHandle
 mainWidgetWithHandle vty child =
   runVtyAppWithHandle vty $ \dr0 inp -> do
     let profile = colorProfileFromVty vty
-    size <- holdDyn dr0 $ fforMaybe inp $ \case
-      V.EvResize w h -> Just (w, h)
-      _ -> Nothing
+    let resizeRaw = fforMaybe inp $ \case
+          V.EvResize w h -> Just (w, h)
+          _ -> Nothing
+    resizeDebounced <- debounce 0.05 resizeRaw
+    size <- holdDyn dr0 resizeDebounced
     let inp' = fforMaybe inp $ \case
           V.EvResize {} -> Nothing
           x -> Just x
@@ -292,6 +294,23 @@ inputInFocusedRegion = do
           _ -> Just (tracking, Just e)
   dynInputEvTracking <- foldDynMaybeM trackMouse (WaitingForInput, Nothing) $ inp
   return (fmapMaybe snd $ updated dynInputEvTracking)
+
+-- | Fires when the terminal window gains focus (requires focus tracking
+-- mode, which is enabled by default via 'getDefaultVty').
+gainedFocus :: (Monad m, Reflex t, HasInput t m) => m (Event t ())
+gainedFocus = do
+  inp <- input
+  return $ fforMaybe inp $ \case
+    V.EvGainedFocus -> Just ()
+    _ -> Nothing
+
+-- | Fires when the terminal window loses focus.
+lostFocus :: (Monad m, Reflex t, HasInput t m) => m (Event t ())
+lostFocus = do
+  inp <- input
+  return $ fforMaybe inp $ \case
+    V.EvLostFocus -> Just ()
+    _ -> Nothing
 
 -- * Getting and setting the display region
 
