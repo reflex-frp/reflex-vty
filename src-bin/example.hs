@@ -378,10 +378,14 @@ showcaseDemo = do
         (label, _) : _ -> label
         [] -> ""
       themeBeh = curTheme <$> current nDyn
-      headerBeh =
-        (\n p -> T.pack ("Theme: " <> curLabel n <> "  |  Profile: " <> show p <> "  |  Tab cycles  |  Esc back"))
+  focusGainedE <- gainedFocus
+  focusLostE <- lostFocus
+  focusedDyn <- holdDyn True $ leftmost [True <$ focusGainedE, False <$ focusLostE]
+  let headerBeh =
+        (\n p f -> T.pack (curLabel n <> " | " <> show p <> " | Focus: " <> (if f then "●" else "○") <> " | Tab/Esc"))
           <$> current nDyn
           <*> prof
+          <*> current focusedDyn
   localTheme (const themeBeh) $ do
     fill (pure ' ')
     col $ do
