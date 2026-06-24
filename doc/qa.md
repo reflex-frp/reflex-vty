@@ -82,7 +82,7 @@ Once it's done you can test the following:
     * Make sure the checkbox still toggles, the link is underlined, and the text input accepts typing in every theme.
     * Type <kbd>Esc</kbd>.
 
-  * Type <kbd>Ctrl</kbd>+<kbd>C</kbd> to quit.
+  * Type <kbd>Ctrl</kbd>+<kbd>C</kbd> (or send SIGTERM / `kill <pid>`) to quit.
 
   * Make sure that after quitting, the terminal restores the content that was on screen before the app launched (alternate screen mode).
 

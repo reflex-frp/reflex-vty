@@ -54,7 +54,7 @@ mainWidgetWithHandle
      )
   -> IO ()
 mainWidgetWithHandle vty child =
-  runVtyAppWithHandle vty $ \dr0 inp -> do
+  runVtyAppWithHandle vty $ \dr0 inp _sigs -> do
     let profile = colorProfileFromVty vty
     let resizeRaw = fforMaybe inp $ \case
           V.EvResize w h -> Just (w, h)
