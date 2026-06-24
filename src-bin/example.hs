@@ -31,6 +31,8 @@ type VtyExample t m =
   , HasFocusReader t m
   , HasTheme t m
   , HasColorProfile t m
+  , HasCursor t m
+  , HasScreenMode t m
   )
 
 type Manager t m =
@@ -45,6 +47,7 @@ data Example
   | Example_ClickButtonsGetEmojis
   | Example_CPUStat
   | Example_Scrollbar
+  | Example_Cursor
   | Example_Showcase
   deriving (Bounded, Enum, Eq, Ord, Read, Show)
 
@@ -58,32 +61,41 @@ withCtrlC f = do
 
 main :: IO ()
 main = mainWidget def $ withCtrlC $ do
+  enterAlternateScreen
   initManager_ $ do
     tabNavigation
     let gf = grout . fixed
         t = tile (fixed 3)
-        buttons = col $ do
-          gf 3 $ col $ do
-            gf 1 $ text "Select an example."
-            gf 1 $ text "Esc will bring you back here."
-            gf 1 $ text "Ctrl+c to quit."
-          a <- t $ textButtonStatic def "Todo List"
-          b <- t $ textButtonStatic def "Text Editor"
-          c <- t $ textButtonStatic def "Scrollable text display"
-          d <- t $ textButtonStatic def "Clickable buttons"
-          e <- t $ textButtonStatic def "CPU Usage"
-          f <- t $ textButtonStatic def "Scrollbar modes"
-          g <- t $ textButtonStatic def "Showcase"
-          return $
-            leftmost
-              [ Left Example_Todo <$ a
-              , Left Example_TextEditor <$ b
-              , Left Example_ScrollableTextDisplay <$ c
-              , Left Example_ClickButtonsGetEmojis <$ d
-              , Left Example_CPUStat <$ e
-              , Left Example_Scrollbar <$ f
-              , Left Example_Showcase <$ g
-              ]
+        buttons = do
+          (_, ev) <-
+            scrollable def $
+              col $ do
+                gf 3 $ col $ do
+                  gf 1 $ text "Select an example."
+                  gf 1 $ text "Esc will bring you back here."
+                  gf 1 $ text "Ctrl+c to quit."
+                a <- t $ textButtonStatic def "Todo List"
+                b <- t $ textButtonStatic def "Text Editor"
+                c <- t $ textButtonStatic def "Scrollable text display"
+                d <- t $ textButtonStatic def "Clickable buttons"
+                e <- t $ textButtonStatic def "CPU Usage"
+                f <- t $ textButtonStatic def "Scrollbar modes"
+                g <- t $ textButtonStatic def "Cursor"
+                h <- t $ textButtonStatic def "Showcase"
+                pure
+                  ( never
+                  , leftmost
+                      [ Left Example_Todo <$ a
+                      , Left Example_TextEditor <$ b
+                      , Left Example_ScrollableTextDisplay <$ c
+                      , Left Example_ClickButtonsGetEmojis <$ d
+                      , Left Example_CPUStat <$ e
+                      , Left Example_Scrollbar <$ f
+                      , Left Example_Cursor <$ g
+                      , Left Example_Showcase <$ h
+                      ]
+                  )
+          pure ev
     let escapable w = do
           void w
           i <- input
@@ -97,6 +109,7 @@ main = mainWidget def $ withCtrlC $ do
           Left Example_ClickButtonsGetEmojis -> escapable easyExample
           Left Example_CPUStat -> escapable cpuStats
           Left Example_Scrollbar -> escapable scrollbarDemo
+          Left Example_Cursor -> escapable cursorDemo
           Left Example_Showcase -> escapable showcaseDemo
           Right () -> buttons
     return ()
@@ -114,6 +127,58 @@ scrollbarDemo = col $ do
     sbPanel label vis =
       boxTitle (pure TextAlignment_Center) (pure singleBoxStyle) (pure label) $
         scrollableText (def {_scrollableConfig_scrollbarVisibility = vis}) (constDyn sampleText)
+
+-- * Terminal cursor demo
+
+cursorDemo :: (VtyExample t m, Manager t m, MonadHold t m, PostBuild t m) => m ()
+cursorDemo = col $ do
+  grout (fixed 1) $ text "Arrows: move | s: style | v: visibility | f: alt-screen | Esc: back"
+  let styles = [CursorStyleBlock, CursorStyleUnderline, CursorStyleBar]
+  upE <- key V.KUp
+  downE <- key V.KDown
+  leftE <- key V.KLeft
+  rightE <- key V.KRight
+  sE <- key (V.KChar 's')
+  vE <- key (V.KChar 'v')
+  fE <- key (V.KChar 'f')
+  posDyn <- foldDyn move (0, 0) $ leftmost [upE, downE, leftE, rightE]
+  idxDyn <- foldDyn (\_ n -> (n + 1) `mod` length styles) 0 sE
+  visDyn <- foldDyn (\_ b -> not b) True vE
+  altDyn <- foldDyn (\_ b -> not b) True fE
+  tellScreenMode $ (\b -> if b then ScreenAlternate else ScreenNormal) <$> updated altDyn
+  let styleDyn = (styles !!) <$> idxDyn
+      cursorDyn =
+        (\(x, y) s v -> CursorState (if v then CursorVisible else CursorHidden) s (x, y))
+          <$> posDyn
+          <*> styleDyn
+          <*> visDyn
+  setCursor cursorDyn
+  grout flex $
+    text $
+      current $
+        ( \(x, y) s v a ->
+            "Position: "
+              <> T.pack (show x)
+              <> ","
+              <> T.pack (show y)
+              <> " | Style: "
+              <> T.pack (show s)
+              <> " | Visible: "
+              <> (if v then "on" else "off")
+              <> " | Alt-screen: "
+              <> (if a then "on" else "off")
+        )
+          <$> posDyn
+          <*> styleDyn
+          <*> visDyn
+          <*> altDyn
+  where
+    move (k, _) (x, y) = case k of
+      V.KUp -> (x, max 0 (y - 1))
+      V.KDown -> (x, y + 1)
+      V.KLeft -> (max 0 (x - 1), y)
+      V.KRight -> (x + 1, y)
+      _ -> (x, y)
 
 -- * Mouse button and emojis example
 easyExample :: (VtyExample t m, Manager t m, MonadHold t m) => m (Event t ())
@@ -378,10 +443,16 @@ showcaseDemo = do
         (label, _) : _ -> label
         [] -> ""
       themeBeh = curTheme <$> current nDyn
-      headerBeh =
-        (\n p -> T.pack ("Theme: " <> curLabel n <> "  |  Profile: " <> show p <> "  |  Tab cycles  |  Esc back"))
+  focusGainedE <- gainedFocus
+  focusLostE <- lostFocus
+  focusedDyn <- holdDyn True $ leftmost [True <$ focusGainedE, False <$ focusLostE]
+  mousePosDyn <- mousePosition
+  let headerBeh =
+        (\n p f (mx, my) -> T.pack (curLabel n <> " | " <> show p <> " | Focus: " <> (if f then "●" else "○") <> " | Mouse: " <> show mx <> "," <> show my <> " | Tab/Esc"))
           <$> current nDyn
           <*> prof
+          <*> current focusedDyn
+          <*> current mousePosDyn
   localTheme (const themeBeh) $ do
     fill (pure ' ')
     col $ do

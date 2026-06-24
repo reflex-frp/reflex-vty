@@ -48,6 +48,7 @@ library
   build-depends:
     base >= 4.10.0 && < 4.22,
     bimap >= 0.3.3 && < 0.6,
+    bytestring >= 0.12,
     containers >= 0.5.0 && < 0.8,
     mtl >= 2.2.2 && < 2.4,
     transformers >= 0.5.5 && < 0.7,
@@ -64,6 +65,7 @@ library
     ref-tf >= 0.4.0 && < 0.6,
     reflex >= 0.9.2 && < 1,
     time >= 1.8.0 && < 1.15,
+    unix >= 2.7 && < 2.10,
     vty >= 6.0 && < 6.5,
     vty-crossplatform >= 0.1 && < 0.5
   hs-source-dirs: src
@@ -186,6 +188,8 @@ test-suite reflex-vty-test
     Reflex.Vty.Test.SnapshotSpec
     Reflex.Vty.Test.GoldenSpec
     Reflex.Vty.Widget.BoxSpec
+    Reflex.Vty.Widget.CursorSpec
+    Reflex.Vty.Widget.MouseSpec
     Reflex.Vty.Widget.ScrollSpec
   build-depends:
     base,

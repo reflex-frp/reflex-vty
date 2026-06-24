@@ -86,7 +86,7 @@ spec = describe "Reflex.Vty.Host" $ do
 -- channel, so the only way the host reaches shutdown promptly is by draining
 -- the whole channel each frame.
 guest :: VtyApp t m
-guest _region _input = do
+guest _region _input _sigs = do
   setupE <- getPostBuild
   (tickE, fireTick) <- newTriggerEvent
   (shutdownE, fireShutdown) <- newTriggerEvent
@@ -108,7 +108,7 @@ guest _region _input = do
 -- | Like 'guest' but increments an 'IORef' on every tick occurrence, so the
 -- test can assert that no occurrences were dropped under backpressure.
 countingGuest :: IORef Int -> (forall t m. VtyApp t m)
-countingGuest counter _region _input = do
+countingGuest counter _region _input _sigs = do
   setupE <- getPostBuild
   (tickE, fireTick) <- newTriggerEvent
   (shutdownE, fireShutdown) <- newTriggerEvent

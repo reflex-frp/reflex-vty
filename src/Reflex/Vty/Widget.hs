@@ -10,20 +10,23 @@ module Reflex.Vty.Widget where
 
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.Fix (MonadFix)
-import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Morph (MFunctor (..))
 import Control.Monad.Reader (ReaderT (..), ask, local, runReaderT)
 import Control.Monad.Ref
 import Control.Monad.Trans (MonadTrans, lift)
 import Control.Monad.Trans.State.Strict
+import qualified Data.ByteString as BS
+import Data.Default (Default (..))
 import Data.Kind (Type)
+import Data.Semigroup (Last (..))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Graphics.Vty (Image)
 import qualified Graphics.Vty as V
 import Reflex
 import Reflex.Class ()
-import Reflex.Host.Class (MonadReflexCreateTrigger)
+import Reflex.Host.Class
 
 import Control.Monad.NodeId
 import Reflex.Vty.ColorProfile
@@ -37,40 +40,57 @@ mainWidgetWithHandle
   :: VtyAppConfig
   -> V.Vty
   -> ( forall t m
-         . ( MonadVtyApp t m
-           , HasImageWriter t m
-           , MonadNodeId m
-           , HasDisplayRegion t m
-           , HasFocusReader t m
-           , HasInput t m
-           , HasTheme t m
-           , HasColorProfile t m
-           )
-        => m (Event t ())
-      )
+        . ( MonadVtyApp t m
+          , HasImageWriter t m
+          , MonadNodeId m
+          , HasDisplayRegion t m
+          , HasFocusReader t m
+          , HasInput t m
+          , HasTheme t m
+          , HasColorProfile t m
+          , HasCursor t m
+          , HasScreenMode t m
+          )
+       => m (Event t ())
+     )
   -> IO ()
 mainWidgetWithHandle cfg vty child =
-  runVtyAppWithHandle cfg vty $ \dr0 inp -> do
+  runVtyAppWithHandle cfg vty $ \dr0 inp _sigs -> do
     let profile = colorProfileFromVty vty
-    size <- holdDyn dr0 $ fforMaybe inp $ \case
-      V.EvResize w h -> Just (w, h)
-      _ -> Nothing
+    let resizeRaw = fforMaybe inp $ \case
+          V.EvResize w h -> Just (w, h)
+          _ -> Nothing
+    resizeDebounced <- debounce 0.05 resizeRaw
+    size <- holdDyn dr0 resizeDebounced
     let inp' = fforMaybe inp $ \case
           V.EvResize {} -> Nothing
           x -> Just x
-    (shutdown, images) <- runThemeReader (constant defTheme) $
+    (((shutdown, images), cursorUpdates), screenModeUpdates) <- runThemeReader (constant defTheme) $
       runColorProfileReader (constant profile) $
         runFocusReader (pure True) $
           runDisplayRegion (fmap (\(w, h) -> Region 0 0 w h) size) $
-            runImageWriter $
-              runNodeIdT $
-                runInput inp' $ do
-                  tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
-                  child
+            runScreenModeWriter $
+              runCursorWriter $
+                runImageWriter $
+                  runNodeIdT $
+                    runInput inp' $ do
+                      tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
+                      child
+    let cursorStates = getLast <$> cursorUpdates
+    cursorState <- holdDyn defaultCursorState cursorStates
+    performEvent_ $ ffor cursorStates $ \st ->
+      liftIO $ setCursorStyle (V.outputIface vty) (_cursorState_style st)
+    performEvent_ $ ffor (getLast <$> screenModeUpdates) $ \mode ->
+      liftIO $ setScreenMode (V.outputIface vty) mode
     return $
       VtyResult
-        { _vtyResult_picture = fmap (V.picForLayers . reverse) images
+        { _vtyResult_picture = makePicture <$> current cursorState <*> images
         , _vtyResult_shutdown = shutdown
+        }
+  where
+    makePicture cursorState layers =
+      (V.picForLayers $ reverse layers)
+        { V.picCursor = cursorStateToVtyCursor cursorState
         }
 
 -- | The output of a vty widget
@@ -90,6 +110,8 @@ mainWidget
            , HasTheme t m
            , HasColorProfile t m
            , HasInput t m
+           , HasCursor t m
+           , HasScreenMode t m
            )
         => m (Event t ())
       )
@@ -295,6 +317,32 @@ inputInFocusedRegion = do
   dynInputEvTracking <- foldDynMaybeM trackMouse (WaitingForInput, Nothing) $ inp
   return (fmapMaybe snd $ updated dynInputEvTracking)
 
+-- | Fires when the terminal window gains focus (requires focus tracking
+-- mode, which is enabled by default via 'getDefaultVty').
+gainedFocus :: (Monad m, Reflex t, HasInput t m) => m (Event t ())
+gainedFocus = do
+  inp <- input
+  return $ fforMaybe inp $ \case
+    V.EvGainedFocus -> Just ()
+    _ -> Nothing
+
+-- | Fires when the terminal window loses focus.
+lostFocus :: (Monad m, Reflex t, HasInput t m) => m (Event t ())
+lostFocus = do
+  inp <- input
+  return $ fforMaybe inp $ \case
+    V.EvLostFocus -> Just ()
+    _ -> Nothing
+
+-- | Fires when text is pasted (bracketed paste mode). Carries the pasted
+-- bytes. Enable bracketed paste via 'getDefaultVty' (on by default).
+paste :: (Monad m, Reflex t, HasInput t m) => m (Event t BS.ByteString)
+paste = do
+  inp <- input
+  return $ fforMaybe inp $ \case
+    V.EvPaste bs -> Just bs
+    _ -> Nothing
+
 -- * Getting and setting the display region
 
 -- | A chunk of the display area
@@ -329,6 +377,227 @@ withinRegion (Region l t w h) x y =
     , x >= l + w
     , y >= t + h
     ]
+
+-- * Terminal cursor state
+
+-- | Complete terminal cursor state.
+--
+-- Coordinates are interpreted relative to the current viewport by 'setCursor'.
+-- Use 'tellCursor' only when supplying absolute terminal coordinates.
+data CursorState = CursorState
+  { _cursorState_visibility :: CursorVisibility
+  -- ^ Whether the cursor should be visible.
+  , _cursorState_style :: CursorStyle
+  -- ^ Shape to request from the terminal.
+  , _cursorState_position :: (Int, Int)
+  -- ^ Cursor position as @(x, y)@.
+  }
+  deriving (Eq, Ord, Show)
+
+-- | The default cursor state: hidden, terminal-default shape, at @(0, 0)@.
+defaultCursorState :: CursorState
+defaultCursorState = CursorState CursorHidden CursorStyleDefault (0, 0)
+
+instance Default CursorState where
+  def = defaultCursorState
+
+-- | A class for widgets that can request terminal cursor updates.
+class (Reflex t, Monad m) => HasCursor t m | m -> t where
+  -- | Request an absolute terminal cursor state update.
+  tellCursor :: Event t CursorState -> m ()
+  default tellCursor :: (f m' ~ m, MonadTrans f, HasCursor t m') => Event t CursorState -> m ()
+  tellCursor = lift . tellCursor
+
+-- | Keep the terminal cursor synchronized with a dynamic state.
+--
+-- The cursor position is relative to the current viewport. If a visible cursor
+-- is outside the viewport, it is hidden until it comes back into bounds.
+setCursor
+  :: (HasCursor t m, HasDisplayRegion t m, PostBuild t m)
+  => Dynamic t CursorState
+  -> m ()
+setCursor cursorState = do
+  viewport <- askViewport
+  postBuild <- getPostBuild
+  let absoluteCursorState = zipDynWith translateCursorState viewport cursorState
+  tellCursor $ leftmost [tag (current absoluteCursorState) postBuild, updated absoluteCursorState]
+
+-- | Translate a viewport-relative cursor state to an absolute terminal cursor
+-- state, hiding visible cursors that are outside the viewport.
+translateCursorState :: Region -> CursorState -> CursorState
+translateCursorState (Region left top width height) (CursorState visibility style (x, y)) =
+  let absolute = CursorState visibility style (left + x, top + y)
+  in case visibility of
+       CursorHidden -> absolute
+       CursorVisible
+         | withinRegion (Region 0 0 width height) x y -> absolute
+         | otherwise -> absolute {_cursorState_visibility = CursorHidden}
+
+-- | Convert reflex-vty cursor state to vty's picture cursor.
+cursorStateToVtyCursor :: CursorState -> V.Cursor
+cursorStateToVtyCursor (CursorState CursorHidden _ _) = V.NoCursor
+cursorStateToVtyCursor (CursorState CursorVisible _ (x, y)) = V.Cursor x y
+
+instance HasCursor t m => HasCursor t (ReaderT x m)
+instance HasCursor t m => HasCursor t (BehaviorWriterT t x m)
+instance HasCursor t m => HasCursor t (DynamicWriterT t x m)
+instance HasCursor t m => HasCursor t (EventWriterT t x m)
+instance HasCursor t m => HasCursor t (NodeIdT m)
+instance HasCursor t m => HasCursor t (Input t m)
+instance HasCursor t m => HasCursor t (ImageWriter t m)
+instance HasCursor t m => HasCursor t (DisplayRegion t m)
+instance HasCursor t m => HasCursor t (FocusReader t m)
+instance HasCursor t m => HasCursor t (ThemeReader t m)
+instance HasCursor t m => HasCursor t (ColorProfileReader t m)
+
+-- | A widget transformer that collects cursor updates from child widgets.
+newtype CursorWriter t m a = CursorWriter
+  {unCursorWriter :: EventWriterT t (Last CursorState) m a}
+  deriving
+    ( Applicative
+    , Functor
+    , Monad
+    , MonadCatch
+    , MonadFix
+    , MonadHold t
+    , MonadIO
+    , MonadMask
+    , MonadRef
+    , MonadSample t
+    , MonadThrow
+    )
+
+instance MonadTrans (CursorWriter t) where
+  lift = CursorWriter . lift
+
+instance MFunctor (CursorWriter t) where
+  hoist f = CursorWriter . hoist f . unCursorWriter
+
+instance (Adjustable t m, MonadHold t m, Reflex t) => Adjustable t (CursorWriter t m) where
+  runWithReplace (CursorWriter a) e = CursorWriter $ runWithReplace a $ fmap unCursorWriter e
+  traverseIntMapWithKeyWithAdjust f m e = CursorWriter $ traverseIntMapWithKeyWithAdjust (\k v -> unCursorWriter $ f k v) m e
+  traverseDMapWithKeyWithAdjust f m e = CursorWriter $ traverseDMapWithKeyWithAdjust (\k v -> unCursorWriter $ f k v) m e
+  traverseDMapWithKeyWithAdjustWithMove f m e = CursorWriter $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unCursorWriter $ f k v) m e
+
+deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (CursorWriter t m)
+deriving instance NotReady t m => NotReady t (CursorWriter t m)
+deriving instance PerformEvent t m => PerformEvent t (CursorWriter t m)
+deriving instance PostBuild t m => PostBuild t (CursorWriter t m)
+deriving instance TriggerEvent t m => TriggerEvent t (CursorWriter t m)
+
+instance (Monad m, Reflex t) => HasCursor t (CursorWriter t m) where
+  tellCursor = CursorWriter . tellEvent . fmap Last
+
+instance HasImageWriter t m => HasImageWriter t (CursorWriter t m) where
+  captureImages (CursorWriter x) = CursorWriter $ do
+    ((a, cursorUpdates), images) <- lift $ captureImages $ runEventWriterT x
+    tellEvent cursorUpdates
+    pure (a, images)
+
+instance HasDisplayRegion t m => HasDisplayRegion t (CursorWriter t m)
+instance HasFocusReader t m => HasFocusReader t (CursorWriter t m)
+instance HasTheme t m => HasTheme t (CursorWriter t m)
+instance HasColorProfile t m => HasColorProfile t (CursorWriter t m)
+instance MonadNodeId m => MonadNodeId (CursorWriter t m)
+
+-- | Run a widget that can request terminal cursor updates.
+runCursorWriter
+  :: (Reflex t, Monad m)
+  => CursorWriter t m a
+  -> m (a, Event t (Last CursorState))
+runCursorWriter = runEventWriterT . unCursorWriter
+
+-- * Screen mode (alt-screen)
+
+-- | A class for widgets that can request terminal screen mode changes.
+class (Reflex t, Monad m) => HasScreenMode t m | m -> t where
+  -- | Request a screen mode change.
+  tellScreenMode :: Event t ScreenMode -> m ()
+  default tellScreenMode :: (f m' ~ m, MonadTrans f, HasScreenMode t m') => Event t ScreenMode -> m ()
+  tellScreenMode = lift . tellScreenMode
+
+instance HasScreenMode t m => HasScreenMode t (ReaderT x m)
+instance HasScreenMode t m => HasScreenMode t (BehaviorWriterT t x m)
+instance HasScreenMode t m => HasScreenMode t (DynamicWriterT t x m)
+instance HasScreenMode t m => HasScreenMode t (EventWriterT t x m)
+instance HasScreenMode t m => HasScreenMode t (NodeIdT m)
+instance HasScreenMode t m => HasScreenMode t (Input t m)
+instance HasScreenMode t m => HasScreenMode t (ImageWriter t m)
+instance HasScreenMode t m => HasScreenMode t (DisplayRegion t m)
+instance HasScreenMode t m => HasScreenMode t (FocusReader t m)
+instance HasScreenMode t m => HasScreenMode t (ThemeReader t m)
+instance HasScreenMode t m => HasScreenMode t (ColorProfileReader t m)
+instance HasScreenMode t m => HasScreenMode t (CursorWriter t m)
+
+-- | Enter alternate screen mode immediately (on post-build).
+enterAlternateScreen :: (HasScreenMode t m, PostBuild t m) => m ()
+enterAlternateScreen = do
+  pb <- getPostBuild
+  tellScreenMode $ ScreenAlternate <$ pb
+
+-- | Return to normal screen mode immediately (on post-build).
+exitAlternateScreen :: (HasScreenMode t m, PostBuild t m) => m ()
+exitAlternateScreen = do
+  pb <- getPostBuild
+  tellScreenMode $ ScreenNormal <$ pb
+
+-- | A widget transformer that collects screen mode requests from child widgets.
+newtype ScreenModeWriter t m a = ScreenModeWriter
+  {unScreenModeWriter :: EventWriterT t (Last ScreenMode) m a}
+  deriving
+    ( Applicative
+    , Functor
+    , Monad
+    , MonadCatch
+    , MonadFix
+    , MonadHold t
+    , MonadIO
+    , MonadMask
+    , MonadRef
+    , MonadSample t
+    , MonadThrow
+    )
+
+instance MonadTrans (ScreenModeWriter t) where
+  lift = ScreenModeWriter . lift
+
+instance MFunctor (ScreenModeWriter t) where
+  hoist f = ScreenModeWriter . hoist f . unScreenModeWriter
+
+instance (Adjustable t m, MonadHold t m, Reflex t) => Adjustable t (ScreenModeWriter t m) where
+  runWithReplace (ScreenModeWriter a) e = ScreenModeWriter $ runWithReplace a $ fmap unScreenModeWriter e
+  traverseIntMapWithKeyWithAdjust f m e = ScreenModeWriter $ traverseIntMapWithKeyWithAdjust (\k v -> unScreenModeWriter $ f k v) m e
+  traverseDMapWithKeyWithAdjust f m e = ScreenModeWriter $ traverseDMapWithKeyWithAdjust (\k v -> unScreenModeWriter $ f k v) m e
+  traverseDMapWithKeyWithAdjustWithMove f m e = ScreenModeWriter $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unScreenModeWriter $ f k v) m e
+
+deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (ScreenModeWriter t m)
+deriving instance NotReady t m => NotReady t (ScreenModeWriter t m)
+deriving instance PerformEvent t m => PerformEvent t (ScreenModeWriter t m)
+deriving instance PostBuild t m => PostBuild t (ScreenModeWriter t m)
+deriving instance TriggerEvent t m => TriggerEvent t (ScreenModeWriter t m)
+
+instance (Monad m, Reflex t) => HasScreenMode t (ScreenModeWriter t m) where
+  tellScreenMode = ScreenModeWriter . tellEvent . fmap Last
+
+instance HasImageWriter t m => HasImageWriter t (ScreenModeWriter t m) where
+  captureImages (ScreenModeWriter x) = ScreenModeWriter $ do
+    ((a, modeUpdates), images) <- lift $ captureImages $ runEventWriterT x
+    tellEvent modeUpdates
+    pure (a, images)
+
+instance HasDisplayRegion t m => HasDisplayRegion t (ScreenModeWriter t m)
+instance HasFocusReader t m => HasFocusReader t (ScreenModeWriter t m)
+instance HasTheme t m => HasTheme t (ScreenModeWriter t m)
+instance HasColorProfile t m => HasColorProfile t (ScreenModeWriter t m)
+instance HasCursor t m => HasCursor t (ScreenModeWriter t m)
+instance MonadNodeId m => MonadNodeId (ScreenModeWriter t m)
+
+-- | Run a widget that can request screen mode changes.
+runScreenModeWriter
+  :: (Reflex t, Monad m)
+  => ScreenModeWriter t m a
+  -> m (a, Event t (Last ScreenMode))
+runScreenModeWriter = runEventWriterT . unScreenModeWriter
 
 -- | Produces an 'Image' that fills a region with space characters
 regionBlankImage :: V.Attr -> Region -> Image

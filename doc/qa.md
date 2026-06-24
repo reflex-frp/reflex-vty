@@ -58,6 +58,13 @@ Once it's done you can test the following:
     * Make sure that resizing your terminal window causes the panels to resize as well.
     * Type <kbd>Esc</kbd>.
 
+  * Click on `Cursor`.
+    * Make sure a real terminal cursor (not the reverse-video fake) appears at position 0,0 inside the panel.
+    * Make sure the arrow keys move the terminal cursor around; it should track the displayed position.
+    * Make sure pressing <kbd>s</kbd> cycles the cursor shape through `CursorStyleBlock`, `CursorStyleUnderline`, and `CursorStyleBar` (your terminal must support DECSCUSR).
+    * Make sure pressing <kbd>v</kbd> toggles cursor visibility on and off.
+    * Type <kbd>Esc</kbd>.
+
   * Click on `Styles`.
     * Make sure you see a grid of labeled boxes demonstrating every border style preset (single, rounded, thick, double, ascii), padding and margin, foreground/background colors (including an RGB true-color swatch), color operations (darken, lighten, mix, complementary), a 1D gradient swatch (red→green→blue), text transforms (bold, italic, underline, reverse), horizontal alignment within a fixed-width box (left/center/right), a combined rounded-border + padded + colored box, and a hyperlink (underline + OSC 8 clickable in supporting terminals).
     * Make sure the gradient swatch fills the width of its row and smoothly transitions from red through green to blue.
@@ -75,6 +82,8 @@ Once it's done you can test the following:
     * Make sure the checkbox still toggles, the link is underlined, and the text input accepts typing in every theme.
     * Type <kbd>Esc</kbd>.
 
-  * Type <kbd>Ctrl</kbd>+<kbd>C</kbd> to quit.
+  * Type <kbd>Ctrl</kbd>+<kbd>C</kbd> (or send SIGTERM / `kill <pid>`) to quit.
 
-There should be 9 examples to cover. If there are more or less than this then this QA guide is out of date and QA should fail.
+  * Make sure that after quitting, the terminal restores the content that was on screen before the app launched (alternate screen mode).
+
+There should be 10 examples to cover. If there are more or less than this then this QA guide is out of date and QA should fail.

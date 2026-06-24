@@ -36,6 +36,14 @@
 * Fix `textInput` cursor: uses `_theme_textInputCursor` instead of hardcoded `reverseVideo`.
 * Fix space leak in `Reflex.Vty.Host.runVtyAppWithHandle`: an application that fired external triggers (e.g. a hot `performEventAsync` callback) faster than the host could process would grow the host's event channel without limit. The host now backpressures producers via a bounded, closeable event queue, and drains every available batch each frame (firing each in its own Reflex frame, redrawing once), so memory is bounded and no event occurrences are dropped. The bounded capacity is configurable via the new `VtyAppConfig` (see the breaking-change entry above; default 4096).
 * Behavior change: external event triggers (`performEventAsync`, `newTriggerEvent`, etc.) may now block when the host's event queue is full, throttling a producer that fires faster than the host can process to the host's own rate. This is the intended flow-control; shutdown closes the queue so any blocked producer is released.
+* Debounce terminal resize events (50ms) to reduce lag and flicker during window drag.
+* Enable terminal focus tracking mode by default. Add `gainedFocus` and `lostFocus` helpers to `Reflex.Vty.Widget`.
+* Enable bracketed paste by default. Add `paste` helper to `Reflex.Vty.Widget`. `textInput` now handles paste events.
+* Add `mousePosition` helper to `Reflex.Vty.Widget.Input.Mouse` — tracks last known mouse coordinates from click/release events. True hover (motion without button) deferred — requires terminal mode 1003 which vty does not expose.
+* Add terminal cursor control: `CursorStyle`, `CursorVisibility`, `CursorState`, and the `HasCursor` capability with `setCursor`/`tellCursor` helpers.
+* Add alternate screen support: `ScreenMode`, `setScreenMode`, and the `HasScreenMode` capability with `tellScreenMode`/`enterAlternateScreen`/`exitAlternateScreen` helpers. The host restores normal screen on shutdown.
+* *Breaking change*: `VtyApp` now takes a third argument, `Event t Signal`, exposing POSIX signals (SIGINT, SIGTERM, SIGHUP). SIGINT and SIGTERM automatically trigger clean shutdown, replacing the old Ctrl-C key detection.
+* Install POSIX signal handlers (SIGINT, SIGTERM, SIGHUP) in `runVtyAppWithHandle`. Add `unix` dependency.
 
 ## 0.6.2.1
 

@@ -6,6 +6,12 @@ module Reflex.Vty.Host
   , VtyResult (..)
   , VtyAppConfig (..)
   , defaultVtyAppConfig
+  , CursorStyle (..)
+  , CursorVisibility (..)
+  , setCursorStyle
+  , ScreenMode (..)
+  , setScreenMode
+  , Signal
   , getDefaultVty
   , runVtyApp
   , runVtyAppWithHandle
@@ -38,6 +44,14 @@ import Reflex.Vty.Host.Trigger
   , newBoundedEventQueue
   , runBoundedTriggerT
   , writeBoundedEventQueue
+  )
+import System.Posix.Signals
+  ( Handler (..)
+  , Signal
+  , installHandler
+  , sigHUP
+  , sigINT
+  , sigTERM
   )
 
 -- | A synonym for the underlying vty event type from 'Graphics.Vty'. This should
@@ -86,6 +100,9 @@ type VtyApp t m =
   -- ^ The initial display size (updates to this come as events)
   -> Event t V.Event
   -- ^ Vty input events.
+  -> Event t Signal
+  -- ^ POSIX signal events (SIGINT, SIGTERM, SIGHUP). All three automatically
+  -- trigger shutdown; apps can observe them for custom handling before exit.
   -> m (VtyResult t)
   -- ^ The output of the 'VtyApp'. The application runs in a context that,
   --   among other things, allows new events to be created and triggered
@@ -141,6 +158,9 @@ runVtyAppWithHandle cfg vty vtyGuest = flip onException (V.shutdown vty) $
     -- once, when the application starts.
     (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
 
+    -- Create an 'Event' for POSIX signals.
+    (signalEvent, signalTriggerRef) <- newEventWithTriggerRef
+
     -- A bounded, closeable queue into which external triggers write their
     -- pending invocations. Boundedness gives us backpressure (a producer that
     -- fires faster than the host can process has its @fire@ block when the
@@ -169,10 +189,11 @@ runVtyAppWithHandle cfg vty vtyGuest = flip onException (V.shutdown vty) $
           -- through the bounded queue above so
           -- that hot producers backpressure
           -- instead of leaking.
-            vtyGuest displayRegion0 vtyEvent
+            vtyGuest displayRegion0 vtyEvent signalEvent
     -- The guest app is provided the
-    -- initial display region and an
-    -- 'Event' of vty inputs.
+    -- initial display region, an
+    -- 'Event' of vty inputs, and an
+    -- 'Event' of POSIX signals.
 
     -- Reads the current value of the 'Picture' behavior and updates the
     -- display with it. This will be called whenever we determine that a
@@ -195,8 +216,10 @@ runVtyAppWithHandle cfg vty vtyGuest = flip onException (V.shutdown vty) $
 
     -- Subscribe to an 'Event' of that the guest application can use to
     -- request application shutdown. We'll check whether this 'Event' is firing
-    -- to determine whether to terminate.
-    shutdown <- subscribeEvent $ _vtyResult_shutdown vtyResult
+    -- to determine whether to terminate. SIGINT, SIGTERM, and SIGHUP from the
+    -- host also trigger shutdown.
+    let sigShutdown = () <$ ffilter (\s -> s == sigINT || s == sigTERM || s == sigHUP) signalEvent
+    shutdown <- subscribeEvent $ leftmost [_vtyResult_shutdown vtyResult, sigShutdown]
 
     -- Fork a thread and continuously get the next vty input event, and then
     -- write the input event to our channel of FRP 'Event' triggers.
@@ -216,6 +239,12 @@ runVtyAppWithHandle cfg vty vtyGuest = flip onException (V.shutdown vty) $
       -- triggers, this is subject to backpressure if the queue is full; in
       -- practice input never saturates it.)
       atomically $ writeBoundedEventQueue pending [triggerRef :=> triggerInvocation]
+
+    -- Install POSIX signal handlers. Each handler writes the signal value
+    -- into the bounded FRP event queue. The RTS runs 'Catch' actions in a
+    -- separate thread, so the STM write is safe here.
+    liftIO $ forM_ [sigINT, sigTERM, sigHUP] $ \sig ->
+      installHandler sig (Catch $ atomically $ writeBoundedEventQueue pending [EventTriggerRef signalTriggerRef :=> TriggerInvocation sig (return ())]) Nothing
 
     -- The main application loop. We block until at least one batch of events
     -- is available, then drain every other batch that has accumulated in the
@@ -253,9 +282,10 @@ runVtyAppWithHandle cfg vty vtyGuest = flip onException (V.shutdown vty) $
             then liftIO $ do
               -- If we received a shutdown 'Event', close the queue first so
               -- any producer blocked on a full queue is released, then stop
-              -- reading input and shut vty down.
+              -- reading input, restore the primary screen, and shut vty down.
               closeBoundedEventQueue pending
               killThread nextEventThread
+              setScreenMode (V.outputIface vty) ScreenNormal
               V.shutdown vty
             else do
               -- Otherwise, update the display and loop.
@@ -288,10 +318,73 @@ runVtyApp cfg app = do
   vty <- getDefaultVty
   runVtyAppWithHandle cfg vty app
 
--- | Returns the standard vty configuration with mouse mode enabled.
+-- | Terminal cursor shape. Not all terminals support all styles; the
+-- fallback is always a block cursor. Set via DECSCUSR escape sequences
+-- (not part of vty 6.2's API).
+data CursorStyle
+  = -- | Restore the terminal's default cursor shape.
+    CursorStyleDefault
+  | -- | Steady block cursor.
+    CursorStyleBlock
+  | -- | Steady underline cursor.
+    CursorStyleUnderline
+  | -- | Steady vertical bar cursor (xterm extension).
+    CursorStyleBar
+  | CursorStyleBlinkingBlock
+  | CursorStyleSteadyBlock
+  | CursorStyleBlinkingUnderline
+  | CursorStyleSteadyUnderline
+  | -- | Blinking vertical bar (xterm extension).
+    CursorStyleBlinkingBar
+  | -- | Steady vertical bar (xterm extension).
+    CursorStyleSteadyBar
+  deriving (Bounded, Enum, Eq, Ord, Show)
+
+-- | Whether the terminal cursor should be rendered.
+data CursorVisibility
+  = CursorVisible
+  | CursorHidden
+  deriving (Bounded, Enum, Eq, Ord, Show)
+
+-- | Set the terminal cursor shape by emitting DECSCUSR escape sequences
+-- directly to the output byte buffer.
+setCursorStyle :: V.Output -> CursorStyle -> IO ()
+setCursorStyle out style =
+  V.outputByteBuffer out (toSeq style)
+  where
+    toSeq CursorStyleDefault = "\ESC[0 q"
+    toSeq CursorStyleBlock = "\ESC[2 q"
+    toSeq CursorStyleUnderline = "\ESC[4 q"
+    toSeq CursorStyleBar = "\ESC[6 q"
+    toSeq CursorStyleBlinkingBlock = "\ESC[1 q"
+    toSeq CursorStyleSteadyBlock = "\ESC[2 q"
+    toSeq CursorStyleBlinkingUnderline = "\ESC[3 q"
+    toSeq CursorStyleSteadyUnderline = "\ESC[4 q"
+    toSeq CursorStyleBlinkingBar = "\ESC[5 q"
+    toSeq CursorStyleSteadyBar = "\ESC[6 q"
+
+-- | Which screen buffer to use. Most full-screen TUI apps use the
+-- alternate screen so the terminal restores prior content on exit.
+data ScreenMode
+  = ScreenNormal
+  | ScreenAlternate
+  deriving (Bounded, Enum, Eq, Ord, Show)
+
+-- | Enter or exit the alternate screen buffer by emitting DECSET/DECRST
+-- escape sequences (1049) directly to the output byte buffer.
+setScreenMode :: V.Output -> ScreenMode -> IO ()
+setScreenMode out = \case
+  ScreenNormal -> V.outputByteBuffer out "\ESC[?1049l"
+  ScreenAlternate -> V.outputByteBuffer out "\ESC[?1049h"
+
+-- | Returns the standard vty configuration with mouse, focus tracking,
+-- and bracketed paste enabled.
 getDefaultVty :: IO V.Vty
 getDefaultVty = do
   cfg <- V.userConfig
   vty <- V.mkVty cfg
-  liftIO $ V.setMode (V.outputIface vty) V.Mouse True
+  liftIO $ do
+    V.setMode (V.outputIface vty) V.Mouse True
+    V.setMode (V.outputIface vty) V.Focus True
+    V.setMode (V.outputIface vty) V.BracketedPaste True
   return vty

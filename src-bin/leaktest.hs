@@ -27,7 +27,7 @@ import Data.Text.Zipper (TextAlignment (..))
 
 main :: IO ()
 main = do
-  void $ Async.async (threadDelay 60000000 >> exitSuccess)
+  void $ Async.async (threadDelay 2000000 >> exitSuccess)
   mainWidget def $ initManager_ $ do
     setupE <- getPostBuild
     inp <- input
@@ -42,5 +42,3 @@ main = do
     pure $ fforMaybe inp $ \case
       V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
       _ -> Nothing
-
-
