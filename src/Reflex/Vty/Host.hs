@@ -4,6 +4,8 @@
 module Reflex.Vty.Host
   ( VtyApp
   , VtyResult (..)
+  , VtyAppConfig (..)
+  , defaultVtyAppConfig
   , CursorStyle (..)
   , CursorVisibility (..)
   , setCursorStyle
@@ -18,7 +20,7 @@ module Reflex.Vty.Host
   ) where
 
 import Control.Concurrent (forkIO, killThread)
-import Control.Concurrent.Chan (newChan, readChan, writeChan)
+import Control.Concurrent.STM (atomically)
 import Control.Exception (onException)
 import Control.Monad (forM, forM_, forever)
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
@@ -27,6 +29,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Identity (Identity (..))
 import Control.Monad.Primitive (PrimMonad)
 import Control.Monad.Ref (MonadRef, Ref, readRef)
+import Data.Default (Default (..))
 import Data.Dependent.Sum (DSum ((:=>)))
 import Data.IORef (IORef, readIORef)
 import Data.Maybe (catMaybes)
@@ -35,6 +38,13 @@ import qualified Graphics.Vty as V
 import qualified Graphics.Vty.CrossPlatform as V
 import Reflex
 import Reflex.Host.Class
+import Reflex.Vty.Host.Trigger
+  ( closeBoundedEventQueue
+  , drainBoundedEventQueue
+  , newBoundedEventQueue
+  , runBoundedTriggerT
+  , writeBoundedEventQueue
+  )
 import System.Posix.Signals
   ( Handler (..)
   , Signal
@@ -100,14 +110,38 @@ type VtyApp t m =
   --   app instantiation ('PostBuild'), and allows actions to be run upon
   --   occurrences of events ('PerformEvent').
 
+-- | Configuration for running a 'VtyApp'.
+data VtyAppConfig = VtyAppConfig
+  { -- | Maximum number of pending external trigger invocations the host will
+    -- buffer before backpressuring producers (e.g. a hot
+    -- 'Reflex.performEventAsync' callback). When the buffer is full, a
+    -- producer's @fire@ blocks until the host catches up, bounding memory
+    -- without dropping any occurrences. See 'defaultVtyAppConfig'.
+    _vtyConfig_eventQueueCapacity :: !Int
+  }
+
+-- | A sensible default 'VtyAppConfig': an event-queue capacity of 4096, which
+-- is large enough to absorb any realistic burst (a large paste, a flappy
+-- mouse, network callbacks) without throttling, while keeping worst-case
+-- per-frame fire work and memory modest (~530 KB ceiling).
+instance Default VtyAppConfig where
+  def = VtyAppConfig{_vtyConfig_eventQueueCapacity = 4096}
+
+-- | The default 'VtyAppConfig' (identical to 'def').
+defaultVtyAppConfig :: VtyAppConfig
+defaultVtyAppConfig = def
+
 -- | Runs a 'VtyApp' in a given 'Graphics.Vty.Vty'.
 runVtyAppWithHandle
-  :: V.Vty
+  :: VtyAppConfig
+  -- ^ Host configuration (event-queue capacity, etc.). Use
+  -- 'defaultVtyAppConfig' for defaults.
+  -> V.Vty
   -- ^ A 'Graphics.Vty.Vty' handle.
   -> (forall t m. VtyApp t m)
   -- ^ A functional reactive vty application.
   -> IO ()
-runVtyAppWithHandle vty vtyGuest = flip onException (V.shutdown vty) $
+runVtyAppWithHandle cfg vty vtyGuest = flip onException (V.shutdown vty) $
   -- We are using the 'Spider' implementation of reflex. Running the host
   -- allows us to take actions on the FRP timeline. The scoped type signature
   -- specifies that our host runs on the Global timeline.
@@ -127,9 +161,16 @@ runVtyAppWithHandle vty vtyGuest = flip onException (V.shutdown vty) $
     -- Create an 'Event' for POSIX signals.
     (signalEvent, signalTriggerRef) <- newEventWithTriggerRef
 
-    -- Create a queue to which we will write 'Event's that need to be
-    -- processed.
-    events <- liftIO newChan
+    -- A bounded, closeable queue into which external triggers write their
+    -- pending invocations. Boundedness gives us backpressure (a producer that
+    -- fires faster than the host can process has its @fire@ block when the
+    -- queue is full), which bounds memory without dropping occurrences. The
+    -- guest runs in 'BoundedTriggerT' below so that its 'TriggerEvent'
+    -- methods (and hence 'Reflex.performEventAsync') route writes through
+    -- this queue.
+    pending <-
+      liftIO $
+        newBoundedEventQueue (fromIntegral (max 1 (_vtyConfig_eventQueueCapacity cfg)))
 
     displayRegion0 <- liftIO $ V.displayBounds $ V.outputIface vty
 
@@ -143,11 +184,11 @@ runVtyAppWithHandle vty vtyGuest = flip onException (V.shutdown vty) $
       -- 'Event's fire.
         flip runPostBuildT postBuild $ -- Allows the guest app to access to
         -- a "post-build" 'Event'
-          flip runTriggerEventT events $ -- Allows the guest app to create new
-          -- events and triggers and writes
-          -- those triggers to a channel from
-          -- which they will be read and
-          -- processed.
+          flip runBoundedTriggerT pending $ -- Allows the guest app to create new
+          -- events and triggers; writes route
+          -- through the bounded queue above so
+          -- that hot producers backpressure
+          -- instead of leaking.
             vtyGuest displayRegion0 vtyEvent signalEvent
     -- The guest app is provided the
     -- initial display region, an
@@ -194,38 +235,62 @@ runVtyAppWithHandle vty vtyGuest = flip onException (V.shutdown vty) $
           -- if nobody is subscribed to the 'Event'.
           triggerInvocation = TriggerInvocation ne $ return ()
       -- Write our input event's 'EventTrigger' with the newly created
-      -- 'TriggerInvocation' value to the queue of events.
-      writeChan events [triggerRef :=> triggerInvocation]
+      -- 'TriggerInvocation' value to the queue of events. (Like all external
+      -- triggers, this is subject to backpressure if the queue is full; in
+      -- practice input never saturates it.)
+      atomically $ writeBoundedEventQueue pending [triggerRef :=> triggerInvocation]
 
     -- Install POSIX signal handlers. Each handler writes the signal value
-    -- into the FRP event queue. The RTS runs 'Catch' actions in a separate
-    -- thread, so 'writeChan' is safe here.
+    -- into the bounded FRP event queue. The RTS runs 'Catch' actions in a
+    -- separate thread, so the STM write is safe here.
     liftIO $ forM_ [sigINT, sigTERM, sigHUP] $ \sig ->
-      installHandler sig (Catch $ writeChan events [EventTriggerRef signalTriggerRef :=> TriggerInvocation sig (return ())]) Nothing
+      installHandler sig (Catch $ atomically $ writeBoundedEventQueue pending [EventTriggerRef signalTriggerRef :=> TriggerInvocation sig (return ())]) Nothing
 
-    -- The main application loop. We wait for new events, fire those that
-    -- have subscribers, and update the display. If we detect a shutdown
-    -- request, the application terminates.
+    -- The main application loop. We block until at least one batch of events
+    -- is available, then drain every other batch that has accumulated in the
+    -- meantime, fire each batch in its own Reflex frame, and redraw once.
+    --
+    -- Draining the whole queue each frame keeps the host from falling behind
+    -- under bursts, while the queue's bounded capacity (see 'VtyAppConfig')
+    -- backpressures a producer that fires faster than the host can process,
+    -- bounding memory without dropping occurrences. Firing each batch in its
+    -- own frame preserves every occurrence even when many firings of the same
+    -- trigger land in one drain (Reflex collapses simultaneous same-trigger
+    -- firings, so merging them into one frame would drop occurrences); drawing
+    -- only once per drain decouples the display rate from the event rate.
     fix $ \loop -> do
-      -- Read the next event (blocking).
-      ers <- liftIO $ readChan events
-      stop <- do
-        -- Fire events that have subscribers.
-        fireEventTriggerRefs fc ers $
-          -- Check if the shutdown 'Event' is firing.
-          readEvent shutdown >>= \case
-            Nothing -> return False
-            Just _ -> return True
-      if or stop
-        then liftIO $ do
-          -- If we received a shutdown 'Event'
-          killThread nextEventThread -- then stop reading input events and
-          setScreenMode (V.outputIface vty) ScreenNormal
-          V.shutdown vty -- call the 'Graphics.Vty.Vty's shutdown command.
-        else do
-          -- Otherwise, update the display and loop.
-          updateVty
-          loop
+      -- Block until at least one batch is available, then atomically drain
+      -- every other batch that has accumulated.
+      mBatches <- liftIO $ drainBoundedEventQueue pending
+      case mBatches of
+        -- Queue was closed and empty (e.g. another thread triggered
+        -- shutdown); stop the loop.
+        Nothing -> return ()
+        Just batches -> do
+          -- Fire each batch in its own frame, stopping early if the shutdown
+          -- event fires.
+          let fireUntilShutdown [] = return False
+              fireUntilShutdown (b : bs) = do
+                stops <-
+                  fireEventTriggerRefs fc b $
+                    readEvent shutdown >>= \case
+                      Nothing -> return False
+                      Just _ -> return True
+                if or stops then return True else fireUntilShutdown bs
+          stop <- fireUntilShutdown batches
+          if stop
+            then liftIO $ do
+              -- If we received a shutdown 'Event', close the queue first so
+              -- any producer blocked on a full queue is released, then stop
+              -- reading input, restore the primary screen, and shut vty down.
+              closeBoundedEventQueue pending
+              killThread nextEventThread
+              setScreenMode (V.outputIface vty) ScreenNormal
+              V.shutdown vty
+            else do
+              -- Otherwise, update the display and loop.
+              updateVty
+              loop
   where
     -- \| Use the given 'FireCommand' to fire events that have subscribers
     -- and call the callback for the 'TriggerInvocation' of each.
@@ -246,11 +311,12 @@ runVtyAppWithHandle vty vtyGuest = flip onException (V.shutdown vty) $
 
 -- | Run a 'VtyApp' with a 'Graphics.Vty.Vty' handle with a standard configuration.
 runVtyApp
-  :: (forall t m. VtyApp t m)
+  :: VtyAppConfig
+  -> (forall t m. VtyApp t m)
   -> IO ()
-runVtyApp app = do
+runVtyApp cfg app = do
   vty <- getDefaultVty
-  runVtyAppWithHandle vty app
+  runVtyAppWithHandle cfg vty app
 
 -- | Terminal cursor shape. Not all terminals support all styles; the
 -- fallback is always a block cursor. Set via DECSCUSR escape sequences

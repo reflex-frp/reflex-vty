@@ -60,7 +60,7 @@ withCtrlC f = do
     _ -> Nothing
 
 main :: IO ()
-main = mainWidget $ withCtrlC $ do
+main = mainWidget def $ withCtrlC $ do
   enterAlternateScreen
   initManager_ $ do
     tabNavigation

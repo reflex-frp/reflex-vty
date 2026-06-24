@@ -37,7 +37,8 @@ import Reflex.Vty.Theme (Theme (..), defTheme, themeToAttr)
 
 -- | Sets up the top-level context for a vty widget and runs it with that context
 mainWidgetWithHandle
-  :: V.Vty
+  :: VtyAppConfig
+  -> V.Vty
   -> ( forall t m
         . ( MonadVtyApp t m
           , HasImageWriter t m
@@ -53,8 +54,8 @@ mainWidgetWithHandle
        => m (Event t ())
      )
   -> IO ()
-mainWidgetWithHandle vty child =
-  runVtyAppWithHandle vty $ \dr0 inp _sigs -> do
+mainWidgetWithHandle cfg vty child =
+  runVtyAppWithHandle cfg vty $ \dr0 inp _sigs -> do
     let profile = colorProfileFromVty vty
     let resizeRaw = fforMaybe inp $ \case
           V.EvResize w h -> Just (w, h)
@@ -99,24 +100,25 @@ data VtyWidgetOut t = VtyWidgetOut
 
 -- | Like 'mainWidgetWithHandle', but uses a default vty configuration
 mainWidget
-  :: ( forall t m
-        . ( MonadVtyApp t m
-          , HasImageWriter t m
-          , MonadNodeId m
-          , HasDisplayRegion t m
-          , HasFocusReader t m
-          , HasTheme t m
-          , HasColorProfile t m
-          , HasInput t m
-          , HasCursor t m
-          , HasScreenMode t m
-          )
-       => m (Event t ())
-     )
+  :: VtyAppConfig
+  -> ( forall t m
+         . ( MonadVtyApp t m
+           , HasImageWriter t m
+           , MonadNodeId m
+           , HasDisplayRegion t m
+           , HasFocusReader t m
+           , HasTheme t m
+           , HasColorProfile t m
+           , HasInput t m
+           , HasCursor t m
+           , HasScreenMode t m
+           )
+        => m (Event t ())
+      )
   -> IO ()
-mainWidget child = do
+mainWidget cfg child = do
   vty <- getDefaultVty
-  mainWidgetWithHandle vty child
+  mainWidgetWithHandle cfg vty child
 
 -- * Input Events
 
