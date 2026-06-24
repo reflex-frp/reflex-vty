@@ -38,6 +38,9 @@
 * Enable bracketed paste by default. Add `paste` helper to `Reflex.Vty.Widget`. `textInput` now handles paste events.
 * Add `mousePosition` helper to `Reflex.Vty.Widget.Input.Mouse` — tracks last known mouse coordinates from click/release events. True hover (motion without button) deferred — requires terminal mode 1003 which vty does not expose.
 * Add terminal cursor control: `CursorStyle`, `CursorVisibility`, `CursorState`, and the `HasCursor` capability with `setCursor`/`tellCursor` helpers.
+* Add alternate screen support: `ScreenMode`, `setScreenMode`, and the `HasScreenMode` capability with `tellScreenMode`/`enterAlternateScreen`/`exitAlternateScreen` helpers. The host restores normal screen on shutdown.
+* *Breaking change*: `VtyApp` now takes a third argument, `Event t Signal`, exposing POSIX signals (SIGINT, SIGTERM, SIGHUP). SIGINT and SIGTERM automatically trigger clean shutdown, replacing the old Ctrl-C key detection.
+* Install POSIX signal handlers (SIGINT, SIGTERM, SIGHUP) in `runVtyAppWithHandle`. Add `unix` dependency.
 
 ## 0.6.2.1
 

@@ -32,6 +32,7 @@ type VtyExample t m =
   , HasTheme t m
   , HasColorProfile t m
   , HasCursor t m
+  , HasScreenMode t m
   )
 
 type Manager t m =
@@ -60,6 +61,7 @@ withCtrlC f = do
 
 main :: IO ()
 main = mainWidget $ withCtrlC $ do
+  enterAlternateScreen
   initManager_ $ do
     tabNavigation
     let gf = grout . fixed
@@ -130,7 +132,7 @@ scrollbarDemo = col $ do
 
 cursorDemo :: (VtyExample t m, Manager t m, MonadHold t m, PostBuild t m) => m ()
 cursorDemo = col $ do
-  grout (fixed 1) $ text "Arrows: move | s: cycle style | v: toggle | Esc: back"
+  grout (fixed 1) $ text "Arrows: move | s: style | v: visibility | f: alt-screen | Esc: back"
   let styles = [CursorStyleBlock, CursorStyleUnderline, CursorStyleBar]
   upE <- key V.KUp
   downE <- key V.KDown
@@ -138,9 +140,12 @@ cursorDemo = col $ do
   rightE <- key V.KRight
   sE <- key (V.KChar 's')
   vE <- key (V.KChar 'v')
+  fE <- key (V.KChar 'f')
   posDyn <- foldDyn move (0, 0) $ leftmost [upE, downE, leftE, rightE]
   idxDyn <- foldDyn (\_ n -> (n + 1) `mod` length styles) 0 sE
   visDyn <- foldDyn (\_ b -> not b) True vE
+  altDyn <- foldDyn (\_ b -> not b) True fE
+  tellScreenMode $ (\b -> if b then ScreenAlternate else ScreenNormal) <$> updated altDyn
   let styleDyn = (styles !!) <$> idxDyn
       cursorDyn =
         (\(x, y) s v -> CursorState (if v then CursorVisible else CursorHidden) s (x, y))
@@ -151,7 +156,7 @@ cursorDemo = col $ do
   grout flex $
     text $
       current $
-        ( \(x, y) s v ->
+        ( \(x, y) s v a ->
             "Position: "
               <> T.pack (show x)
               <> ","
@@ -160,10 +165,13 @@ cursorDemo = col $ do
               <> T.pack (show s)
               <> " | Visible: "
               <> (if v then "on" else "off")
+              <> " | Alt-screen: "
+              <> (if a then "on" else "off")
         )
           <$> posDyn
           <*> styleDyn
           <*> visDyn
+          <*> altDyn
   where
     move (k, _) (x, y) = case k of
       V.KUp -> (x, max 0 (y - 1))
