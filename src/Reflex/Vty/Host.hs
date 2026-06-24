@@ -91,9 +91,8 @@ type VtyApp t m =
   -> Event t V.Event
   -- ^ Vty input events.
   -> Event t Signal
-  -- ^ POSIX signal events (SIGINT, SIGTERM, SIGHUP). SIGINT and SIGTERM
-  -- automatically trigger shutdown; apps can observe SIGHUP for config
-  -- reload or other graceful handling.
+  -- ^ POSIX signal events (SIGINT, SIGTERM, SIGHUP). All three automatically
+  -- trigger shutdown; apps can observe them for custom handling before exit.
   -> m (VtyResult t)
   -- ^ The output of the 'VtyApp'. The application runs in a context that,
   --   among other things, allows new events to be created and triggered
@@ -176,9 +175,9 @@ runVtyAppWithHandle vty vtyGuest = flip onException (V.shutdown vty) $
 
     -- Subscribe to an 'Event' of that the guest application can use to
     -- request application shutdown. We'll check whether this 'Event' is firing
-    -- to determine whether to terminate. SIGINT and SIGTERM from the host
-    -- also trigger shutdown.
-    let sigShutdown = () <$ ffilter (\s -> s == sigINT || s == sigTERM) signalEvent
+    -- to determine whether to terminate. SIGINT, SIGTERM, and SIGHUP from the
+    -- host also trigger shutdown.
+    let sigShutdown = () <$ ffilter (\s -> s == sigINT || s == sigTERM || s == sigHUP) signalEvent
     shutdown <- subscribeEvent $ leftmost [_vtyResult_shutdown vtyResult, sigShutdown]
 
     -- Fork a thread and continuously get the next vty input event, and then

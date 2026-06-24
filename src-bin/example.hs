@@ -51,8 +51,16 @@ data Example
   | Example_Showcase
   deriving (Bounded, Enum, Eq, Ord, Read, Show)
 
+withCtrlC :: (Monad m, HasInput t m, Reflex t) => m () -> m (Event t ())
+withCtrlC f = do
+  inp <- input
+  f
+  return $ fforMaybe inp $ \case
+    V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
+    _ -> Nothing
+
 main :: IO ()
-main = mainWidget $ do
+main = mainWidget $ withCtrlC $ do
   enterAlternateScreen
   initManager_ $ do
     tabNavigation
@@ -105,7 +113,6 @@ main = mainWidget $ do
           Left Example_Showcase -> escapable showcaseDemo
           Right () -> buttons
     return ()
-  return never
 
 scrollbarDemo :: (VtyExample t m, Manager t m, MonadHold t m, PostBuild t m, PerformEvent t m, TriggerEvent t m, MonadIO (Performable m)) => m ()
 scrollbarDemo = col $ do
