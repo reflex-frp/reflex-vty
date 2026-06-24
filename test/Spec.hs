@@ -13,6 +13,7 @@ import qualified Reflex.Vty.StyleSpec
 import qualified Reflex.Vty.Test.GoldenSpec
 import qualified Reflex.Vty.Test.SnapshotSpec
 import qualified Reflex.Vty.Widget.BoxSpec
+import qualified Reflex.Vty.Widget.CursorSpec
 import qualified Reflex.Vty.Widget.MouseSpec
 import qualified Reflex.Vty.Widget.ScrollSpec
 
@@ -30,5 +31,6 @@ spec = do
   describe "Reflex.Vty.Test.SnapshotSpec" Reflex.Vty.Test.SnapshotSpec.spec
   describe "Reflex.Vty.Test.GoldenSpec" Reflex.Vty.Test.GoldenSpec.spec
   describe "Reflex.Vty.Widget.BoxSpec" Reflex.Vty.Widget.BoxSpec.spec
+  describe "Reflex.Vty.Widget.CursorSpec" Reflex.Vty.Widget.CursorSpec.spec
   describe "Reflex.Vty.Widget.MouseSpec" Reflex.Vty.Widget.MouseSpec.spec
   describe "Reflex.Vty.Widget.ScrollSpec" Reflex.Vty.Widget.ScrollSpec.spec

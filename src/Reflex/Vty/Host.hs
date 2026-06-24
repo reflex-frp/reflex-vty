@@ -4,6 +4,9 @@
 module Reflex.Vty.Host
   ( VtyApp
   , VtyResult (..)
+  , CursorStyle (..)
+  , CursorVisibility (..)
+  , setCursorStyle
   , getDefaultVty
   , runVtyApp
   , runVtyAppWithHandle
@@ -221,6 +224,51 @@ runVtyApp
 runVtyApp app = do
   vty <- getDefaultVty
   runVtyAppWithHandle vty app
+
+-- | Terminal cursor shape. Not all terminals support all styles; the
+-- fallback is always a block cursor. Set via DECSCUSR escape sequences
+-- (not part of vty 6.2's API).
+data CursorStyle
+  = -- | Restore the terminal's default cursor shape.
+    CursorStyleDefault
+  | -- | Steady block cursor.
+    CursorStyleBlock
+  | -- | Steady underline cursor.
+    CursorStyleUnderline
+  | -- | Steady vertical bar cursor (xterm extension).
+    CursorStyleBar
+  | CursorStyleBlinkingBlock
+  | CursorStyleSteadyBlock
+  | CursorStyleBlinkingUnderline
+  | CursorStyleSteadyUnderline
+  | -- | Blinking vertical bar (xterm extension).
+    CursorStyleBlinkingBar
+  | -- | Steady vertical bar (xterm extension).
+    CursorStyleSteadyBar
+  deriving (Bounded, Enum, Eq, Ord, Show)
+
+-- | Whether the terminal cursor should be rendered.
+data CursorVisibility
+  = CursorVisible
+  | CursorHidden
+  deriving (Bounded, Enum, Eq, Ord, Show)
+
+-- | Set the terminal cursor shape by emitting DECSCUSR escape sequences
+-- directly to the output byte buffer.
+setCursorStyle :: V.Output -> CursorStyle -> IO ()
+setCursorStyle out style =
+  V.outputByteBuffer out (toSeq style)
+  where
+    toSeq CursorStyleDefault = "\ESC[0 q"
+    toSeq CursorStyleBlock = "\ESC[2 q"
+    toSeq CursorStyleUnderline = "\ESC[4 q"
+    toSeq CursorStyleBar = "\ESC[6 q"
+    toSeq CursorStyleBlinkingBlock = "\ESC[1 q"
+    toSeq CursorStyleSteadyBlock = "\ESC[2 q"
+    toSeq CursorStyleBlinkingUnderline = "\ESC[3 q"
+    toSeq CursorStyleSteadyUnderline = "\ESC[4 q"
+    toSeq CursorStyleBlinkingBar = "\ESC[5 q"
+    toSeq CursorStyleSteadyBar = "\ESC[6 q"
 
 -- | Returns the standard vty configuration with mouse, focus tracking,
 -- and bracketed paste enabled.

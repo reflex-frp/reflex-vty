@@ -37,6 +37,7 @@
 * Enable terminal focus tracking mode by default. Add `gainedFocus` and `lostFocus` helpers to `Reflex.Vty.Widget`.
 * Enable bracketed paste by default. Add `paste` helper to `Reflex.Vty.Widget`. `textInput` now handles paste events.
 * Add `mousePosition` helper to `Reflex.Vty.Widget.Input.Mouse` — tracks last known mouse coordinates from click/release events. True hover (motion without button) deferred — requires terminal mode 1003 which vty does not expose.
+* Add terminal cursor control: `CursorStyle`, `CursorVisibility`, `CursorState`, and the `HasCursor` capability with `setCursor`/`tellCursor` helpers.
 
 ## 0.6.2.1
 
