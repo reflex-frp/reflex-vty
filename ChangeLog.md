@@ -12,6 +12,7 @@
 * *Breaking change*: `TextInputConfig` has a new field, `_textInputConfig_alignment :: TextAlignment`, controlling how entered text is aligned within the input region. `def` uses `TextAlignment_Left`.
 * *Breaking change*: `boxTitle` now takes a `Behavior t TextAlignment` as its first argument, controlling title alignment within the top border. Pass `pure TextAlignment_Center` to preserve the old behavior. `box` and `boxStatic` are unchanged.
 * *Breaking change*: `scrollable` and `scrollableText` now require `PerformEvent t m`, `TriggerEvent t m`, and `MonadIO (Performable m)` constraints (needed for `ScrollbarWhileScrolling` debounce).
+* *Breaking change*: `Reflex.Vty.Host.runVtyAppWithHandle`, `runVtyApp`, and `Reflex.Vty.Widget.mainWidget`/`mainWidgetWithHandle` now take a `VtyAppConfig` as their first argument. Use `def` (a `Default` instance) or `defaultVtyAppConfig` for the defaults. `_vtyConfig_eventQueueCapacity` configures the bounded event-queue capacity used to backpressure fast external producers.
 * Add `Reflex.Vty.Canvas` module: per-cell compositing with transparency. `Canvas` type (sparse `Map` of cells), `placeCanvas`, `translate`, `stack`, `imageToCanvas`/`canvasToImage` conversions.
 * Add `Reflex.Vty.ColorProfile` module: `ColorProfile` datatype (`TrueColor`/`Ansi256`/`Ansi16`/`Ascii`/`NoTTY`), `detectColorProfile`/`colorProfileFromVty` to read the terminal's capability from vty handle, `convertColor` for downsampling, and `applyProfile` to downsample an entire `V.Attr` (resets colors/style to `Default` for `Ascii`/`NoTTY`).
 * Add `Reflex.Vty.Color` module: `RGB` color type with `darken`, `lighten`, `complementary`, `mix`, `alpha` operations; `Gradient1D` (n-stop linear interpolation) and `Gradient2D` (bilinear corner interpolation); `toRGB`/`fromRGB` conversions to/from vty `Color`.
@@ -33,6 +34,8 @@
 * Fix `Reflex.Vty.Widget.Text.richText`: now merges config attrs on `themeAttr` via `mergeAttr`, so `RichTextConfig def` inherits the ambient theme.
 * Fix `textButton` centering: now uses `textWithAlignment TextAlignment_Center`.
 * Fix `textInput` cursor: uses `_theme_textInputCursor` instead of hardcoded `reverseVideo`.
+* Fix space leak in `Reflex.Vty.Host.runVtyAppWithHandle`: an application that fired external triggers (e.g. a hot `performEventAsync` callback) faster than the host could process would grow the host's event channel without limit. The host now backpressures producers via a bounded, closeable event queue, and drains every available batch each frame (firing each in its own Reflex frame, redrawing once), so memory is bounded and no event occurrences are dropped. The bounded capacity is configurable via the new `VtyAppConfig` (see the breaking-change entry above; default 4096).
+* Behavior change: external event triggers (`performEventAsync`, `newTriggerEvent`, etc.) may now block when the host's event queue is full, throttling a producer that fires faster than the host can process to the host's own rate. This is the intended flow-control; shutdown closes the queue so any blocked producer is released.
 
 ## 0.6.2.1
 

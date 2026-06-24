@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: reflex-vty
-version: 0.7.0.0
+version: 1.0.0.0
 synopsis: Reflex FRP host and widgets for VTY applications
 description:
   Build terminal applications using functional reactive programming (FRP) with Reflex FRP (<https://reflex-frp.org>).
@@ -44,6 +44,7 @@ library
                  , Reflex.Vty.Widget.Text
                  , Data.Text.Zipper
                  , Control.Monad.NodeId
+  other-modules:  Reflex.Vty.Host.Trigger
   build-depends:
     base >= 4.10.0 && < 4.22,
     bimap >= 0.3.3 && < 0.6,
@@ -99,6 +100,11 @@ library
     TypeOperators
     TypeFamilies
 
+flag leaktest
+  description: Build the space-leak profiling repro (src-bin/leaktest.hs)
+  manual: True
+  default: False
+
 executable example
   hs-source-dirs: src-bin
   main-is: example.hs
@@ -144,6 +150,24 @@ executable example
     TypeApplications
     TypeFamilies
 
+executable leaktest
+  if !flag(leaktest)
+    buildable: False
+  hs-source-dirs: src-bin
+  main-is: leaktest.hs
+  ghc-options: -threaded -Wall -rtsopts
+  build-depends:
+    base,
+    async,
+    reflex,
+    reflex-vty,
+    text,
+    transformers,
+    vty
+  default-language: Haskell2010
+  default-extensions:
+    LambdaCase
+    OverloadedStrings
 
 test-suite reflex-vty-test
   hs-source-dirs: test
@@ -155,6 +179,7 @@ test-suite reflex-vty-test
     Reflex.Vty.CanvasSpec
     Reflex.Vty.ColorProfileSpec
     Reflex.Vty.ColorSpec
+    Reflex.Vty.HostSpec
     Reflex.Vty.StyleSpec
     Reflex.Vty.StyleJoinSpec
     Reflex.Vty.Test.Snapshot

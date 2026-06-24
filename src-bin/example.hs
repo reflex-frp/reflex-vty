@@ -57,7 +57,7 @@ withCtrlC f = do
     _ -> Nothing
 
 main :: IO ()
-main = mainWidget $ withCtrlC $ do
+main = mainWidget def $ withCtrlC $ do
   initManager_ $ do
     tabNavigation
     let gf = grout . fixed

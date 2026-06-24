@@ -8,6 +8,7 @@ import qualified Data.Text.ZipperSpec
 import qualified Reflex.Vty.CanvasSpec
 import qualified Reflex.Vty.ColorProfileSpec
 import qualified Reflex.Vty.ColorSpec
+import qualified Reflex.Vty.HostSpec
 import qualified Reflex.Vty.StyleJoinSpec
 import qualified Reflex.Vty.StyleSpec
 import qualified Reflex.Vty.Test.GoldenSpec
@@ -24,6 +25,7 @@ spec = do
   describe "Reflex.Vty.CanvasSpec" Reflex.Vty.CanvasSpec.spec
   describe "Reflex.Vty.ColorProfileSpec" Reflex.Vty.ColorProfileSpec.spec
   describe "Reflex.Vty.ColorSpec" Reflex.Vty.ColorSpec.spec
+  describe "Reflex.Vty.HostSpec" Reflex.Vty.HostSpec.spec
   describe "Reflex.Vty.StyleSpec" Reflex.Vty.StyleSpec.spec
   describe "Reflex.Vty.StyleJoinSpec" Reflex.Vty.StyleJoinSpec.spec
   describe "Reflex.Vty.Test.SnapshotSpec" Reflex.Vty.Test.SnapshotSpec.spec

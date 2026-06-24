@@ -34,22 +34,23 @@ import Reflex.Vty.Theme (Theme (..), defTheme, themeToAttr)
 
 -- | Sets up the top-level context for a vty widget and runs it with that context
 mainWidgetWithHandle
-  :: V.Vty
+  :: VtyAppConfig
+  -> V.Vty
   -> ( forall t m
-        . ( MonadVtyApp t m
-          , HasImageWriter t m
-          , MonadNodeId m
-          , HasDisplayRegion t m
-          , HasFocusReader t m
-          , HasInput t m
-          , HasTheme t m
-          , HasColorProfile t m
-          )
-       => m (Event t ())
-     )
+         . ( MonadVtyApp t m
+           , HasImageWriter t m
+           , MonadNodeId m
+           , HasDisplayRegion t m
+           , HasFocusReader t m
+           , HasInput t m
+           , HasTheme t m
+           , HasColorProfile t m
+           )
+        => m (Event t ())
+      )
   -> IO ()
-mainWidgetWithHandle vty child =
-  runVtyAppWithHandle vty $ \dr0 inp -> do
+mainWidgetWithHandle cfg vty child =
+  runVtyAppWithHandle cfg vty $ \dr0 inp -> do
     let profile = colorProfileFromVty vty
     size <- holdDyn dr0 $ fforMaybe inp $ \case
       V.EvResize w h -> Just (w, h)
@@ -79,22 +80,23 @@ data VtyWidgetOut t = VtyWidgetOut
 
 -- | Like 'mainWidgetWithHandle', but uses a default vty configuration
 mainWidget
-  :: ( forall t m
-        . ( MonadVtyApp t m
-          , HasImageWriter t m
-          , MonadNodeId m
-          , HasDisplayRegion t m
-          , HasFocusReader t m
-          , HasTheme t m
-          , HasColorProfile t m
-          , HasInput t m
-          )
-       => m (Event t ())
-     )
+  :: VtyAppConfig
+  -> ( forall t m
+         . ( MonadVtyApp t m
+           , HasImageWriter t m
+           , MonadNodeId m
+           , HasDisplayRegion t m
+           , HasFocusReader t m
+           , HasTheme t m
+           , HasColorProfile t m
+           , HasInput t m
+           )
+        => m (Event t ())
+      )
   -> IO ()
-mainWidget child = do
+mainWidget cfg child = do
   vty <- getDefaultVty
-  mainWidgetWithHandle vty child
+  mainWidgetWithHandle cfg vty child
 
 -- * Input Events
 
