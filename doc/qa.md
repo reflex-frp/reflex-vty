@@ -84,4 +84,6 @@ Once it's done you can test the following:
 
   * Type <kbd>Ctrl</kbd>+<kbd>C</kbd> to quit.
 
+  * Make sure that after quitting, the terminal restores the content that was on screen before the app launched (alternate screen mode).
+
 There should be 10 examples to cover. If there are more or less than this then this QA guide is out of date and QA should fail.

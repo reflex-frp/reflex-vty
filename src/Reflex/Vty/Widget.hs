@@ -48,6 +48,7 @@ mainWidgetWithHandle
           , HasTheme t m
           , HasColorProfile t m
           , HasCursor t m
+          , HasScreenMode t m
           )
        => m (Event t ())
      )
@@ -63,20 +64,23 @@ mainWidgetWithHandle vty child =
     let inp' = fforMaybe inp $ \case
           V.EvResize {} -> Nothing
           x -> Just x
-    ((shutdown, images), cursorUpdates) <- runThemeReader (constant defTheme) $
+    (((shutdown, images), cursorUpdates), screenModeUpdates) <- runThemeReader (constant defTheme) $
       runColorProfileReader (constant profile) $
         runFocusReader (pure True) $
           runDisplayRegion (fmap (\(w, h) -> Region 0 0 w h) size) $
-            runCursorWriter $
-              runImageWriter $
-                runNodeIdT $
-                  runInput inp' $ do
-                    tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
-                    child
+            runScreenModeWriter $
+              runCursorWriter $
+                runImageWriter $
+                  runNodeIdT $
+                    runInput inp' $ do
+                      tellImages . ffor (current size) $ \(w, h) -> [V.charFill V.defAttr ' ' w h]
+                      child
     let cursorStates = getLast <$> cursorUpdates
     cursorState <- holdDyn defaultCursorState cursorStates
     performEvent_ $ ffor cursorStates $ \st ->
       liftIO $ setCursorStyle (V.outputIface vty) (_cursorState_style st)
+    performEvent_ $ ffor (getLast <$> screenModeUpdates) $ \mode ->
+      liftIO $ setScreenMode (V.outputIface vty) mode
     return $
       VtyResult
         { _vtyResult_picture = makePicture <$> current cursorState <*> images
@@ -105,6 +109,7 @@ mainWidget
           , HasColorProfile t m
           , HasInput t m
           , HasCursor t m
+          , HasScreenMode t m
           )
        => m (Event t ())
      )
@@ -499,6 +504,98 @@ runCursorWriter
   => CursorWriter t m a
   -> m (a, Event t (Last CursorState))
 runCursorWriter = runEventWriterT . unCursorWriter
+
+-- * Screen mode (alt-screen)
+
+-- | A class for widgets that can request terminal screen mode changes.
+class (Reflex t, Monad m) => HasScreenMode t m | m -> t where
+  -- | Request a screen mode change.
+  tellScreenMode :: Event t ScreenMode -> m ()
+  default tellScreenMode :: (f m' ~ m, MonadTrans f, HasScreenMode t m') => Event t ScreenMode -> m ()
+  tellScreenMode = lift . tellScreenMode
+
+instance HasScreenMode t m => HasScreenMode t (ReaderT x m)
+instance HasScreenMode t m => HasScreenMode t (BehaviorWriterT t x m)
+instance HasScreenMode t m => HasScreenMode t (DynamicWriterT t x m)
+instance HasScreenMode t m => HasScreenMode t (EventWriterT t x m)
+instance HasScreenMode t m => HasScreenMode t (NodeIdT m)
+instance HasScreenMode t m => HasScreenMode t (Input t m)
+instance HasScreenMode t m => HasScreenMode t (ImageWriter t m)
+instance HasScreenMode t m => HasScreenMode t (DisplayRegion t m)
+instance HasScreenMode t m => HasScreenMode t (FocusReader t m)
+instance HasScreenMode t m => HasScreenMode t (ThemeReader t m)
+instance HasScreenMode t m => HasScreenMode t (ColorProfileReader t m)
+instance HasScreenMode t m => HasScreenMode t (CursorWriter t m)
+
+-- | Enter alternate screen mode immediately (on post-build).
+enterAlternateScreen :: (HasScreenMode t m, PostBuild t m) => m ()
+enterAlternateScreen = do
+  pb <- getPostBuild
+  tellScreenMode $ ScreenAlternate <$ pb
+
+-- | Return to normal screen mode immediately (on post-build).
+exitAlternateScreen :: (HasScreenMode t m, PostBuild t m) => m ()
+exitAlternateScreen = do
+  pb <- getPostBuild
+  tellScreenMode $ ScreenNormal <$ pb
+
+-- | A widget transformer that collects screen mode requests from child widgets.
+newtype ScreenModeWriter t m a = ScreenModeWriter
+  {unScreenModeWriter :: EventWriterT t (Last ScreenMode) m a}
+  deriving
+    ( Applicative
+    , Functor
+    , Monad
+    , MonadCatch
+    , MonadFix
+    , MonadHold t
+    , MonadIO
+    , MonadMask
+    , MonadRef
+    , MonadSample t
+    , MonadThrow
+    )
+
+instance MonadTrans (ScreenModeWriter t) where
+  lift = ScreenModeWriter . lift
+
+instance MFunctor (ScreenModeWriter t) where
+  hoist f = ScreenModeWriter . hoist f . unScreenModeWriter
+
+instance (Adjustable t m, MonadHold t m, Reflex t) => Adjustable t (ScreenModeWriter t m) where
+  runWithReplace (ScreenModeWriter a) e = ScreenModeWriter $ runWithReplace a $ fmap unScreenModeWriter e
+  traverseIntMapWithKeyWithAdjust f m e = ScreenModeWriter $ traverseIntMapWithKeyWithAdjust (\k v -> unScreenModeWriter $ f k v) m e
+  traverseDMapWithKeyWithAdjust f m e = ScreenModeWriter $ traverseDMapWithKeyWithAdjust (\k v -> unScreenModeWriter $ f k v) m e
+  traverseDMapWithKeyWithAdjustWithMove f m e = ScreenModeWriter $ traverseDMapWithKeyWithAdjustWithMove (\k v -> unScreenModeWriter $ f k v) m e
+
+deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (ScreenModeWriter t m)
+deriving instance NotReady t m => NotReady t (ScreenModeWriter t m)
+deriving instance PerformEvent t m => PerformEvent t (ScreenModeWriter t m)
+deriving instance PostBuild t m => PostBuild t (ScreenModeWriter t m)
+deriving instance TriggerEvent t m => TriggerEvent t (ScreenModeWriter t m)
+
+instance (Monad m, Reflex t) => HasScreenMode t (ScreenModeWriter t m) where
+  tellScreenMode = ScreenModeWriter . tellEvent . fmap Last
+
+instance HasImageWriter t m => HasImageWriter t (ScreenModeWriter t m) where
+  captureImages (ScreenModeWriter x) = ScreenModeWriter $ do
+    ((a, modeUpdates), images) <- lift $ captureImages $ runEventWriterT x
+    tellEvent modeUpdates
+    pure (a, images)
+
+instance HasDisplayRegion t m => HasDisplayRegion t (ScreenModeWriter t m)
+instance HasFocusReader t m => HasFocusReader t (ScreenModeWriter t m)
+instance HasTheme t m => HasTheme t (ScreenModeWriter t m)
+instance HasColorProfile t m => HasColorProfile t (ScreenModeWriter t m)
+instance HasCursor t m => HasCursor t (ScreenModeWriter t m)
+instance MonadNodeId m => MonadNodeId (ScreenModeWriter t m)
+
+-- | Run a widget that can request screen mode changes.
+runScreenModeWriter
+  :: (Reflex t, Monad m)
+  => ScreenModeWriter t m a
+  -> m (a, Event t (Last ScreenMode))
+runScreenModeWriter = runEventWriterT . unScreenModeWriter
 
 -- | Produces an 'Image' that fills a region with space characters
 regionBlankImage :: V.Attr -> Region -> Image

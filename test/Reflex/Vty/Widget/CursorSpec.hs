@@ -39,3 +39,10 @@ spec = describe "Reflex.Vty.Widget cursor" $ do
     it "maps visible cursor state to a vty cursor position" $
       cursorStateToVtyCursor (CursorState CursorVisible CursorStyleBlock (2, 3))
         `shouldBe` V.Cursor 2 3
+
+  describe "ScreenMode" $ do
+    it "has two constructors" $
+      [ScreenNormal ..] `shouldBe` [ScreenNormal, ScreenAlternate]
+
+    it "ScreenNormal /= ScreenAlternate" $
+      ScreenNormal `shouldNotBe` ScreenAlternate

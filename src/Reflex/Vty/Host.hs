@@ -7,6 +7,8 @@ module Reflex.Vty.Host
   , CursorStyle (..)
   , CursorVisibility (..)
   , setCursorStyle
+  , ScreenMode (..)
+  , setScreenMode
   , getDefaultVty
   , runVtyApp
   , runVtyAppWithHandle
@@ -194,6 +196,7 @@ runVtyAppWithHandle vty vtyGuest = flip onException (V.shutdown vty) $
         then liftIO $ do
           -- If we received a shutdown 'Event'
           killThread nextEventThread -- then stop reading input events and
+          setScreenMode (V.outputIface vty) ScreenNormal
           V.shutdown vty -- call the 'Graphics.Vty.Vty's shutdown command.
         else do
           -- Otherwise, update the display and loop.
@@ -269,6 +272,20 @@ setCursorStyle out style =
     toSeq CursorStyleSteadyUnderline = "\ESC[4 q"
     toSeq CursorStyleBlinkingBar = "\ESC[5 q"
     toSeq CursorStyleSteadyBar = "\ESC[6 q"
+
+-- | Which screen buffer to use. Most full-screen TUI apps use the
+-- alternate screen so the terminal restores prior content on exit.
+data ScreenMode
+  = ScreenNormal
+  | ScreenAlternate
+  deriving (Bounded, Enum, Eq, Ord, Show)
+
+-- | Enter or exit the alternate screen buffer by emitting DECSET/DECRST
+-- escape sequences (1049) directly to the output byte buffer.
+setScreenMode :: V.Output -> ScreenMode -> IO ()
+setScreenMode out = \case
+  ScreenNormal -> V.outputByteBuffer out "\ESC[?1049l"
+  ScreenAlternate -> V.outputByteBuffer out "\ESC[?1049h"
 
 -- | Returns the standard vty configuration with mouse, focus tracking,
 -- and bracketed paste enabled.
