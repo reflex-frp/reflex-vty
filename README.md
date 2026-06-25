@@ -8,7 +8,7 @@ reflex-vty provides a [Reflex FRP](https://reflex-frp.org) host and a library of
 
 [![Haskell](https://img.shields.io/badge/language-Haskell-orange.svg)](https://haskell.org) [![Hackage](https://img.shields.io/hackage/v/reflex-vty.svg)](https://hackage.haskell.org/package/reflex-vty) [![Github CI](https://github.com/reflex-frp/reflex-vty/actions/workflows/haskell.yml/badge.svg)](https://github.com/reflex-frp/reflex-vty/actions) [![Obsidian](https://img.shields.io/badge/Obsidian-Systems-white)](https://obsidian.systems) [![BSD3 License](https://img.shields.io/badge/license-BSD3-blue.svg)](LICENSE)
 
-<img src="https://i.imgur.com/FULQNtu.gif" alt="reflex-vty example animation" width="80%">
+<img src="https://vhs.charm.sh/vhs-3KNq9BMP7nnFY7YNsQw4TV.gif" alt="reflex-vty example walkthrough: gradient menu, to-do list, CPU graph, and styling showcase" width="80%">
 
 </div>
 
@@ -21,12 +21,12 @@ module Main where
 import Reflex.Vty
 
 main :: IO ()
-main = mainWidget $ do
+main = mainWidget def $ do
   text "Hello, reflex-vty! Press Ctrl+C to quit."
   ctrlc
 ```
 
-`mainWidget` runs a widget until the `Event t ()` it returns fires; here that is `ctrlc`, which fires when the user presses Ctrl+C. Docs are available on [Hackage](https://hackage.haskell.org/package/reflex-vty/docs/Reflex-Vty.html).
+`mainWidget` takes a `VtyAppConfig` (`def` for the defaults) and runs a widget until the `Event t ()` it returns fires. Here that is `ctrlc`, which fires when the user presses Ctrl+C. Docs are available on [Hackage](https://hackage.haskell.org/package/reflex-vty/docs/Reflex-Vty.html).
 
 ### Features
 
@@ -37,16 +37,17 @@ main = mainWidget $ do
 - **Boxes**: single, thick, double, rounded, ASCII, inner-half, and outer-half border styles, with optional titles and horizontal rules.
 - **Scrolling**: scrollable containers with programmatic scrolling, auto-scroll-to-bottom mode, and a visual scrollbar with four visibility modes (always, thumb-only, while-scrolling, hidden).
 - **Split panes**: fixed horizontal and vertical splits, plus a mouse-draggable splitter you can resize at runtime (`splitVDrag`).
-- **Mouse**: button clicks, drags (with full from/to/button/modifier tracking), and scroll-wheel events.
+- **Mouse**: button clicks, drags (with from/to/button/modifier tracking), scroll-wheel events, and last-known mouse-position tracking.
 - **Keyboard**: individual key and key-combo events, plus input filtering.
+- **Runtime**: alternate-screen mode, terminal cursor control (shape, visibility, and position), bracketed paste, terminal focus tracking, resize, and POSIX signal handling.
 - **Theming**: a `Theme` record with presets (default, dark, charm, dracula, nord, zenburn, gruvbox). Widgets inherit the ambient theme and can override locally.
-- **Declarative styling**: Lip Gloss-inspired `Style` type with foreground/background colors, text transforms (bold/italic/underline/etc.), padding, margin, borders with per-side colors, width/height constraints, alignment, text transforms (`withTransform`), tab expansion, inline mode, whitespace coloring, and 9 border presets. `render` and `measure` produce vty `Image` output.
-- **Color**: `Reflex.Vty.Color` module with `RGB` color type, operations (`darken`, `lighten`, `complementary`, `mix`, `alpha`), and gradients (`Gradient1D`, `Gradient2D`).
+- **Declarative styling**: Lip Gloss-inspired `Style` type with foreground/background colors, text attributes (bold/italic/underline/etc.), padding, margin, borders with per-side colors, width/height constraints, alignment, text transforms, tab expansion, inline mode, whitespace coloring, and border presets.
+- **Color**: `RGB` color type, operations (`darken`, `lighten`, `complementary`, `mix`, `alpha`), and gradients (`Gradient1D`, `Gradient2D`).
 - **Compositing**: `Reflex.Vty.Canvas` module with per-cell transparency for overlays and layered rendering.
 - **Image composition**: `joinHorizontal`/`joinVertical`/`place` utilities for composing rendered images.
 - **Color profiles**: automatic terminal color-capability detection (`TrueColor`/`Ansi256`/`Ansi16`/`Ascii`/`NoTTY`) with downsampling.
 
-Run the bundled demo with `cabal run example` to see many of these in action: a text editor, a to-do list, scrollable text, clickable buttons, a live CPU-usage display, a scrollbar modes demo, and a full styling showcase.
+Run the bundled demo with `cabal run example` to see many of these in action: a text editor, a to-do list, scrollable text, clickable buttons, a live CPU-usage display with a true-color gradient bar, a scrollbar-modes demo, a terminal-cursor demo, and a little styling showcase featuring gradients, color operations, a canvas overlay, border presets, theming, and color-profile downsampling.
 
 Feature requests, pull requests, and other feedback are welcome and appreciated (see the [contribution guide](CONTRIBUTING.md)). This library is still experimental, so big changes are possible.
 
@@ -71,10 +72,10 @@ From within the nix-shell you can:
 
 ##### Selecting a compiler
 
-`nix-shell` defaults to GHC 9.8. The other compilers defined in `release.nix` are `ghc810`, `ghc94`, and `ghc96`. To enter a shell with one of them, pass it as the `compiler` argument:
+`nix-shell` defaults to GHC 9.8. The other compilers defined in `release.nix` are `ghc94`, `ghc96`, and `ghc98`. To enter a shell with one of them, pass it as the `compiler` argument:
 
 ```bash
-nix-shell --argstr compiler ghc810
+nix-shell --argstr compiler ghc96
 ```
 
 If you were previously building with a different compiler, you may need to run `cabal clean` first.

@@ -102,19 +102,19 @@ data VtyWidgetOut t = VtyWidgetOut
 mainWidget
   :: VtyAppConfig
   -> ( forall t m
-         . ( MonadVtyApp t m
-           , HasImageWriter t m
-           , MonadNodeId m
-           , HasDisplayRegion t m
-           , HasFocusReader t m
-           , HasTheme t m
-           , HasColorProfile t m
-           , HasInput t m
-           , HasCursor t m
-           , HasScreenMode t m
-           )
-        => m (Event t ())
-      )
+        . ( MonadVtyApp t m
+          , HasImageWriter t m
+          , MonadNodeId m
+          , HasDisplayRegion t m
+          , HasFocusReader t m
+          , HasTheme t m
+          , HasColorProfile t m
+          , HasInput t m
+          , HasCursor t m
+          , HasScreenMode t m
+          )
+       => m (Event t ())
+     )
   -> IO ()
 mainWidget cfg child = do
   vty <- getDefaultVty

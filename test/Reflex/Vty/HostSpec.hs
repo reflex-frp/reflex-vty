@@ -1,19 +1,20 @@
--- |
--- Description: Host event-channel regression + backpressure tests.
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
+
+-- |
+-- Description: Host event-channel regression + backpressure tests.
 module Reflex.Vty.HostSpec (spec) where
 
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Monad (forever, replicateM_, void)
 import Control.Monad.IO.Class (liftIO)
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
-import System.Timeout (timeout)
-import Test.Hspec
-
 import qualified Graphics.Vty as V
 import Graphics.Vty.Attributes.Color (ColorMode (..))
 import Reflex
+import System.Timeout (timeout)
+import Test.Hspec
+
 import Reflex.Vty.Host
   ( VtyApp
   , VtyResult (..)

@@ -59,6 +59,75 @@ withCtrlC f = do
     V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
     _ -> Nothing
 
+-- * Shared styling helpers
+
+-- | The brand accent color (cyan), matching the bright end of 'brandGradient'.
+accent :: Color
+accent = rgbColor 0 200 230
+
+-- | A pink → violet → cyan true-color gradient used for the brand banner.
+brandGradient :: Gradient1D
+brandGradient =
+  gradient1D
+    [ (0.0, RGB 255 64 160)
+    , (0.5, RGB 150 90 255)
+    , (1.0, RGB 0 200 230)
+    ]
+
+-- | Emit a single line of bold text whose characters are colored along a
+-- horizontal 1D gradient. Shows off true-color 'Gradient1D' sampling.
+gradientText
+  :: (Reflex t, HasImageWriter t m)
+  => Gradient1D -> Text -> m ()
+gradientText grad txt = tellImages $ pure [img]
+  where
+    cs = T.unpack txt
+    n = length cs
+    img =
+      V.horizCat
+        [ V.char (V.withStyle (V.withForeColor V.defAttr (fromRGB (sampleGradient1D grad p))) V.bold) c
+        | (i, c) <- zip [0 :: Int ..] cs
+        , let p = fromIntegral i / fromIntegral (max 1 (n - 1))
+        ]
+
+-- | A line of text tinted with an accent foreground color (used for the
+-- short instructional headers above each example).
+accentText
+  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m)
+  => Color -> Text -> m ()
+accentText c t =
+  localTheme (const (pure (defTheme {_theme_default = withForeground c def}))) $
+    text (pure t)
+
+-- | A titled box whose border and title are tinted with an accent color,
+-- while its content stays in the default theme so body text remains
+-- readable.
+accentBox
+  :: ( MonadFix m
+     , MonadHold t m
+     , HasDisplayRegion t m
+     , HasImageWriter t m
+     , HasInput t m
+     , HasFocusReader t m
+     , HasTheme t m
+     )
+  => Color -> BoxStyle -> Text -> m a -> m a
+accentBox c style title child =
+  localTheme (const (pure (defTheme {_theme_default = withForeground c def}))) $
+    boxTitle (pure TextAlignment_Center) (pure style) (pure title) $
+      localTheme (const (pure defTheme)) child
+
+-- | A theme transformer that reverse-videos the default style while the
+-- given dynamic is True. Used to highlight a focused widget (e.g. the
+-- checkbox in a to-do row).
+highlightFocus
+  :: Reflex t
+  => Dynamic t Bool -> Behavior t Theme -> Behavior t Theme
+highlightFocus d thB =
+  (\th foc -> if foc then th {_theme_default = withReverse (_theme_default th)} else th)
+    <$> thB
+    <*> current d
+
 main :: IO ()
 main = mainWidget def $ withCtrlC $ do
   enterAlternateScreen
@@ -71,9 +140,9 @@ main = mainWidget def $ withCtrlC $ do
             scrollable def $
               col $ do
                 gf 3 $ col $ do
+                  gf 1 $ gradientText brandGradient "reflex-vty · functional reactive terminal UIs"
                   gf 1 $ text "Select an example."
-                  gf 1 $ text "Esc will bring you back here."
-                  gf 1 $ text "Ctrl+c to quit."
+                  gf 1 $ text "Esc brings you back here · Ctrl+C quits."
                 a <- t $ textButtonStatic def "Todo List"
                 b <- t $ textButtonStatic def "Text Editor"
                 c <- t $ textButtonStatic def "Scrollable text display"
@@ -116,7 +185,7 @@ main = mainWidget def $ withCtrlC $ do
 
 scrollbarDemo :: (VtyExample t m, Manager t m, MonadHold t m, PostBuild t m, PerformEvent t m, TriggerEvent t m, MonadIO (Performable m)) => m ()
 scrollbarDemo = col $ do
-  grout (fixed 1) $ text "Four scrollbar modes. Use arrow keys or mouse wheel to scroll each panel:"
+  grout (fixed 1) $ accentText accent "Four scrollbar modes. Use arrow keys or mouse wheel to scroll each panel:"
   grout flex $ row $ do
     grout flex $ void $ sbPanel "Always" ScrollbarAlways
     grout flex $ void $ sbPanel "Thumb Only" ScrollbarThumbOnly
@@ -132,7 +201,7 @@ scrollbarDemo = col $ do
 
 cursorDemo :: (VtyExample t m, Manager t m, MonadHold t m, PostBuild t m) => m ()
 cursorDemo = col $ do
-  grout (fixed 1) $ text "Arrows: move | s: style | v: visibility | f: alt-screen | Esc: back"
+  grout (fixed 1) $ accentText accent "Arrows: move | s: style | v: visibility | f: alt-screen | Esc: back"
   let styles = [CursorStyleBlock, CursorStyleUnderline, CursorStyleBar]
   upE <- key V.KUp
   downE <- key V.KDown
@@ -199,7 +268,7 @@ easyExample = do
       b <- tile flex $ btn "RHYME"
       c <- tile flex $ btn "A BIG CRIME"
       return (a, b, c)
-    tile (fixed 7) $ boxTitle (constant TextAlignment_Center) (constant def) "CLICK BUTTONS TO DRAW*" $ do
+    tile (fixed 7) $ accentBox accent roundedBoxStyle "CLICK BUTTONS TO DRAW*" $ do
       outputDyn <-
         foldDyn (<>) "" $
           mergeWith
@@ -228,6 +297,7 @@ taskList
   :: (VtyExample t m, Manager t m, MonadHold t m, Adjustable t m, PostBuild t m)
   => m ()
 taskList = col $ do
+  grout (fixed 1) $ accentText accent "To-Do · Tab to move · Ctrl+T toggles · Enter adds a task"
   let todos0 =
         [ Todo "Find reflex-vty" True
         , Todo "Become functional reactive" False
@@ -250,6 +320,9 @@ data TodoOutput t = TodoOutput
   , _todoOutput_delete :: Event t ()
   , _todoOutput_height :: Dynamic t Int
   , _todoOutput_focusId :: FocusId
+  , _todoOutput_focused :: Dynamic t Bool
+  -- ^ Whether any element of this row (checkbox or text field) is focused.
+  --   Used to insert a newly added task directly beneath the active row.
   }
 
 todo
@@ -257,19 +330,29 @@ todo
   => Todo
   -> m (TodoOutput t)
 todo t0 = row $ do
-  let toggleKeys =
-        Set.fromList
-          [ (V.KChar ' ', [V.MCtrl])
-          , (V.KChar '@', [V.MCtrl])
-          ]
+  let toggleKeys = Set.singleton (V.KChar 't', [V.MCtrl])
   anyChildFocused $ \focused -> do
     toggleE <- keyCombos toggleKeys
     filterKeys (flip Set.notMember $ Set.insert (V.KChar '\t', []) toggleKeys) $ do
-      rec let cfg =
+      rec -- Which sub-element of this row has focus: the row is focused
+          -- when either the checkbox or the text input is, so the
+          -- checkbox is focused if the row is focused and the text isn't.
+          textFocused <- isFocused fid
+          let cbFocused = (\f tf -> f && not tf) <$> focused <*> textFocused
+          -- A caret in a left gutter marks which to-do row is active.
+          grout (fixed 2) $
+            tellImages $
+              ffor (current focused) $ \f ->
+                [V.text' (V.withStyle (V.withForeColor V.defAttr accent) V.bold) (if f then "▸ " else "  ")]
+          let cfg =
                 def
                   { _checkboxConfig_setValue = setVal
                   }
-          value <- tile (fixed 4) $ checkbox cfg $ _todo_done t0
+          value <-
+            tile (fixed 4) $
+              localTheme (highlightFocus cbFocused) $
+                checkbox cfg $
+                  _todo_done t0
           let setVal = attachWith (\v _ -> not v) (current value) $ gate (current focused) toggleE
           (fid, (ti, d)) <- tile' flex $ do
             i <- input
@@ -286,6 +369,7 @@ todo t0 = row $ do
           , _todoOutput_delete = d
           , _todoOutput_height = _textInput_lines ti
           , _todoOutput_focusId = fid
+          , _todoOutput_focused = focused
           }
   where
     backspaceOnEmpty v = \case
@@ -302,7 +386,7 @@ todos
      )
   => [Todo]
   -> Event t ()
-  -> m (Dynamic t (Map Int (TodoOutput t)))
+  -> m (Dynamic t (Map Rational (TodoOutput t)))
 todos todos0 newTodo = do
   let todosMap0 = Map.fromList $ zip [0 ..] todos0
   rec listOut <- listHoldWithKey todosMap0 updates $ \k t -> grout (fixed 1) $ do
@@ -313,9 +397,22 @@ todos todos0 newTodo = do
         pure to
       let delete = flip Map.singleton Nothing <$> todoDelete
           todosMap = joinDynThroughMap $ fmap _todoOutput_todo <$> listOut
-          insert = ffor (tag (current todosMap) newTodo) $ \m -> case Map.lookupMax m of
-            Nothing -> Map.singleton 0 $ Just $ Todo "" False
-            Just (k, _) -> Map.singleton (k + 1) $ Just $ Todo "" False
+          -- The key of the row that currently holds focus, if any.
+          focusedKey =
+            fmap (fmap fst . Map.lookupMin . Map.filter id) $
+              joinDynThroughMap $
+                fmap _todoOutput_focused <$> listOut
+          -- Insert the new task directly beneath the focused row by choosing a
+          -- key halfway between it and the next row (so existing rows keep
+          -- their keys and edit state). With no focus, or when the focused row
+          -- is last, append at the end.
+          insert = ffor (attach (current todosMap) (tag (current focusedKey) newTodo)) $ \(m, mfk) ->
+            let newKey = case mfk of
+                  Just fk -> case Map.lookupGT fk m of
+                    Just (knext, _) -> (fk + knext) / 2
+                    Nothing -> fk + 1
+                  Nothing -> maybe 0 ((+ 1) . fst) (Map.lookupMax m)
+            in Map.singleton newKey $ Just $ Todo "" False
           updates = leftmost [insert, delete]
           todoDelete =
             switch . current $
@@ -347,7 +444,7 @@ scrolling
   => m ()
 scrolling = col $ do
   grout (fixed 2) $ text "Use your mouse wheel or up and down arrows to scroll:"
-  (fid, out) <- tile' (fixed 5) $ boxStatic def $ scrollableText def $ "Gallia est omnis divisa in partes tres, quarum unam incolunt Belgae, aliam Aquitani, tertiam qui ipsorum lingua Celtae, nostra Galli appellantur. Hi omnes lingua, institutis, legibus inter se differunt. Gallos ab Aquitanis Garumna flumen, a Belgis Matrona et Sequana dividit. Horum omnium fortissimi sunt Belgae, propterea quod a cultu atque humanitate provinciae longissime absunt, minimeque ad eos mercatores saepe commeant atque ea quae ad effeminandos animos pertinent important, proximique sunt Germanis, qui trans Rhenum incolunt, quibuscum continenter bellum gerunt. Qua de causa Helvetii quoque reliquos Gallos virtute praecedunt, quod fere cotidianis proeliis cum Germanis contendunt, cum aut suis finibus eos prohibent aut ipsi in eorum finibus bellum gerunt. Eorum una pars, quam Gallos obtinere dictum est, initium capit a flumine Rhodano, continetur Garumna flumine, Oceano, finibus Belgarum, attingit etiam ab Sequanis et Helvetiis flumen Rhenum, vergit ad septentriones. Belgae ab extremis Galliae finibus oriuntur, pertinent ad inferiorem partem fluminis Rheni, spectant in septentrionem et orientem solem. Aquitania a Garumna flumine ad Pyrenaeos montes et eam partem Oceani quae est ad Hispaniam pertinet; spectat inter occasum solis et septentriones.\nApud Helvetios longe nobilissimus fuit et ditissimus Orgetorix. Is M. Messala, [et P.] M. Pisone consulibus regni cupiditate inductus coniurationem nobilitatis fecit et civitati persuasit ut de finibus suis cum omnibus copiis exirent: perfacile esse, cum virtute omnibus praestarent, totius Galliae imperio potiri. Id hoc facilius iis persuasit, quod undique loci natura Helvetii continentur: una ex parte flumine Rheno latissimo atque altissimo, qui agrum Helvetium a Germanis dividit; altera ex parte monte Iura altissimo, qui est inter Sequanos et Helvetios; tertia lacu Lemanno et flumine Rhodano, qui provinciam nostram ab Helvetiis dividit. His rebus fiebat ut et minus late vagarentur et minus facile finitimis bellum inferre possent; qua ex parte homines bellandi cupidi magno dolore adficiebantur. Pro multitudine autem hominum et pro gloria belli atque fortitudinis angustos se fines habere arbitrabantur, qui in longitudinem milia passuum CCXL, in latitudinem CLXXX patebant."
+  (fid, out) <- tile' (fixed 5) $ accentBox accent roundedBoxStyle " De Bello Gallico " $ scrollableText def $ "Gallia est omnis divisa in partes tres, quarum unam incolunt Belgae, aliam Aquitani, tertiam qui ipsorum lingua Celtae, nostra Galli appellantur. Hi omnes lingua, institutis, legibus inter se differunt. Gallos ab Aquitanis Garumna flumen, a Belgis Matrona et Sequana dividit. Horum omnium fortissimi sunt Belgae, propterea quod a cultu atque humanitate provinciae longissime absunt, minimeque ad eos mercatores saepe commeant atque ea quae ad effeminandos animos pertinent important, proximique sunt Germanis, qui trans Rhenum incolunt, quibuscum continenter bellum gerunt. Qua de causa Helvetii quoque reliquos Gallos virtute praecedunt, quod fere cotidianis proeliis cum Germanis contendunt, cum aut suis finibus eos prohibent aut ipsi in eorum finibus bellum gerunt. Eorum una pars, quam Gallos obtinere dictum est, initium capit a flumine Rhodano, continetur Garumna flumine, Oceano, finibus Belgarum, attingit etiam ab Sequanis et Helvetiis flumen Rhenum, vergit ad septentriones. Belgae ab extremis Galliae finibus oriuntur, pertinent ad inferiorem partem fluminis Rheni, spectant in septentrionem et orientem solem. Aquitania a Garumna flumine ad Pyrenaeos montes et eam partem Oceani quae est ad Hispaniam pertinet; spectat inter occasum solis et septentriones.\nApud Helvetios longe nobilissimus fuit et ditissimus Orgetorix. Is M. Messala, [et P.] M. Pisone consulibus regni cupiditate inductus coniurationem nobilitatis fecit et civitati persuasit ut de finibus suis cum omnibus copiis exirent: perfacile esse, cum virtute omnibus praestarent, totius Galliae imperio potiri. Id hoc facilius iis persuasit, quod undique loci natura Helvetii continentur: una ex parte flumine Rheno latissimo atque altissimo, qui agrum Helvetium a Germanis dividit; altera ex parte monte Iura altissimo, qui est inter Sequanos et Helvetios; tertia lacu Lemanno et flumine Rhodano, qui provinciam nostram ab Helvetiis dividit. His rebus fiebat ut et minus late vagarentur et minus facile finitimis bellum inferre possent; qua ex parte homines bellandi cupidi magno dolore adficiebantur. Pro multitudine autem hominum et pro gloria belli atque fortitudinis angustos se fines habere arbitrabantur, qui in longitudinem milia passuum CCXL, in latitudinem CLXXX patebant."
   pb <- getPostBuild
   requestFocus $ Refocus_Id fid <$ pb
   grout (fixed 1) $ text $ ffor (_scrollable_scrollPosition out) $ \p ->
@@ -367,7 +464,7 @@ scrolling = col $ do
       tile flex $
         scrollableText (ScrollableConfig never never ScrollPos_Bottom (pure $ Just ScrollToBottom_Maintain) ScrollbarAlways) $
           T.unlines <$> xs
-    grout (fixed 5) $ boxStatic def $ do
+    grout (fixed 5) $ accentBox accent singleBoxStyle " Scroll state " $ do
       grout (fixed 1) $ row $ do
         grout (fixed 8) (text "Height:")
         grout flex $ display h

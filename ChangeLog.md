@@ -34,6 +34,7 @@
 * Fix `Reflex.Vty.Widget.Text.richText`: now merges config attrs on `themeAttr` via `mergeAttr`, so `RichTextConfig def` inherits the ambient theme.
 * Fix `textButton` centering: now uses `textWithAlignment TextAlignment_Center`.
 * Fix `textInput` cursor: uses `_theme_textInputCursor` instead of hardcoded `reverseVideo`.
+* Fix `Data.Text.Zipper.displayLinesWithAlignment`: the cursor is now rendered as a blank highlighted cell when it sits past the last character of a line or on an empty line.
 * Fix space leak in `Reflex.Vty.Host.runVtyAppWithHandle`: an application that fired external triggers (e.g. a hot `performEventAsync` callback) faster than the host could process would grow the host's event channel without limit. The host now backpressures producers via a bounded, closeable event queue, and drains every available batch each frame (firing each in its own Reflex frame, redrawing once), so memory is bounded and no event occurrences are dropped. The bounded capacity is configurable via the new `VtyAppConfig` (see the breaking-change entry above; default 4096).
 * Behavior change: external event triggers (`performEventAsync`, `newTriggerEvent`, etc.) may now block when the host's event queue is full, throttling a producer that fires faster than the host can process to the host's own rate. This is the intended flow-control; shutdown closes the queue so any blocked producer is released.
 * Debounce terminal resize events (50ms) to reduce lag and flicker during window drag.

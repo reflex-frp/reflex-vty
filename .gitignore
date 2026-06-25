@@ -3,3 +3,4 @@ dist/
 dist-newstyle/
 .direnv/
 .envrc.local
+doc/reflex-vty.gif

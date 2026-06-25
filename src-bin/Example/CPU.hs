@@ -135,66 +135,27 @@ chart pct = do
           , T.pack (printf "%3d" $ (ceiling $ x * 100 :: Int))
           , "% "
           ]
-  boxTitle (pure TextAlignment_Center) (pure doubleBoxStyle) (current title) $ col $ do
-    grout flex blank
-    dh <- displayHeight
-    let heights = calcRowHeights <$> dh <*> pct
-        quarters = fst <$> heights
-        eighths = snd <$> heights
-        eighthRow = ffor eighths $ \x -> if x == 0 then 0 else 1
-    grout (fixed eighthRow) $
-      fill' (current $ eighthBlocks <$> eighths) $
-        current $
-          ffor quarters $ \q ->
-            if
-              | _quarter_fourth q > 0 -> redAttr
-              | _quarter_third q > 0 -> orangeAttr
-              | _quarter_second q > 0 -> yellowAttr
-              | otherwise -> whiteAttr
-    grout (fixed $ _quarter_fourth <$> quarters) $ fill' (pure '█') (pure redAttr)
-    grout (fixed $ _quarter_third <$> quarters) $ fill' (pure '█') (pure orangeAttr)
-    grout (fixed $ _quarter_second <$> quarters) $ fill' (pure '█') (pure yellowAttr)
-    grout (fixed $ _quarter_first <$> quarters) $ fill' (pure '█') (pure whiteAttr)
-  where
-    -- Calculate number of full rows, height of partial row
-    calcRowHeights :: Int -> Ratio Word64 -> (Quarter Int, Int)
-    calcRowHeights h r =
-      let (full, leftovers) = divMod (numerator r * fromIntegral h) (denominator r)
-          partial = ceiling $ 8 * (leftovers % denominator r)
-          quarter = ceiling $ fromIntegral h / (4 :: Double)
-          n = fromIntegral full
-      in if
-           | n <= quarter ->
-               (Quarter n 0 0 0, partial)
-           | n <= (2 * quarter) ->
-               (Quarter quarter (n - quarter) 0 0, partial)
-           | n <= (3 * quarter) ->
-               (Quarter quarter quarter (n - (2 * quarter)) 0, partial)
-           | otherwise ->
-               (Quarter quarter quarter quarter (n - (3 * quarter)), partial)
-    fill' bc attr = do
-      dw <- displayWidth
+  boxTitle (pure TextAlignment_Center) (pure doubleBoxStyle) (current title) $
+    grout flex $ do
       dh <- displayHeight
-      let fillImg =
-            (\w h c a -> [V.charFill a c w h])
-              <$> current dw
-              <*> current dh
-              <*> bc
-              <*> attr
-      tellImages fillImg
-    color :: Int -> Int -> Int -> V.Color
-    color = V.rgbColor
-    redAttr = V.withForeColor V.defAttr $ color 255 0 0
-    orangeAttr = V.withForeColor V.defAttr $ color 255 165 0
-    yellowAttr = V.withForeColor V.defAttr $ color 255 255 0
-    whiteAttr = V.withForeColor V.defAttr $ color 255 255 255
-
-data Quarter a = Quarter
-  { _quarter_first :: a
-  , _quarter_second :: a
-  , _quarter_third :: a
-  , _quarter_fourth :: a
-  }
+      dw <- displayWidth
+      let grad = gradient1D [(0.0, RGB 50 205 50), (0.4, RGB 255 220 0), (0.7, RGB 255 140 0), (1.0, RGB 220 40 40)]
+          chartImgs h w r =
+            let filledF = fromIntegral (numerator r) * fromIntegral h / fromIntegral (denominator r) :: Double
+                filled = min h $ floor filledF
+                frac = filledF - fromIntegral filled
+                partial = if frac > 0 && filled < h then ceiling (8 * frac) :: Int else 0
+                rowColor i = V.withForeColor V.defAttr $ fromRGB $ sampleGradient1D grad (fromIntegral i / fromIntegral (max 1 (h - 1)))
+                fullImgs =
+                  [ V.translate 0 (h - 1 - i) $ V.charFill (rowColor i) '█' w 1
+                  | i <- [0 .. filled - 1]
+                  ]
+                partialImg =
+                  if partial > 0 && filled < h
+                    then [V.translate 0 (h - 1 - filled) $ V.text' (rowColor filled) (T.replicate w (T.singleton $ eighthBlocks partial))]
+                    else []
+            in fullImgs ++ partialImg
+      tellImages $ chartImgs <$> current dh <*> current dw <*> current pct
 
 eighthBlocks :: (Eq a, Num a, Ord a) => a -> Char
 eighthBlocks n =
