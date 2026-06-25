@@ -38,13 +38,6 @@ import qualified Graphics.Vty as V
 import qualified Graphics.Vty.CrossPlatform as V
 import Reflex
 import Reflex.Host.Class
-import Reflex.Vty.Host.Trigger
-  ( closeBoundedEventQueue
-  , drainBoundedEventQueue
-  , newBoundedEventQueue
-  , runBoundedTriggerT
-  , writeBoundedEventQueue
-  )
 import System.Posix.Signals
   ( Handler (..)
   , Signal
@@ -52,6 +45,14 @@ import System.Posix.Signals
   , sigHUP
   , sigINT
   , sigTERM
+  )
+
+import Reflex.Vty.Host.Trigger
+  ( closeBoundedEventQueue
+  , drainBoundedEventQueue
+  , newBoundedEventQueue
+  , runBoundedTriggerT
+  , writeBoundedEventQueue
   )
 
 -- | A synonym for the underlying vty event type from 'Graphics.Vty'. This should
@@ -112,12 +113,12 @@ type VtyApp t m =
 
 -- | Configuration for running a 'VtyApp'.
 data VtyAppConfig = VtyAppConfig
-  { -- | Maximum number of pending external trigger invocations the host will
-    -- buffer before backpressuring producers (e.g. a hot
-    -- 'Reflex.performEventAsync' callback). When the buffer is full, a
-    -- producer's @fire@ blocks until the host catches up, bounding memory
-    -- without dropping any occurrences. See 'defaultVtyAppConfig'.
-    _vtyConfig_eventQueueCapacity :: !Int
+  { _vtyConfig_eventQueueCapacity :: !Int
+  -- ^ Maximum number of pending external trigger invocations the host will
+  -- buffer before backpressuring producers (e.g. a hot
+  -- 'Reflex.performEventAsync' callback). When the buffer is full, a
+  -- producer's @fire@ blocks until the host catches up, bounding memory
+  -- without dropping any occurrences. See 'defaultVtyAppConfig'.
   }
 
 -- | A sensible default 'VtyAppConfig': an event-queue capacity of 4096, which
@@ -125,7 +126,7 @@ data VtyAppConfig = VtyAppConfig
 -- mouse, network callbacks) without throttling, while keeping worst-case
 -- per-frame fire work and memory modest (~530 KB ceiling).
 instance Default VtyAppConfig where
-  def = VtyAppConfig{_vtyConfig_eventQueueCapacity = 4096}
+  def = VtyAppConfig {_vtyConfig_eventQueueCapacity = 4096}
 
 -- | The default 'VtyAppConfig' (identical to 'def').
 defaultVtyAppConfig :: VtyAppConfig

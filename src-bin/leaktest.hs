@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+
 -- Space-leak repro for profiling. A streaming producer fires into the FRP
 -- network as fast as possible via 'performEventAsync'; the only buffer in
 -- play is the reflex host's event channel. The program self-terminates after
@@ -13,17 +14,17 @@
 --   leaktest +RTS -N2 -hy -p -M4000m -RTS
 module Main (main) where
 
-import qualified Control.Concurrent.Async as Async
 import Control.Concurrent (threadDelay)
+import qualified Control.Concurrent.Async as Async
 import Control.Monad (forever, void)
 import Control.Monad.IO.Class (liftIO)
 import Data.Text (pack)
 import qualified Graphics.Vty as V
 import Reflex
-import Reflex.Vty
 import System.Exit (exitSuccess)
 
 import Data.Text.Zipper (TextAlignment (..))
+import Reflex.Vty
 
 main :: IO ()
 main = do
@@ -36,9 +37,11 @@ main = do
         ffor setupE $
           \() fire -> liftIO . void . Async.async $ forever (fire (0 :: Int))
     sB <- current <$> holdDyn 0 sE
-    col $ grout (fixed 17) $
-      boxTitle (constant TextAlignment_Left) (constant doubleBoxStyle) "" $
-        grout (fixed 1) $ text (pack . show <$> sB)
+    col $
+      grout (fixed 17) $
+        boxTitle (constant TextAlignment_Left) (constant doubleBoxStyle) "" $
+          grout (fixed 1) $
+            text (pack . show <$> sB)
     pure $ fforMaybe inp $ \case
       V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
       _ -> Nothing

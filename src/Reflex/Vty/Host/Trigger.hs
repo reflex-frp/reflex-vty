@@ -26,6 +26,7 @@ module Reflex.Vty.Host.Trigger
   , closeBoundedEventQueue
   , writeBoundedEventQueue
   , drainBoundedEventQueue
+
     -- * TriggerEvent transformer
   , BoundedTriggerT
   , runBoundedTriggerT
@@ -108,16 +109,17 @@ writeBoundedEventQueue q batch =
 -- batch would drop occurrences). Returns 'Nothing' if the queue is closed and
 -- empty.
 drainBoundedEventQueue :: BoundedEventQueue t -> IO (Maybe [Batch t])
-drainBoundedEventQueue q = atomically $
-  let readFirst = Just <$> readTBQueue (_beqQueue q)
-      waitClosed = Nothing <$ readTMVar (_beqClosed q)
-   in do
-        mFirst <- readFirst `orElse` waitClosed
-        case mFirst of
-          Nothing -> return Nothing
-          Just first -> do
-            rest <- flushTBQueue (_beqQueue q)
-            return $ Just (first : rest)
+drainBoundedEventQueue q =
+  atomically $
+    let readFirst = Just <$> readTBQueue (_beqQueue q)
+        waitClosed = Nothing <$ readTMVar (_beqClosed q)
+    in do
+         mFirst <- readFirst `orElse` waitClosed
+         case mFirst of
+           Nothing -> return Nothing
+           Just first -> do
+             rest <- flushTBQueue (_beqQueue q)
+             return $ Just (first : rest)
 
 ----------------------------------------------------------------------------
 -- TriggerEvent transformer
@@ -132,14 +134,14 @@ newtype BoundedTriggerT t m a = BoundedTriggerT
   { unBoundedTriggerT :: ReaderT (BoundedEventQueue t) m a
   }
   deriving
-    ( Functor
-    , Applicative
+    ( Applicative
+    , Functor
     , Monad
+    , MonadCatch
     , MonadFix
     , MonadIO
-    , MonadCatch
-    , MonadThrow
     , MonadMask
+    , MonadThrow
     )
 
 -- | Run a 'BoundedTriggerT' action against a particular 'BoundedEventQueue'.
