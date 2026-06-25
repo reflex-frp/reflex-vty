@@ -49,7 +49,17 @@ main = mainWidget def $ do
 
 Run the bundled demo with `cabal run example` to see many of these in action: a text editor, a to-do list, scrollable text, clickable buttons, a live CPU-usage display with a true-color gradient bar, a scrollbar-modes demo, a terminal-cursor demo, and a little styling showcase featuring gradients, color operations, a canvas overlay, border presets, theming, and color-profile downsampling.
 
-Feature requests, pull requests, and other feedback are welcome and appreciated (see the [contribution guide](CONTRIBUTING.md)). This library is still experimental, so big changes are possible.
+### Example gallery
+
+Each of these examples is a module in [`src-bin/Example/`](src-bin/Example/). You can run any of them with `cabal run examples -- <name>`.
+
+|                                                 |                                                                                                     |
+| :--                                             | :--                                                                                                 |
+| **`spinner`** — an animated braille spinner     | <img src="https://vhs.charm.sh/vhs-2ZldM9gFD9ovea54MAwio3.gif" alt="spinner demo" width="420">      |
+| **`progress`** — a gradient-filled progress bar | <img src="https://vhs.charm.sh/vhs-3oJNQQcQH6vM4VyH7Yww56.gif" alt="progress bar demo" width="420"> |
+| **`stopwatch`** — a tick-driven count-up timer  | <img src="https://vhs.charm.sh/vhs-5C8hkG3W9P4tATBBtLhxIm.gif" alt="stopwatch demo" width="420">    |
+
+Feature requests, pull requests, and other feedback are welcome and appreciated (see the [contribution guide](CONTRIBUTING.md)).
 
 ### How to Build
 

@@ -152,6 +152,31 @@ executable example
     TypeApplications
     TypeFamilies
 
+executable examples
+  hs-source-dirs: src-bin
+  main-is: examples.hs
+  ghc-options: -threaded -Wall
+  build-depends:
+    base,
+    reflex,
+    reflex-vty,
+    text,
+    time,
+    vty
+  default-language: Haskell2010
+  other-modules:
+    Example.Common
+    Example.Progress
+    Example.Spinner
+    Example.Stopwatch
+  default-extensions:
+    ConstraintKinds
+    FlexibleContexts
+    LambdaCase
+    OverloadedStrings
+    RankNTypes
+    ScopedTypeVariables
+
 executable leaktest
   if !flag(leaktest)
     buildable: False
