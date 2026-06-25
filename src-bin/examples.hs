@@ -9,9 +9,13 @@ import Reflex
 import System.Environment (getArgs)
 
 import Example.Common
+import Example.Pager
 import Example.Progress
 import Example.Spinner
 import Example.Stopwatch
+import Example.TextInput
+import Example.Timer
+import Example.Views
 import Reflex.Vty
 
 main :: IO ()
@@ -29,6 +33,10 @@ runExample = \case
   "progress" -> progressBar
   "progress-bar" -> progressBar
   "stopwatch" -> stopwatch
+  "timer" -> timer
+  "textinput" -> textInputExample
+  "pager" -> pager
+  "views" -> views
   other -> do
     text $ pure $ "Unknown example: " <> T.pack other <> "  (q to quit)"
     quit

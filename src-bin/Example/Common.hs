@@ -23,6 +23,7 @@ type Demo t m =
   , HasInput t m
   , HasImageWriter t m
   , HasDisplayRegion t m
+  , HasFocusReader t m
   , HasTheme t m
   )
 
