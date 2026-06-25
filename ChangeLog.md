@@ -1,5 +1,9 @@
 # Revision history for reflex-vty
 
+## 1.0.0.1
+
+* Add some more examples, especially of the new canvas features
+
 ## 1.0.0.0
 
 * *Breaking change*: Add `HasColorProfile` class (with `colorProfile`/`localColorProfile` and a `ColorProfileReader` transformer) to `Reflex.Vty.Widget`. Widgets can call `colorProfile` to make decisions based on terminal capability.
