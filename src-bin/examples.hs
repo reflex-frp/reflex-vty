@@ -8,10 +8,14 @@ import qualified Data.Text as T
 import Reflex
 import System.Environment (getArgs)
 
+import Example.CellBuffer
 import Example.Common
+import Example.DoomFire
 import Example.Pager
 import Example.Progress
+import Example.Space
 import Example.Spinner
+import Example.Splash
 import Example.Stopwatch
 import Example.TextInput
 import Example.Timer
@@ -37,6 +41,10 @@ runExample = \case
   "textinput" -> textInputExample
   "pager" -> pager
   "views" -> views
+  "cellbuffer" -> cellBuffer
+  "doom-fire" -> doomFire
+  "space" -> space
+  "splash" -> splash
   other -> do
     text $ pure $ "Unknown example: " <> T.pack other <> "  (q to quit)"
     quit
