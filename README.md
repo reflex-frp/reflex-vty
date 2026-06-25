@@ -58,6 +58,10 @@ Each of these examples is a module in [`src-bin/Example/`](src-bin/Example/). Yo
 | **`spinner`** — an animated braille spinner     | <img src="https://vhs.charm.sh/vhs-2ZldM9gFD9ovea54MAwio3.gif" alt="spinner demo" width="420">      |
 | **`progress`** — a gradient-filled progress bar | <img src="https://vhs.charm.sh/vhs-3oJNQQcQH6vM4VyH7Yww56.gif" alt="progress bar demo" width="420"> |
 | **`stopwatch`** — a tick-driven count-up timer  | <img src="https://vhs.charm.sh/vhs-5C8hkG3W9P4tATBBtLhxIm.gif" alt="stopwatch demo" width="420">    |
+| **`timer`** — a count-down timer                | <img src="https://vhs.charm.sh/vhs-3gpq3fy1zWP3IsXysnT7WT.gif" alt="timer demo" width="420">        |
+| **`textinput`** — a focused text-input field    | <img src="https://vhs.charm.sh/vhs-4FzSVaJAnGq4V1NNrk1lal.gif" alt="text input demo" width="420">   |
+| **`pager`** — a scrollable text viewport        | <img src="https://vhs.charm.sh/vhs-7a2bCmFHleF9MG3KxY4yeh.gif" alt="pager demo" width="420">        |
+| **`views`** — toggle between two views          | <img src="https://vhs.charm.sh/vhs-7rflGBcgFrmIQgk0JmZNKe.gif" alt="views demo" width="420">        |
 
 Feature requests, pull requests, and other feedback are welcome and appreciated (see the [contribution guide](CONTRIBUTING.md)).
 

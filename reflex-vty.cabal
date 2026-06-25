@@ -166,9 +166,13 @@ executable examples
   default-language: Haskell2010
   other-modules:
     Example.Common
+    Example.Pager
     Example.Progress
     Example.Spinner
     Example.Stopwatch
+    Example.TextInput
+    Example.Timer
+    Example.Views
   default-extensions:
     ConstraintKinds
     FlexibleContexts
