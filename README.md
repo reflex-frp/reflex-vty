@@ -63,7 +63,7 @@ Each of these examples is a module in [`src-bin/Example/`](src-bin/Example/). Yo
 | **`pager`** — a scrollable text viewport        | <img src="https://vhs.charm.sh/vhs-7a2bCmFHleF9MG3KxY4yeh.gif" alt="pager demo" width="420">        |
 | **`views`** — toggle between two views          | <img src="https://vhs.charm.sh/vhs-7rflGBcgFrmIQgk0JmZNKe.gif" alt="views demo" width="420">        |
 
-**More demos** — full-screen canvas animations (Doom fire, a plasma field, a starfield, an animated splash) live on the [examples page](EXAMPLES.md).
+**More demos**: full-screen canvas animations (the classic Doom fire, a plasma field, a starfield, an animated splash) live on the [examples page](EXAMPLES.md).
 
 Feature requests, pull requests, and other feedback are welcome and appreciated (see the [contribution guide](CONTRIBUTING.md)).
 
