@@ -8,7 +8,7 @@ reflex-vty provides a [Reflex FRP](https://reflex-frp.org) host and a library of
 
 [![Haskell](https://img.shields.io/badge/language-Haskell-orange.svg)](https://haskell.org) [![Hackage](https://img.shields.io/hackage/v/reflex-vty.svg)](https://hackage.haskell.org/package/reflex-vty) [![Github CI](https://github.com/reflex-frp/reflex-vty/actions/workflows/haskell.yml/badge.svg)](https://github.com/reflex-frp/reflex-vty/actions) [![Obsidian](https://img.shields.io/badge/Obsidian-Systems-white)](https://obsidian.systems) [![BSD3 License](https://img.shields.io/badge/license-BSD3-blue.svg)](LICENSE)
 
-<img src="https://vhs.charm.sh/vhs-3KNq9BMP7nnFY7YNsQw4TV.gif" alt="reflex-vty example walkthrough: gradient menu, to-do list, CPU graph, and styling showcase" width="80%">
+<img src="https://vhs.charm.sh/vhs-4ch4hhuTGZMXLIOPgNcA0G.gif" alt="reflex-vty example walkthrough: gradient menu, to-do list, scrollbar modes, and styling showcase" width="80%">
 
 </div>
 
