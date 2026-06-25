@@ -29,8 +29,8 @@ splitVDrag wS wA wB = do
       splitterFrac <- holdDyn ((1 :: Double) / 2) $ ffor (attach (current dh) (fst <$> dragSplitter)) $ \(h, x) ->
         fromIntegral x / max 1 (fromIntegral h)
       let dragSplitter = fforMaybe (attach (current splitterCheckpoint) dragE) $
-            \(splitterY, Drag (_, fromY) (_, toY) _ _ end) ->
-              if splitterY == fromY then Just (toY, end) else Nothing
+            \(splitterY, Drag (_, fromY) (_, toY) _ _ st) ->
+              if splitterY == fromY then Just (toY, st == DragEnd) else Nothing
           regA = Region 0 0 <$> dw <*> splitterPos
           regS = Region 0 <$> splitterPos <*> dw <*> 1
           regB = Region 0 <$> (splitterPos + 1) <*> dw <*> (dh - splitterPos - 1)

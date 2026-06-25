@@ -8,6 +8,19 @@ import Reflex
 
 import Reflex.Vty.Widget
 
+-- | The phase of a drag operation. A drag is a sequence of events that begins
+-- with a 'DragStart' (the button is pressed), continues with zero or more
+-- 'Dragging' events (the mouse moves with the button held), and finishes with
+-- a 'DragEnd' (the button is released).
+data DragState
+  = -- | The button was just pressed; this is the first event of the drag.
+    DragStart
+  | -- | The mouse is moving with the button held down.
+    Dragging
+  | -- | The button was released; this is the last event of the drag.
+    DragEnd
+  deriving (Bounded, Enum, Eq, Ord, Read, Show)
+
 -- | Information about a drag operation
 data Drag = Drag
   { _drag_from :: (Int, Int)
@@ -18,10 +31,39 @@ data Drag = Drag
   -- ^ Which mouse button is dragging
   , _drag_modifiers :: [V.Modifier]
   -- ^ What modifiers are held
-  , _drag_end :: Bool
-  -- ^ Whether the drag ended (the mouse button was released)
+  , _drag_state :: DragState
+  -- ^ Which phase of the drag this event represents. Use this to tell the
+  -- start of a drag ('DragStart') apart from its continuation ('Dragging')
+  -- and its end ('DragEnd').
   }
   deriving (Eq, Ord, Show)
+
+-- | Pure state transition driving 'drag'. Given the button being tracked, the
+-- previous 'Drag' state (if any), and an incoming vty event, produce the next
+-- 'Drag' or 'Nothing' if the event is irrelevant. The first relevant mouse-down
+-- yields a 'DragStart', subsequent moves yield 'Dragging', and the button
+-- release yields 'DragEnd'; a mouse-down after a 'DragEnd' starts a fresh drag.
+stepDrag :: V.Button -> Maybe Drag -> V.Event -> Maybe Drag
+stepDrag btn = \case
+  Nothing -> \case
+    V.EvMouseDown x y btn' mods
+      | btn == btn' -> Just $ Drag (x, y) (x, y) btn' mods DragStart
+      | otherwise -> Nothing
+    _ -> Nothing
+  Just (Drag from _ _ mods st) -> \case
+    V.EvMouseDown x y btn' mods'
+      | st == DragEnd && btn == btn' -> Just $ Drag (x, y) (x, y) btn' mods' DragStart
+      | btn == btn' -> Just $ Drag from (x, y) btn mods' Dragging
+      | otherwise -> Nothing -- Ignore other buttons.
+    V.EvMouseUp x y (Just btn')
+      | st == DragEnd -> Nothing
+      | btn == btn' -> Just $ Drag from (x, y) btn mods DragEnd
+      | otherwise -> Nothing
+    V.EvMouseUp x y Nothing -- Terminal doesn't specify mouse up button,
+    -- assume it's the right one.
+      | st == DragEnd -> Nothing
+      | otherwise -> Just $ Drag from (x, y) btn mods DragEnd
+    _ -> Nothing
 
 -- | Converts raw vty mouse drag events into an event stream of 'Drag's
 drag
@@ -30,27 +72,7 @@ drag
   -> m (Event t Drag)
 drag btn = do
   inp <- input
-  let f :: Maybe Drag -> V.Event -> Maybe Drag
-      f Nothing = \case
-        V.EvMouseDown x y btn' mods
-          | btn == btn' -> Just $ Drag (x, y) (x, y) btn' mods False
-          | otherwise -> Nothing
-        _ -> Nothing
-      f (Just (Drag from _ _ mods end)) = \case
-        V.EvMouseDown x y btn' mods'
-          | end && btn == btn' -> Just $ Drag (x, y) (x, y) btn' mods' False
-          | btn == btn' -> Just $ Drag from (x, y) btn mods' False
-          | otherwise -> Nothing -- Ignore other buttons.
-        V.EvMouseUp x y (Just btn')
-          | end -> Nothing
-          | btn == btn' -> Just $ Drag from (x, y) btn mods True
-          | otherwise -> Nothing
-        V.EvMouseUp x y Nothing -- Terminal doesn't specify mouse up button,
-        -- assume it's the right one.
-          | end -> Nothing
-          | otherwise -> Just $ Drag from (x, y) btn mods True
-        _ -> Nothing
-  rec let newDrag = attachWithMaybe f (current dragD) inp
+  rec let newDrag = attachWithMaybe (stepDrag btn) (current dragD) inp
       dragD <- holdDyn Nothing $ Just <$> newDrag
   return (fmapMaybe id $ updated dragD)
 
