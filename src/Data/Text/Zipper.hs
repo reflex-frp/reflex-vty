@@ -514,7 +514,14 @@ displayLinesWithAlignment alignment width tag cursorTag (TextZipper lb b a la) =
           cursortext = T.take 1 $ T.drop charsbeforecursor t
           aftercursor = T.drop (charsbeforecursor + 1) t
 
-          cursorspans = [Span tag beforecursor, Span cursorTag cursortext] <> if T.null aftercursor then [] else [Span tag aftercursor]
+          -- When the cursor goes past the last character of the current
+          -- logical line (@a@ is empty), there is no character under it to
+          -- highlight, so we render a blank cell carrying the cursor tag. This
+          -- keeps the cursor visible at the end of the text. We only do this
+          -- at the true end of the line, never at a soft-wrap boundary (which
+          -- would double the cursor).
+          cursorcell = if T.null cursortext && T.null a then " " else cursortext
+          cursorspans = [Span tag beforecursor, Span cursorTag cursorcell] <> if T.null aftercursor then [] else [Span tag aftercursor]
 
           r =
             if cursoroncurspan
@@ -522,8 +529,10 @@ displayLinesWithAlignment alignment width tag cursorTag (TextZipper lb b a la) =
               else (nextacc, [Span tag t])
       ((_, ecpos_out), curlinespans) =
         if T.null curlinetext
-          -- manually handle empty case because mapaccumlfn doesn't handle it
-          then ((0, Right (0, alignmentOffset alignment width "")), [[Span cursorTag ""]])
+          -- Manually handle empty case. Render a blank cursor cell (a space)
+          -- so the cursor stays visible on an empty line instead of collapsing
+          -- to nothing.
+          then ((0, Right (0, alignmentOffset alignment width "")), [[Span cursorTag " "]])
           else L.mapAccumL mapaccumlfn (0, Left 0) curwrappedlines
 
       (cursorY', cursorX) = case ecpos_out of

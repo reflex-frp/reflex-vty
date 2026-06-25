@@ -79,18 +79,26 @@ spec =
 
       insertcharnewlinesentence `shouldBe` fromText newlineSentence
 
-      -- NOTE last " " is the generated cursor span char
-      _displayLines_spans dl0 `shouldBe` makespans [[""], [""], [""], [""], [""], [""]]
-      _displayLines_spans dl1 `shouldBe` makespans [["aoeu"], [""], [""], ["aoeu", ""]]
-      _displayLines_spans dl2 `shouldBe` makespans [[""], [""], [""], ["aoeu", ""]]
-      _displayLines_spans dl3 `shouldBe` makespans [["aoeu"], [""], [""], [""]]
-      _displayLines_spans dl4 `shouldBe` makespans [[""]]
+      -- NOTE the trailing " " is the generated cursor cell: when the cursor
+      -- sits past the last character of its line, it is rendered as a blank
+      -- cell carrying the cursor tag so it stays visible.
+      _displayLines_spans dl0 `shouldBe` makespans [[""], [""], [""], [""], [""], [" "]]
+      _displayLines_spans dl1 `shouldBe` makespans [["aoeu"], [""], [""], ["aoeu", " "]]
+      _displayLines_spans dl2 `shouldBe` makespans [[""], [""], [""], ["aoeu", " "]]
+      _displayLines_spans dl3 `shouldBe` makespans [["aoeu"], [""], [""], [" "]]
+      _displayLines_spans dl4 `shouldBe` makespans [[" "]]
 
     it "displayLinesWithAlignment - cursor tag" $ do
       let dl0 = displayLinesWithAlignment TextAlignment_Right 10 0 1 (fromText "abc")
           dl1 = displayLinesWithAlignment TextAlignment_Right 10 0 1 empty
-      _displayLines_spans dl0 `shouldBe` [[Span 0 "abc", Span 1 ""]]
-      _displayLines_spans dl1 `shouldBe` [[Span 1 ""]]
+          -- cursor moved left into the text: it lands on a real character
+          dl2 = displayLinesWithAlignment TextAlignment_Right 10 0 1 (left (fromText "abc"))
+      -- cursor at end of text and on an empty line render a blank cursor cell
+      -- so the cursor remains visible (see Data.Text.Zipper cursorcell)
+      _displayLines_spans dl0 `shouldBe` [[Span 0 "abc", Span 1 " "]]
+      _displayLines_spans dl1 `shouldBe` [[Span 1 " "]]
+      -- when the cursor is over a character, that character carries the tag
+      _displayLines_spans dl2 `shouldBe` [[Span 0 "ab", Span 1 "c"]]
 
     it "displayLines - cursorPos" $ do
       let dl0 = displayLinesWithAlignment TextAlignment_Left 10 () () (fromText "")
