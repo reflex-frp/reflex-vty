@@ -158,6 +158,7 @@ executable examples
   ghc-options: -threaded -Wall
   build-depends:
     base,
+    containers,
     reflex,
     reflex-vty,
     text,
@@ -165,10 +166,14 @@ executable examples
     vty
   default-language: Haskell2010
   other-modules:
+    Example.CellBuffer
     Example.Common
+    Example.DoomFire
     Example.Pager
     Example.Progress
+    Example.Space
     Example.Spinner
+    Example.Splash
     Example.Stopwatch
     Example.TextInput
     Example.Timer
