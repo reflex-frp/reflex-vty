@@ -30,49 +30,53 @@ Sleep 800ms
 Show
 
 # --- Main menu: the pink -> violet -> cyan gradient banner ---
-Sleep 1200ms
+Sleep 800ms
 
-# --- Todo List (button 1): focus caret, toggle, insert-under-focus, visible cursor ---
+# --- Todo List (button 1): tab down to the last task, then the
+# "..." / "Profit!" gag (shows focus caret, insert-under-focus, cursor, Ctrl+T) ---
 Tab
+Sleep 250ms
+Enter
+Sleep 600ms
+Tab@90ms 4
+Sleep 350ms
+Enter
+Sleep 200ms
+Type "..."
 Sleep 400ms
 Enter
-Sleep 1000ms
+Sleep 200ms
+Type "Profit!"
+Sleep 400ms
 Ctrl+T
 Sleep 800ms
-Enter
-Sleep 350ms
-Type "ship reflex-vty 1.0.0.0"
-Sleep 600ms
-Enter
-Sleep 350ms
-Type "write the changelog"
-Sleep 500ms
-Ctrl+T
-Sleep 1000ms
 Escape
-Sleep 600ms
+Sleep 350ms
 
-# --- CPU Usage (button 5): the live true-color gradient bar (kept brief) ---
-Tab@150ms 5
-Sleep 300ms
+# --- Scrollbar modes (button 6): a Down-arrow scrolls all four panels at once,
+# showing the gutter+thumb / thumb-only / while-scrolling / hidden styles ---
+Tab@90ms 6
+Sleep 200ms
 Enter
-Sleep 1500ms
-Escape
 Sleep 600ms
+Down@80ms 12
+Sleep 800ms
+Escape
+Sleep 350ms
 
 # --- Showcase (button 8): styling, then cycle through themes with Tab (lots of color) ---
-Tab@150ms 8
-Sleep 300ms
+Tab@90ms 8
+Sleep 200ms
 Enter
-Sleep 1300ms
+Sleep 800ms
 Tab
-Sleep 1000ms
+Sleep 650ms
 Tab
-Sleep 1000ms
+Sleep 650ms
 Tab
-Sleep 1000ms
+Sleep 650ms
 Tab
-Sleep 1200ms
+Sleep 800ms
 
 # --- Quit (hidden so the restored shell / nix output isn't recorded; the GIF
 # ends on the showcase and loops cleanly back to the menu) ---
