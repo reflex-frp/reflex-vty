@@ -5,7 +5,7 @@ synopsis: Reflex FRP host and widgets for VTY applications
 description:
   Build terminal applications using functional reactive programming (FRP) with Reflex FRP (<https://reflex-frp.org>).
   .
-  <<https://i.imgur.com/FULQNtu.gif>>
+  <<https://vhs.charm.sh/vhs-1QNXpqEc9fg8E2WKtkDsD9.gif>>
 license: BSD-3-Clause
 license-file: LICENSE
 author: Obsidian Systems LLC
