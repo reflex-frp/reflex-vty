@@ -1,5 +1,9 @@
 # Revision history for reflex-vty
 
+## 1.1.0.0
+
+* *Breaking change*: reflex-vty now builds on Windows. OS signals are handled through a platform-agnostic type called `AppSignal`. This changes `VtyApp`'s signal argument (`Event t AppSignal` instead of `Event t Signal` (synonym for `CInt`).
+
 ## 1.0.0.1
 
 * Add some more examples, especially of the new canvas features
