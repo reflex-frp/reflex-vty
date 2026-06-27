@@ -11,7 +11,7 @@ module Reflex.Vty.Host
   , setCursorStyle
   , ScreenMode (..)
   , setScreenMode
-  , Signal
+  , AppSignal (..)
   , getDefaultVty
   , runVtyApp
   , runVtyAppWithHandle
@@ -38,15 +38,11 @@ import qualified Graphics.Vty as V
 import qualified Graphics.Vty.CrossPlatform as V
 import Reflex
 import Reflex.Host.Class
-import System.Posix.Signals
-  ( Handler (..)
-  , Signal
-  , installHandler
-  , sigHUP
-  , sigINT
-  , sigTERM
-  )
 
+import Reflex.Vty.Host.Signal
+  ( AppSignal (..)
+  , installAppSignalHandlers
+  )
 import Reflex.Vty.Host.Trigger
   ( closeBoundedEventQueue
   , drainBoundedEventQueue
@@ -101,9 +97,10 @@ type VtyApp t m =
   -- ^ The initial display size (updates to this come as events)
   -> Event t V.Event
   -- ^ Vty input events.
-  -> Event t Signal
-  -- ^ POSIX signal events (SIGINT, SIGTERM, SIGHUP). All three automatically
-  -- trigger shutdown; apps can observe them for custom handling before exit.
+  -> Event t AppSignal
+  -- ^ OS signal events, normalized across platforms. 'AppSignal_Interrupt',
+  -- 'AppSignal_Terminate', and 'AppSignal_Hangup' all trigger shutdown.
+  -- NOTE: This behavior will be configurable in the future.
   -> m (VtyResult t)
   -- ^ The output of the 'VtyApp'. The application runs in a context that,
   --   among other things, allows new events to be created and triggered
@@ -159,7 +156,7 @@ runVtyAppWithHandle cfg vty vtyGuest = flip onException (V.shutdown vty) $
     -- once, when the application starts.
     (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
 
-    -- Create an 'Event' for POSIX signals.
+    -- Create an 'Event' for OS signals.
     (signalEvent, signalTriggerRef) <- newEventWithTriggerRef
 
     -- A bounded, closeable queue into which external triggers write their
@@ -194,7 +191,7 @@ runVtyAppWithHandle cfg vty vtyGuest = flip onException (V.shutdown vty) $
     -- The guest app is provided the
     -- initial display region, an
     -- 'Event' of vty inputs, and an
-    -- 'Event' of POSIX signals.
+    -- 'Event' of OS signals.
 
     -- Reads the current value of the 'Picture' behavior and updates the
     -- display with it. This will be called whenever we determine that a
@@ -219,7 +216,7 @@ runVtyAppWithHandle cfg vty vtyGuest = flip onException (V.shutdown vty) $
     -- request application shutdown. We'll check whether this 'Event' is firing
     -- to determine whether to terminate. SIGINT, SIGTERM, and SIGHUP from the
     -- host also trigger shutdown.
-    let sigShutdown = () <$ ffilter (\s -> s == sigINT || s == sigTERM || s == sigHUP) signalEvent
+    let sigShutdown = () <$ ffilter (\s -> s == AppSignal_Interrupt || s == AppSignal_Terminate || s == AppSignal_Hangup) signalEvent
     shutdown <- subscribeEvent $ leftmost [_vtyResult_shutdown vtyResult, sigShutdown]
 
     -- Fork a thread and continuously get the next vty input event, and then
@@ -241,11 +238,9 @@ runVtyAppWithHandle cfg vty vtyGuest = flip onException (V.shutdown vty) $
       -- practice input never saturates it.)
       atomically $ writeBoundedEventQueue pending [triggerRef :=> triggerInvocation]
 
-    -- Install POSIX signal handlers. Each handler writes the signal value
-    -- into the bounded FRP event queue. The RTS runs 'Catch' actions in a
-    -- separate thread, so the STM write is safe here.
-    liftIO $ forM_ [sigINT, sigTERM, sigHUP] $ \sig ->
-      installHandler sig (Catch $ atomically $ writeBoundedEventQueue pending [EventTriggerRef signalTriggerRef :=> TriggerInvocation sig (return ())]) Nothing
+    -- Install OS signal handlers.
+    liftIO $ installAppSignalHandlers $ \appSignal ->
+      atomically $ writeBoundedEventQueue pending [EventTriggerRef signalTriggerRef :=> TriggerInvocation appSignal (return ())]
 
     -- The main application loop. We block until at least one batch of events
     -- is available, then drain every other batch that has accumulated in the
