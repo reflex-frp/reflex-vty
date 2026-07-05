@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# nix-scaffold.sh: scaffold a new reflex-vty-based Haskell
+# nix-skeleton.sh: skeleton a new reflex-vty-based Haskell
 # project that builds with nix.
 #
 # Runs `cabal init -i` in the target directory (producing a
 # library & executable skeleton), then layers on:
-#   - the nix scaffolding (dep/ thunks, release.nix, shell.nix,
+#   - the nix skeleton (dep/ thunks, release.nix, shell.nix,
 #   src.nix, .envrc) parameterized to the project name, and
 #   - a minimal reflex-vty executable that draws a greeting exported by the
 #   library (the canonical "Hello, reflex-vty!" example from the README).
@@ -82,6 +82,8 @@ sed "s/@PACKAGE_NAME@/$NAME/g" "$TEMPLATE_DIR/app/Main.hs" > "$DIR/app/Main.hs"
 # 3. Patch the cabal file: expose `App`, and add reflex-vty to the executable.
 echo "==> patching $NAME.cabal" >&2
 sed -i "s/^[[:space:]]*exposed-modules:.*/    exposed-modules:      App/" "$CABAL_FILE"
+# The reflex-vty host needs the threaded RTS (it spawns input/vty threads).
+sed -i "s/ghc-options: -Wall/ghc-options: -Wall -threaded -rtsopts/" "$CABAL_FILE"
 
 # Append deps after the self/base dependency lines:
 #   - in the executable: `, reflex-vty` (after the package's self-dependency)
