@@ -101,7 +101,11 @@ awk -v pkg="$NAME" '
     line = $0
     sub(/^[[:space:]]+/, "", line)
     sub(/[[:space:]]+$/, "", line)
-    if (line == pkg) print "        , reflex-vty"
+    if (line == pkg) {
+      print "        , reflex-vty"
+      print "        , vty"
+      print "        , text"
+    }
   }
 ' "$CABAL_FILE" > "$CABAL_FILE.tmp" && mv "$CABAL_FILE.tmp" "$CABAL_FILE"
 
