@@ -5,5 +5,5 @@ import Reflex.Vty
 
 main :: IO ()
 main = mainWidget def $ do
-  text greeting
+  text (pure greeting)
   ctrlc

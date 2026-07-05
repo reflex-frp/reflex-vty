@@ -83,10 +83,17 @@ sed "s/@PACKAGE_NAME@/$NAME/g" "$TEMPLATE_DIR/app/Main.hs" > "$DIR/app/Main.hs"
 echo "==> patching $NAME.cabal" >&2
 sed -i "s/^[[:space:]]*exposed-modules:.*/    exposed-modules:      App/" "$CABAL_FILE"
 
-# Append `, reflex-vty` after the executable's self-dependency line.
+# Append deps after the self/base dependency lines:
+#   - in the executable: `, reflex-vty` (after the package's self-dependency)
+#   - in the library: append `, text` to the build-depends line (App.hs needs Data.Text)
 awk -v pkg="$NAME" '
-  /^executable[[:space:]]/ { in_exe = 1 }
-  /^(library|test-suite|common|benchmark)[[:space:]]/ { in_exe = 0 }
+  /^library([[:space:]]|$)/                                   { in_lib = 1; in_exe = 0 }
+  /^executable[[:space:]]/                                    { in_lib = 0; in_exe = 1 }
+  /^(test-suite|common|benchmark)([[:space:]]|$)/             { in_lib = 0; in_exe = 0 }
+  in_lib && /^[[:space:]]*build-depends:[[:space:]].*base/ {
+    sub(/[[:space:]]+$/, "")
+    $0 = $0 ", text"
+  }
   { print }
   in_exe {
     line = $0
