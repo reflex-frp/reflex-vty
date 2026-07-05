@@ -8,7 +8,7 @@ import Reflex.Vty
 
 import App (greeting)
 
--- | A pink → violet → cyan brand gradient, as used by the splash example.
+-- | A pink to violet to cyan gradient
 brandGradient :: Gradient1D
 brandGradient =
   gradient1D
@@ -20,23 +20,24 @@ brandGradient =
 -- | Render a single line of bold text whose characters are colored along a
 -- horizontal true-color gradient, centered within the available width.
 gradientLine
-  :: (Reflex t, HasDisplayRegion t m, HasImageWriter t m)
+  :: (Reflex t, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m)
   => Gradient1D -> Text -> m ()
 gradientLine grad txt = do
   dw <- displayWidth
-  tellImages $ ffor (current dw) $ \w -> [img w]
+  attr <- themeAttr
+  tellImages $ (\w a -> [img a w]) <$> current dw <*> attr
   where
     cs = T.unpack txt
     n = length cs
-    colored =
+    colored a =
       V.horizCat
-        [ V.char (V.withStyle (V.withForeColor V.defAttr (fromRGB (sampleGradient1D grad p))) V.bold) c
+        [ V.char (V.withStyle (V.withForeColor a (fromRGB (sampleGradient1D grad p))) V.bold) c
         | (i, c) <- zip [0 :: Int ..] cs
         , let p = fromIntegral i / fromIntegral (max 1 (n - 1))
         ]
-    img w =
+    img a w =
       V.horizCat
-        [V.text' V.defAttr (T.replicate (max 0 ((w - n) `div` 2)) " "), colored]
+        [V.text' a (T.replicate (max 0 ((w - n) `div` 2)) " "), colored a]
 
 main :: IO ()
 main = mainWidget def $ localTheme (const (pure draculaTheme)) $ initManager_ $ do
