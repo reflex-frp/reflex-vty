@@ -1,5 +1,9 @@
 # Revision history for reflex-vty
 
+## 1.1.0.1
+
+* Fix: `inputInFocusedRegion` now drops `EvPaste` events in unfocused regions, so paste doesn't go to every `textInput` on screen. Previously only `EvKey` was gated on focus.
+
 ## 1.1.0.0
 
 * *Breaking change*: reflex-vty now builds on Windows. OS signals are handled through a platform-agnostic type called `AppSignal`. This changes `VtyApp`'s signal argument (`Event t AppSignal` instead of `Event t Signal` (synonym for `CInt`)).
