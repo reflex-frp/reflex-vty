@@ -1,8 +1,10 @@
 # Revision history for reflex-vty
 
-## 1.1.0.1
+## 1.2.0.0
 
 * Fix: `inputInFocusedRegion` now drops `EvPaste` events in unfocused regions, so paste doesn't go to every `textInput` on screen. Previously only `EvKey` was gated on focus.
+* Fix: `grout` no longer sets focus to `True` for its child elements. Instead it inherits focus from its parent.
+* *Breaking change*: Add `_textInputConfig_acceptTab` to control tab key behavior in text inputs.
 
 ## 1.1.0.0
 
