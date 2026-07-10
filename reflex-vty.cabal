@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: reflex-vty
-version: 1.1.0.0
+version: 1.1.0.1
 synopsis: Reflex FRP host and widgets for VTY applications
 description:
   Build terminal applications using functional reactive programming (FRP) with Reflex FRP (<https://reflex-frp.org>).

@@ -293,6 +293,9 @@ inputInFocusedRegion = do
         return $ case e of
           -- filter keyboard input if region is not focused
           V.EvKey _ _ | not focused -> Nothing
+          -- pastes are keyboard input too; deliver them only to the focused
+          -- region so they don't land in every 'textInput' at once
+          V.EvPaste _ | not focused -> Nothing
           -- filter scroll wheel input based on mouse position
           V.EvMouseDown x y btn m | btn == V.BScrollUp || btn == V.BScrollDown -> case tracking of
             trck@(Tracking _) -> Just (trck, Nothing)
