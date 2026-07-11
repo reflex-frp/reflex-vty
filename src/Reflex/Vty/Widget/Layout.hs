@@ -619,4 +619,5 @@ grout
   -> m a
 grout c w = do
   r <- region c
-  pane r (pure True) w
+  foc <- focus -- Inherit the ambient focus
+  pane r foc w

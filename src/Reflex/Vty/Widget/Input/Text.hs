@@ -51,6 +51,12 @@ data TextInputConfig t = TextInputConfig
   --     }
   --   @
   , _textInputConfig_tabWidth :: Int
+  -- ^ Number of columns a tab character occupies when @'acceptTab'@ is enabled.
+  , _textInputConfig_acceptTab :: Bool
+  -- ^ Whether the Tab key inserts a tab character into the input. Defaults to
+  --   'False', so Tab is left available for focus cycling (e.g.
+  --   'Reflex.Vty.Widget.Input.tabNavigation'). Set to 'True' for editors that
+  --   should insert tabs.
   , _textInputConfig_display :: Dynamic t (Char -> Char)
   -- ^ Transform the characters in a text input before displaying them. This is useful, e.g., for
   --   masking characters when entering passwords.
@@ -60,7 +66,7 @@ data TextInputConfig t = TextInputConfig
   }
 
 instance Reflex t => Default (TextInputConfig t) where
-  def = TextInputConfig empty never 4 (pure id) TextAlignment_Left
+  def = TextInputConfig empty never 4 False (pure id) TextAlignment_Left
 
 -- | The output produced by text input widgets, including the text
 -- value and the number of display lines (post-wrapping). Note that some
@@ -92,10 +98,16 @@ textInput cfg = do
   rec -- we split up the events from vty and the one users provide to avoid cyclical
       -- update dependencies. This way, users may subscribe only to UI updates.
       let valueChangedByCaller = _textInputConfig_modify cfg
+          -- Unless tab insertion is enabled, drop Tab/BackTab so they remain
+          -- available for focus cycling instead of being typed into the field.
+          keyForZipper =
+            if _textInputConfig_acceptTab cfg
+              then i
+              else ffilter notTabKey i
       let valueChangedByUI =
             mergeWith
               (.)
-              [ uncurry (updateTextZipper (_textInputConfig_tabWidth cfg)) <$> attach (current dh) i
+              [ uncurry (updateTextZipper (_textInputConfig_tabWidth cfg)) <$> attach (current dh) keyForZipper
               , let displayInfo = (,) <$> current rows <*> scrollTop
                 in ffor (attach displayInfo click) $ \((dl, st), MouseDown _ (mx, my) _) ->
                      goToDisplayLinePosition mx (st + my) dl
@@ -219,3 +231,11 @@ updateTextZipper tabWidth pageSize ev = case ev of
   V.EvKey V.KPageUp [] -> pageUp pageSize
   V.EvKey V.KPageDown [] -> pageDown pageSize
   _ -> id
+
+-- | 'True' unless the event is a (possibly shifted) Tab keypress. Used to keep
+-- Tab available for focus cycling when '_textInputConfig_acceptTab' is off.
+notTabKey :: V.Event -> Bool
+notTabKey = \case
+  V.EvKey (V.KChar '\t') _ -> False
+  V.EvKey V.KBackTab _ -> False
+  _ -> True
