@@ -96,7 +96,7 @@ rm -f "$DIR"/src/*.hs
 sed "s/@PACKAGE_NAME@/$NAME/g" "$TEMPLATE_DIR/src/App.hs" > "$DIR/src/App.hs"
 sed "s/@PACKAGE_NAME@/$NAME/g" "$TEMPLATE_DIR/app/Main.hs" > "$DIR/app/Main.hs"
 
-# 3. Patch the cabal file: expose `App`, and add reflex-vty to the executable.
+# 3. Patch the cabal file: expose `App`, support the Nix GHC set, and add dependencies.
 echo "==> patching $NAME.cabal" >&2
 sed -i "s/^[[:space:]]*exposed-modules:.*/    exposed-modules:      App/" "$CABAL_FILE"
 # The reflex-vty host needs the threaded RTS (it spawns input/vty threads).
@@ -106,9 +106,17 @@ sed -i "s/ghc-options: -Wall/ghc-options: -Wall -threaded -rtsopts/" "$CABAL_FIL
 #   - in the executable: `, reflex-vty` (after the package's self-dependency)
 #   - in the library: append `, text` to the build-depends line (App.hs needs Data.Text)
 awk -v pkg="$NAME" '
+  /^version:[[:space:]]/ {
+    print
+    print "tested-with:        GHC == 9.8.4 || == 9.10.1 || == 9.12.2"
+    next
+  }
   /^library([[:space:]]|$)/                                   { in_lib = 1; in_exe = 0 }
   /^executable[[:space:]]/                                    { in_lib = 0; in_exe = 1 }
   /^(test-suite|common|benchmark)([[:space:]]|$)/             { in_lib = 0; in_exe = 0 }
+  (in_lib || in_exe) && /base[[:space:]]+\^>=/ {
+    sub(/base[[:space:]]+\^>=[[:space:]]*[0-9]+(\.[0-9]+)*/, "base >= 4.19 && < 4.22")
+  }
   in_lib && /^[[:space:]]*build-depends:[[:space:]].*base/ {
     sub(/[[:space:]]+$/, "")
     $0 = $0 ", text"
