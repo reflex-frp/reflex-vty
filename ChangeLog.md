@@ -1,5 +1,9 @@
 # Revision history for reflex-vty
 
+## Unreleased/Next
+
+* Update the Nix build and project skeleton to NixOS 26.05 and support GHC 9.8, 9.10, and 9.12.
+
 ## 1.2.0.0
 
 * Fix: `inputInFocusedRegion` now drops `EvPaste` events in unfocused regions, so paste doesn't go to every `textInput` on screen. Previously only `EvKey` was gated on focus.
