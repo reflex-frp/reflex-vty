@@ -48,9 +48,26 @@ esac
 # Resolve the template directory (this script's sibling ./template).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_DIR="$SCRIPT_DIR/template"
+REFLEX_VTY_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REFLEX_VTY_URL="https://github.com/reflex-frp/reflex-vty.git"
 
 if [ ! -d "$TEMPLATE_DIR" ]; then
   echo "error: template directory not found at $TEMPLATE_DIR" >&2
+  exit 1
+fi
+
+if ! REFLEX_VTY_REV="$(git -C "$REFLEX_VTY_ROOT" rev-parse --verify HEAD 2>/dev/null)"; then
+  echo "error: the reflex-vty skeleton must be run from a Git checkout" >&2
+  exit 1
+fi
+if [ -n "$(git -C "$REFLEX_VTY_ROOT" status --porcelain)" ]; then
+  echo "error: the reflex-vty checkout has uncommitted changes" >&2
+  echo "       commit them before generating a project" >&2
+  exit 1
+fi
+if ! git -C "$REFLEX_VTY_ROOT" fetch --quiet --no-tags "$REFLEX_VTY_URL" "$REFLEX_VTY_REV"; then
+  echo "error: reflex-vty revision $REFLEX_VTY_REV is not available from $REFLEX_VTY_URL" >&2
+  echo "       push the revision before generating a project" >&2
   exit 1
 fi
 
@@ -109,7 +126,7 @@ awk -v pkg="$NAME" '
   }
 ' "$CABAL_FILE" > "$CABAL_FILE.tmp" && mv "$CABAL_FILE.tmp" "$CABAL_FILE"
 
-# 4. Lay down the nix scaffolding, substituting @PACKAGE_NAME@ -> NAME.
+# 4. Lay down the nix scaffolding, substituting template parameters.
 echo "==> installing nix scaffolding into $DIR" >&2
 while IFS= read -r -d '' rel; do
   rel="${rel#$TEMPLATE_DIR/}"
@@ -120,9 +137,11 @@ while IFS= read -r -d '' rel; do
   src="$TEMPLATE_DIR/$rel"
   dst="$DIR/$rel"
   mkdir -p "$(dirname "$dst")"
-  # Plain text files get @PACKAGE_NAME@ substituted; thunk payloads contain no
-  # such token, so sed is a harmless no-op on them.
-  sed "s/@PACKAGE_NAME@/$NAME/g" "$src" > "$dst"
+  # Thunk payloads contain no template tokens, so sed is a harmless no-op on them.
+  sed \
+    -e "s/@PACKAGE_NAME@/$NAME/g" \
+    -e "s/@REFLEX_VTY_REV@/$REFLEX_VTY_REV/g" \
+    "$src" > "$dst"
   if [ -x "$src" ]; then chmod +x "$dst"; fi
 done < <(find "$TEMPLATE_DIR" -type f -print0)
 

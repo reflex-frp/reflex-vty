@@ -1,6 +1,5 @@
-# Enter a shell for this project using reflex-platform (which provides ghc8107)
-# or nixpkgs (which provides ghc943)
-{ compiler ? "ghc98" # or "ghc943"
+# Enter a shell for this project using nixpkgs
+{ compiler ? "ghc912"
 }:
 let
   pkgs = import ./dep/nixpkgs { };
