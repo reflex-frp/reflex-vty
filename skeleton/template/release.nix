@@ -16,11 +16,18 @@ let
     } {};
   };
   ghcs = lib.genAttrs supportedSystems (system: let
-    hp = (import ./dep/nixpkgs { inherit system; }).haskell.packages.ghc98.override { inherit overrides; };
+    haskellPackages = (import ./dep/nixpkgs { inherit system; }).haskell.packages;
+    ghc98 = haskellPackages.ghc98.override { inherit overrides; };
+    ghc910 = haskellPackages.ghc910.override { inherit overrides; };
+    ghc912 = haskellPackages.ghc912.override { inherit overrides; };
   in {
     recurseForDerivations = true;
-    ghc98 = hp.callCabal2nix "@PACKAGE_NAME@" (import ./src.nix) {};
-    ghc98Packages = hp;
+    ghc98 = ghc98.callCabal2nix "@PACKAGE_NAME@" (import ./src.nix) {};
+    ghc98Packages = ghc98;
+    ghc910 = ghc910.callCabal2nix "@PACKAGE_NAME@" (import ./src.nix) {};
+    ghc910Packages = ghc910;
+    ghc912 = ghc912.callCabal2nix "@PACKAGE_NAME@" (import ./src.nix) {};
+    ghc912Packages = ghc912;
   });
 in
   ghcs
