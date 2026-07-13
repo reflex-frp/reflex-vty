@@ -2,7 +2,7 @@
 
 ## Unreleased/Next
 
-* Update the Nix build and project skeleton to NixOS 26.05 and support GHC 9.8, 9.10, and 9.12.
+* Update the Nix build and project skeleton to NixOS 26.05 and support GHC 9.8, 9.10, and 9.12. Generated projects now pin the committed, upstream-available reflex-vty revision from which the skeleton is run.
 
 ## 1.2.0.0
 

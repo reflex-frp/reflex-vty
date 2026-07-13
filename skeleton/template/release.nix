@@ -9,11 +9,10 @@ let
       ver = "0.9.4.1";
       sha256 = "1igjwcbfcjm7aymb3nwqdwg4sq9zzrp28r77q143ab0bkbjlldcc";
     } {};
-    reflex-vty = self.callHackageDirect {
-      pkg = "reflex-vty";
-      ver = "1.1.0.0";
-      sha256 = "11jj70q9mjv20m03pgpismns462dkzp50pmqg4f6h3wpzwh330wf";
-    } {};
+    reflex-vty = self.callCabal2nix "reflex-vty" (builtins.fetchGit {
+      url = "https://github.com/reflex-frp/reflex-vty.git";
+      rev = "@REFLEX_VTY_REV@";
+    }) {};
   };
   ghcs = lib.genAttrs supportedSystems (system: let
     haskellPackages = (import ./dep/nixpkgs { inherit system; }).haskell.packages;
