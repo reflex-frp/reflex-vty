@@ -71,6 +71,8 @@ Feature requests, pull requests, and other feedback are welcome and appreciated 
 
 #### With reflex-platform
 
+Prebuilt Nix dependencies are available from `https://nixcache.reflex-frp.org`. NixOS users can enable the cache by following the [binary cache setup instructions](https://github.com/reflex-frp/reflex-platform/blob/f70e481fa59ecb7958abeb2cb928c79efcd65f43/notes/NixOS.md).
+
 Enter a nix-shell for the project:
 ```bash
 git clone https://github.com/reflex-frp/reflex-vty.git
