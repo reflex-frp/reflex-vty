@@ -1,5 +1,5 @@
 # Enter a shell for this project using nixpkgs
-{ compiler ? "ghc98"
+{ compiler ? "ghc912"
 }:
 let
   pkgs = import ./dep/nixpkgs { };

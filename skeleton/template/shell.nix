@@ -1,5 +1,5 @@
 # Enter a nix-shell for this project.
-{ compiler ? "ghc98"
+{ compiler ? "ghc912"
 , profiling ? false # build closure with library profiling (for -hc/-hy/-p)
 }:
 let

@@ -88,10 +88,10 @@ From within the nix-shell you can:
 
 ##### Selecting a compiler
 
-`nix-shell` defaults to GHC 9.8. The other compilers defined in `release.nix` are `ghc94`, `ghc96`, and `ghc98`. To enter a shell with one of them, pass it as the `compiler` argument:
+`nix-shell` defaults to GHC 9.12. The compilers defined in `release.nix` are `ghc98`, `ghc910`, and `ghc912`. To enter a shell with one of them, pass it as the `compiler` argument:
 
 ```bash
-nix-shell --argstr compiler ghc96
+nix-shell --argstr compiler ghc98
 ```
 
 If you were previously building with a different compiler, you may need to run `cabal clean` first.
