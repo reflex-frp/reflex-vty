@@ -21,21 +21,52 @@ splitVDrag
 splitVDrag wS wA wB = do
   dh <- viewportHeight
   dw <- viewportWidth
-  h0 <- sample $ current dh -- TODO
   dragE <- drag V.BLeft
-  let splitter0 = h0 `div` 2
-  rec splitterCheckpoint <- holdDyn splitter0 $ leftmost [fst <$> ffilter snd dragSplitter, resizeSplitter]
-      splitterPos <- holdDyn splitter0 $ leftmost [fst <$> dragSplitter, resizeSplitter]
-      splitterFrac <- holdDyn ((1 :: Double) / 2) $ ffor (attach (current dh) (fst <$> dragSplitter)) $ \(h, x) ->
-        fromIntegral x / max 1 (fromIntegral h)
-      let dragSplitter = fforMaybe (attach (current splitterCheckpoint) dragE) $
-            \(splitterY, Drag (_, fromY) (_, toY) _ _ st) ->
-              if splitterY == fromY then Just (toY, st == DragEnd) else Nothing
-          regA = Region 0 0 <$> dw <*> splitterPos
-          regS = Region 0 <$> splitterPos <*> dw <*> 1
-          regB = Region 0 <$> (splitterPos + 1) <*> dw <*> (dh - splitterPos - 1)
-          resizeSplitter = ffor (attach (current splitterFrac) (updated dh)) $
-            \(frac, h) -> round (frac * fromIntegral h)
+  rec -- The divider's displayed position comes from the current
+      -- height and the user-chosen fraction, never from a sampled
+      -- initial height. While no drag has happened, the divider sits
+      -- at half the height. The position is always clamped, so the
+      -- divider row itself stays inside the viewport.
+      let displayedPos =
+            ( \h mf ->
+                let raw = case mf of
+                      Nothing -> h `div` 2
+                      Just frac -> round (frac * fromIntegral (max 1 h))
+                in min (max 0 raw) (max 0 (h - 1))
+            )
+              <$> dh
+              <*> userFraction
+          startsOnDivider =
+            ffilter id $
+              ffor (attach (current displayedPos) dragE) $
+                \(p, Drag (_, fromY) _ _ _ st) -> st == DragStart && p == fromY
+          dragEnded = ffilter (\d -> _drag_state d == DragEnd) dragE
+      -- Drag ownership is decided at DragStart, against the pre-event
+      -- divider position, and kept until DragEnd. Drags that start
+      -- elsewhere are ignored.
+      dragOwned <-
+        holdDyn False $
+          leftmost
+            [ True <$ startsOnDivider
+            , False <$ dragEnded
+            ]
+      userFraction <-
+        holdDyn Nothing $
+          fforMaybe (attach (current dragOwned) (attach (current dh) dragE)) $
+            \(owned, (h, Drag _ (_, toY) _ _ _)) ->
+              if not owned
+                then Nothing
+                else
+                  Just
+                    ( Just
+                        ( fromIntegral (min (max 0 toY) (max 0 (h - 1)))
+                            / max 1 (fromIntegral h)
+                            :: Double
+                        )
+                    )
+      let regA = Region 0 0 <$> dw <*> displayedPos
+          regS = Region 0 <$> displayedPos <*> dw <*> 1
+          regB = Region 0 <$> (displayedPos + 1) <*> dw <*> (dh - displayedPos - 1)
       focA <-
         holdDyn True $
           leftmost

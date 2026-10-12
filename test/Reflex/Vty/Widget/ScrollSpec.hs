@@ -2,14 +2,30 @@
 
 module Reflex.Vty.Widget.ScrollSpec (spec) where
 
+import Control.Monad (forM_)
 import qualified Graphics.Vty as V
 import Test.Hspec
 
 import Reflex.Vty.Test.Snapshot
 import Reflex.Vty.Widget.Scroll
-  ( ScrollbarVisibility (..)
+  ( ScrollPos (..)
+  , ScrollbarVisibility (..)
+  , scrollByLines
+  , scrollToLine
   , scrollbarImages
   )
+
+-- | Specified normalization of an already-clamped target line.
+expectedPosFromClamped :: Int -> Int -> Int -> ScrollPos
+expectedPosFromClamped total height line
+  | total <= height = ScrollPos_Top
+  | line <= 0 = ScrollPos_Top
+  | line + height >= total = ScrollPos_Bottom
+  | otherwise = ScrollPos_Line line
+
+-- | Specified normalization of a raw (possibly out-of-range) request.
+expectedPos :: Int -> Int -> Int -> ScrollPos
+expectedPos total height req = expectedPosFromClamped total height (max 0 req)
 
 spec :: Spec
 spec = describe "Reflex.Vty.Widget.Scroll" $ do
@@ -58,6 +74,35 @@ spec = describe "Reflex.Vty.Widget.Scroll" $ do
           -- When scrolled, the first row should not have the thumb
           last scrolled `shouldSatisfy` (/= '█')
         _ -> expectationFailure "expected rendered rows"
+
+  describe "scrollToLine" $ do
+    it "normalizes every small-domain request exactly" $ do
+      -- Exhaustive over totalLines 0..6, height 0..4, request -2..8,
+      -- against the specified semantics: content that fits is Top;
+      -- nonpositive requests are Top; requests at/past the last page
+      -- are Bottom; anything else is the exact line.
+      forM_ [(0 :: Int) .. 6] $ \total ->
+        forM_ [0 .. 4] $ \height ->
+          forM_ [(-2) .. 8] $ \req ->
+            scrollToLine total height req
+              `shouldBe` expectedPos total height req
+
+  describe "scrollByLines" $ do
+    it "clamps and normalizes relative movement from every starting form" $ do
+      forM_ [ScrollPos_Top, ScrollPos_Bottom, ScrollPos_Line 0, ScrollPos_Line 2, ScrollPos_Line 5] $ \sp ->
+        forM_ [(0 :: Int) .. 6] $ \total ->
+          forM_ [0 .. 4] $ \height ->
+            forM_ [(-3), (-1), 0, 1, 4] $ \delta -> do
+              -- The starting line is used literally; stored positions
+              -- are always normalized in production, so Top is 0 and
+              -- Bottom is the last page.
+              let start = case sp of
+                    ScrollPos_Top -> 0
+                    ScrollPos_Bottom -> total - height
+                    ScrollPos_Line n -> n
+                  target = min total (max 0 (start + delta))
+              scrollByLines sp total height delta
+                `shouldBe` (if total <= height then ScrollPos_Top else expectedPosFromClamped total height target)
 
     it "thumb size is proportional to viewport/total ratio" $ do
       let attr' = V.defAttr

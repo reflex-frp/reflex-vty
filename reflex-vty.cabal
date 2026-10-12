@@ -178,6 +178,7 @@ executable example
     TemplateHaskell
     TupleSections
     TypeApplications
+    TypeOperators
     TypeFamilies
 
 executable examples
@@ -239,6 +240,7 @@ test-suite reflex-vty-test
   type: exitcode-stdio-1.0
   ghc-options: -threaded
   other-modules:
+    Control.Monad.NodeIdSpec
     Data.Text.ZipperSpec
     Reflex.Vty.Test.Generators
     Reflex.Vty.CanvasSpec
@@ -250,11 +252,20 @@ test-suite reflex-vty-test
     Reflex.Vty.Test.AppHarness
     Reflex.Vty.StyleSpec
     Reflex.Vty.StyleJoinSpec
+    Reflex.Vty.Test.Snapshot
     Reflex.Vty.Test.SnapshotSpec
     Reflex.Vty.Test.GoldenPolicySpec
     Reflex.Vty.Test.GoldenSpec
     Reflex.Vty.Widget.BoxSpec
     Reflex.Vty.Widget.CursorSpec
+    Reflex.Vty.Widget.LayoutSpec
+    Reflex.Vty.WidgetSpec
+    Reflex.Vty.Widget.InputSpec
+    Reflex.Vty.Widget.Input.TextSpec
+    Reflex.Vty.Widget.TextSpec
+    Reflex.Vty.Widget.SplitSpec
+    Reflex.Vty.ThemeSpec
+    Reflex.Vty.CompositionSpec
     Reflex.Vty.Widget.MouseSpec
     Reflex.Vty.Widget.ScrollSpec
   build-depends:

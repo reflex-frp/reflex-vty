@@ -5,7 +5,7 @@ import Control.Monad.Fix
 import Control.Monad.IO.Class
 import Data.Default
 import Data.Functor (void)
-import Data.List (foldl')
+import qualified Data.List as List
 import qualified Graphics.Vty as V
 import Reflex
 
@@ -110,7 +110,7 @@ scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend sbVisibility
       hold False $ leftmost [True <$ scrollActivity, False <$ hideAfterQuiet]
     _ -> pure (pure True)
   rec ((update, a), imgs) <- captureImages $ localLayoutRegion heightTransform $ localRegion widthTransform $ localInput (translateMouseEvents translation) $ mkImg
-      let sz = foldl' max 0 . fmap V.imageHeight <$> imgs
+      let sz = List.foldl' max 0 . fmap V.imageHeight <$> imgs
       lineIndex <-
         foldDynMaybe ($) startingPos $
           leftmost
@@ -157,7 +157,10 @@ scrollable (ScrollableConfig scrollBy scrollTo startingPos onAppend sbVisibility
     calculateTranslation height scrollPos totalLines = case scrollPos of
       ScrollPos_Bottom -> max 0 (totalLines - height)
       ScrollPos_Top -> 0
-      ScrollPos_Line n -> max 0 n
+      -- A stored line can be past the last page after the content
+      -- shrinks or the viewport grows. The rendered offset clamps to
+      -- the last page, so no blank over-scroll is shown.
+      ScrollPos_Line n -> min (max 0 n) (max 0 (totalLines - height))
     translateMouseEvents translation vtyEvent =
       let e = attach translation vtyEvent
       in ffor e $ \case
@@ -180,7 +183,7 @@ scrollToLine :: Int -> Int -> Int -> ScrollPos
 scrollToLine totalLines height newPos =
   if
     | totalLines <= height -> ScrollPos_Top
-    | newPos == 0 -> ScrollPos_Top
+    | newPos <= 0 -> ScrollPos_Top
     | newPos + height >= totalLines -> ScrollPos_Bottom
     | otherwise -> ScrollPos_Line newPos
 

@@ -5,10 +5,12 @@
 import System.Environment (lookupEnv)
 import Test.Hspec
 
+import qualified Control.Monad.NodeIdSpec
 import qualified Data.Text.ZipperSpec
 import qualified Reflex.Vty.CanvasSpec
 import qualified Reflex.Vty.ColorProfileSpec
 import qualified Reflex.Vty.ColorSpec
+import qualified Reflex.Vty.CompositionSpec
 import qualified Reflex.Vty.Host.SignalSpec
 import qualified Reflex.Vty.Host.TriggerSpec
 import qualified Reflex.Vty.HostSpec
@@ -18,10 +20,17 @@ import qualified Reflex.Vty.Test.GoldenPolicySpec
 import qualified Reflex.Vty.Test.GoldenSpec
 import Reflex.Vty.Test.Snapshot (GoldenMode (..))
 import qualified Reflex.Vty.Test.SnapshotSpec
+import qualified Reflex.Vty.ThemeSpec
 import qualified Reflex.Vty.Widget.BoxSpec
 import qualified Reflex.Vty.Widget.CursorSpec
+import qualified Reflex.Vty.Widget.Input.TextSpec
+import qualified Reflex.Vty.Widget.InputSpec
+import qualified Reflex.Vty.Widget.LayoutSpec
 import qualified Reflex.Vty.Widget.MouseSpec
 import qualified Reflex.Vty.Widget.ScrollSpec
+import qualified Reflex.Vty.Widget.SplitSpec
+import qualified Reflex.Vty.Widget.TextSpec
+import qualified Reflex.Vty.WidgetSpec
 
 main :: IO ()
 main = do
@@ -56,6 +65,7 @@ goldenModeFromEnv = do
 
 spec :: GoldenMode -> Spec
 spec goldenMode = do
+  describe "Control.Monad.NodeIdSpec" Control.Monad.NodeIdSpec.spec
   describe "Data.Text.ZipperSpec" Data.Text.ZipperSpec.spec
   describe "Reflex.Vty.CanvasSpec" Reflex.Vty.CanvasSpec.spec
   describe "Reflex.Vty.ColorProfileSpec" Reflex.Vty.ColorProfileSpec.spec
@@ -68,6 +78,14 @@ spec goldenMode = do
   describe "Reflex.Vty.Test.SnapshotSpec" Reflex.Vty.Test.SnapshotSpec.spec
   describe "Reflex.Vty.Widget.BoxSpec" Reflex.Vty.Widget.BoxSpec.spec
   describe "Reflex.Vty.Widget.CursorSpec" Reflex.Vty.Widget.CursorSpec.spec
+  describe "Reflex.Vty.Widget.LayoutSpec" Reflex.Vty.Widget.LayoutSpec.spec
+  describe "Reflex.Vty.WidgetSpec" Reflex.Vty.WidgetSpec.spec
+  describe "Reflex.Vty.Widget.InputSpec" Reflex.Vty.Widget.InputSpec.spec
+  describe "Reflex.Vty.Widget.Input.TextSpec" Reflex.Vty.Widget.Input.TextSpec.spec
+  describe "Reflex.Vty.Widget.TextSpec" Reflex.Vty.Widget.TextSpec.spec
+  describe "Reflex.Vty.Widget.SplitSpec" Reflex.Vty.Widget.SplitSpec.spec
+  describe "Reflex.Vty.ThemeSpec" Reflex.Vty.ThemeSpec.spec
+  describe "Reflex.Vty.CompositionSpec" Reflex.Vty.CompositionSpec.spec
   describe "Reflex.Vty.Widget.MouseSpec" Reflex.Vty.Widget.MouseSpec.spec
   describe "Reflex.Vty.Widget.ScrollSpec" Reflex.Vty.Widget.ScrollSpec.spec
   describe "Reflex.Vty.Host.SignalSpec" Reflex.Vty.Host.SignalSpec.spec
