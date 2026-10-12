@@ -1,6 +1,6 @@
 # Revision history for reflex-vty
 
-## 1.2.0.0
+## 1.3.0.0
 
 * Fix: `splitAtWidth` uses character boundaries instead of storage offsets. This preserves Unicode text when the function wraps wide characters.
 * Fix: The host checks post-build shutdown before it draws output or starts input. On normal and exceptional exits, it restores signal handlers and waits for the input worker to stop. Closed event queues reject writes even when capacity remains.
@@ -8,8 +8,11 @@
 * Text inputs apply local theme changes immediately. `textInputTile` samples its size after each frame to prevent a recursive-layout deadlock. It also requires `PostBuild`, `PerformEvent`, and `MonadSample t (Performable m)`. The standard widget host supplies these constraints.
 * Golden tests fail if a fixture is missing. They change fixtures only when `REFLEX_VTY_GOLDEN_UPDATE=1` and `CI` is not `true`.
 * Add widget and composition tests that use the production host. Check fixture bytes in source packages. Add POSIX PTY checks and a GHC 9.12.3 coverage baseline for all library modules. Coverage reports combine parent and signal-child tick counts.
-* Fix: `inputInFocusedRegion` now drops `EvPaste` events in unfocused regions, so paste doesn't go to every `textInput` on screen. Previously only `EvKey` was gated on focus.
 * *Breaking change*: `Reflex.Vty.Canvas` uses `CanvasCell` instead of `(Char, V.Attr)` for each glyph. A cell contains the column width and attributed text for one base character and its zero-width marks. `canvasCells :: Map (Int, Int) CanvasCell` uses each glyph's start column as its key. `canvasCellAt` returns the covering glyph for each column of a wide glyph. It returns `Nothing` for transparent positions. `imageToCanvas` reads Vty's rendered spans to preserve joins, clipping, backgrounds, wide characters, and combining marks. `canvasToImage` uses `V.backgroundFill` for transparent gaps so that lower images remain visible. Partial wide glyphs use Vty's ellipsis rule: the remaining half becomes a one-column `…`. Right-edge clipping removes the combining suffix. Left-edge clipping keeps the suffix. Use `CanvasCell` values when you construct a `Canvas` map.
+
+## 1.2.0.0
+
+* Fix: `inputInFocusedRegion` now drops `EvPaste` events in unfocused regions, so paste doesn't go to every `textInput` on screen. Previously only `EvKey` was gated on focus.
 * Fix: `grout` no longer sets focus to `True` for its child elements. Instead it inherits focus from its parent.
 * *Breaking change*: Add `_textInputConfig_acceptTab` to control tab key behavior in text inputs.
 * Update the Nix build and project skeleton to NixOS 26.05 and support GHC 9.8, 9.10, and 9.12. Generated projects now pin the committed, upstream-available reflex-vty revision from which the skeleton is run.

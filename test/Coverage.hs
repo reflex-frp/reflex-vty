@@ -6,7 +6,7 @@
 -- Description: Coverage measurement and baseline checks for all library modules
 --
 -- This tool runs separately from the test suite.
--- README.md and .github/workflows/haskell.yml give the commands and package versions.
+-- doc/qa.md and .github/workflows/haskell.yml give the commands and package versions.
 -- The tool must use the Cabal version that configured the build.
 --
 -- > runghc <package flags> test/Coverage.hs check  <build-dir> test/coverage-baseline.tsv <report-dir>
@@ -549,7 +549,7 @@ canonicalCommand =
   unlines
     [ "Use the coverage job in .github/workflows/haskell.yml."
     , "Use GHC 9.12.3, Cabal 3.16.1.0, and a new dist-coverage build."
-    , "Install the matching Cabal library in a separate package environment. See README.md."
+    , "Install the matching Cabal library in a separate package environment. See doc/qa.md."
     , "export REFLEX_VTY_COVERAGE_CHILD_DIR=\"$PWD/dist-coverage/child-tix\""
     , "mkdir -p \"$REFLEX_VTY_COVERAGE_CHILD_DIR\""
     , "touch \"$REFLEX_VTY_COVERAGE_CHILD_DIR/run-start\""

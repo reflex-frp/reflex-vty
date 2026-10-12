@@ -1,8 +1,83 @@
 # QA Guide
 
-This QA guide takes you through the process of testing `reflex-vty` from a visual observer's perspective. The goal is to ensure that `reflex-vty` does not contain bugs/regressions that are visual in nature, which are hard to detect with automated testing. This guide assumes you have Nix installed.
+Use this guide for automated tests and manual terminal checks.
 
-## Steps
+Run these commands from the repository root.
+
+## Test suite
+
+```bash
+REFLEX_VTY_GOLDEN_UPDATE=0 cabal test all --test-show-details=direct
+```
+
+The portable suite uses an in-memory Vty to run the production host.
+It compares rendered spans, including wide characters, combining marks, and attributes.
+
+## Golden files
+
+Missing or different golden files cause test failures. Tests do not change these files in normal mode.
+To replace local golden files, use this command:
+
+```bash
+REFLEX_VTY_GOLDEN_UPDATE=1 cabal test reflex-vty-test --test-option=--match=Golden
+```
+
+Review each changed fixture before you commit it. Update mode cannot run when `CI=true`.
+The source-distribution CI job checks fixture bytes in the package.
+It then runs the suite from the extracted package.
+
+## Terminal checks
+
+```bash
+cabal build -ftest-tools reflex-vty-test-driver
+python3 test/pty_smoke.py "$(cabal list-bin -ftest-tools reflex-vty-test-driver)"
+```
+
+The PTY checks require POSIX, Python 3, a UTF-8 locale, and the `xterm-256color` terminfo entry.
+They check terminal input, paste, resize, and scrolling.
+They also check terminal restoration after normal exits, signals, and exceptions.
+Windows runs the portable suite and separate console-handler checks.
+These tests do not check interactive ConPTY operation.
+
+## Coverage
+
+Coverage includes every declared module in both libraries, including modules that did not execute.
+`test/Coverage.hs` compares expression, boolean-pair, and alternative ratios with `test/coverage-baseline.tsv` for each module.
+These ratios do not prove complete behavioral coverage.
+Use GHC **9.12.3** with optimization disabled and a new instrumented build directory for baseline comparisons.
+Use the coverage commands in [the CI workflow](../.github/workflows/haskell.yml).
+
+The reporting tool must use the Cabal version that wrote `setup-config`.
+The workflow specifies Cabal **3.16.1.0**. GHC can supply a different Cabal version.
+Install the specified Cabal library in a separate package environment:
+
+```bash
+cabal install --lib Cabal-3.16.1.0 extra --package-env=/tmp/reflex-vty-coverage.env
+```
+
+Before you run the instrumented suite, create an empty `dist-coverage/child-tix` directory.
+Create `dist-coverage/child-tix/run-start` with `touch`.
+Set `REFLEX_VTY_COVERAGE_CHILD_DIR` to the absolute path of the child directory and export the variable.
+Keep this variable set during analysis.
+The tool rejects unknown child files.
+It also rejects child tick files older than the marker or newer than the parent tick file.
+After the suite passes, use this command to update the local baseline:
+
+```bash
+runghc -package-env=/tmp/reflex-vty-coverage.env \
+  -package=Cabal -package=hpc -package=extra -package=directory \
+  -package=filepath -package=process -package=time -package=containers \
+  test/Coverage.hs update dist-coverage test/coverage-baseline.tsv dist-coverage/report
+```
+
+Review the baseline changes before you commit them.
+Use `check` instead of `update` to compare coverage with the committed baseline.
+Analysis does not change the tick files. Repeated checks use the same data.
+Baseline updates cannot run when `CI=true`.
+
+## Manual checks
+
+These checks require Nix.
 
 Clone and examples
 
