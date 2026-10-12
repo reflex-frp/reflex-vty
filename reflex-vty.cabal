@@ -16,6 +16,8 @@ build-type: Simple
 extra-source-files:
   README.md
   test/goldens/*.txt
+  test/coverage-baseline.tsv
+  test/Coverage.hs
 extra-doc-files:
   doc/tasks.png
   ChangeLog.md

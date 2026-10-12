@@ -1,6 +1,7 @@
 tags
 dist/
 dist-newstyle/
+dist-coverage*/
 .direnv/
 .envrc.local
 doc/reflex-vty.gif

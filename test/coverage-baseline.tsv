@@ -1,0 +1,21 @@
+# reflex-vty coverage baseline	schema=1	ghc=9.12.3	opt=0
+internal	Reflex.Vty.Host.Signal	52	59	0	0	1	2
+internal	Reflex.Vty.Host.Trigger	126	224	0	0	2	2
+main	Control.Monad.NodeId	41	74	0	0	0	0
+main	Data.Text.Zipper	933	1010	23	30	86	99
+main	Reflex.Vty	0	0	0	0	0	0
+main	Reflex.Vty.Canvas	629	687	15	24	43	49
+main	Reflex.Vty.Color	156	177	4	8	10	14
+main	Reflex.Vty.ColorProfile	185	215	0	0	17	22
+main	Reflex.Vty.Host	299	348	3	3	19	31
+main	Reflex.Vty.Style	1306	1648	8	34	66	96
+main	Reflex.Vty.Theme	40	300	0	0	0	0
+main	Reflex.Vty.Widget	856	1380	7	13	34	46
+main	Reflex.Vty.Widget.Box	277	305	2	3	7	7
+main	Reflex.Vty.Widget.Input	157	169	3	3	6	8
+main	Reflex.Vty.Widget.Input.Mouse	157	193	4	11	16	23
+main	Reflex.Vty.Widget.Input.Text	298	305	4	5	30	31
+main	Reflex.Vty.Widget.Layout	632	738	0	1	17	20
+main	Reflex.Vty.Widget.Scroll	266	365	6	9	24	36
+main	Reflex.Vty.Widget.Split	247	256	1	1	4	4
+main	Reflex.Vty.Widget.Text	95	120	0	0	0	0
