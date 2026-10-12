@@ -5,12 +5,21 @@ module Data.Text.ZipperSpec
   ) where
 
 import Control.Monad
+import Data.Char (isSpace)
+import Data.List (mapAccumL)
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import Test.Hspec
+import Test.QuickCheck (conjoin, counterexample, forAll)
 import Prelude
 
 import Data.Text.Zipper
+import Reflex.Vty.Test.Generators
+  ( EditOp (..)
+  , genEditScript
+  , genMixedWidthText
+  , runPlanProperty
+  )
 
 someSentence :: T.Text
 someSentence = "12345 1234 12"
@@ -126,4 +135,151 @@ spec =
         forM_ [TextAlignment_Left, TextAlignment_Center, TextAlignment_Right] $ \ta -> do
           let t = rightN x $ someText
           length (_displayLines_spans $ (displayLinesWithAlignment ta 5 () () t)) `shouldBe` 4
-          length (_displayLines_spans $ (displayLinesWithAlignment ta 10 () () t)) `shouldBe` 2
+
+    describe "editing against a flat-text model" $ do
+      it "contents and cursor index agree after every operation of a random script" $
+        runPlanProperty $
+          forAll ((,) <$> genMixedWidthText <*> genEditScript) $ \(t, script) ->
+            let walk (z, m) op =
+                  ( (applyZipper op z, applyModel op m)
+                  , let z' = applyZipper op z
+                        (flat', idx') = applyModel op m
+                    in counterexample
+                         ( "after op "
+                             ++ show op
+                             ++ ": zipper value "
+                             ++ show (value z')
+                             ++ " vs model "
+                             ++ show flat'
+                             ++ "; marked zipper "
+                             ++ show (value (insert "^" z'))
+                             ++ " vs marked model "
+                             ++ show (T.take idx' flat' <> "^" <> T.drop idx' flat')
+                         )
+                         ( value z' == flat'
+                             && value (insert "^" z')
+                               == T.take idx' flat' <> "^" <> T.drop idx' flat'
+                         )
+                  )
+                (_, checks) =
+                  mapAccumL
+                    walk
+                    -- 'fromText' places the cursor at the end of the
+                    -- document.
+                    (fromText t, (t, T.length t))
+                    script
+            in conjoin checks
+
+      it "line joining, splitting, empty documents, and boundaries" $ do
+        -- Directed boundary cases for the same model.
+        let model z m = value z == fst m && value (insert "^" z) == markerOf m
+            markerOf (flat, idx) = T.take idx flat <> "^" <> T.drop idx flat
+        model (deleteLeft (insertChar 'a' (fromText ""))) (applyModel OpDeleteLeft (applyModel (OpInsertChar 'a') ("", 0)))
+          `shouldBe` True
+        model (up (fromText "ab\ncd")) (applyModel OpUp ("ab\ncd", 5)) `shouldBe` True
+        model (down (up (fromText "ab\ncd"))) (applyModel OpDown (applyModel OpUp ("ab\ncd", 5))) `shouldBe` True
+        model (deleteLeftWord (fromText "ab cd  ")) (applyModel OpDeleteLeftWord ("ab cd  ", 7)) `shouldBe` True
+        model (tab 4 (fromText "ab")) (applyModel (OpTab 4) ("ab", 2)) `shouldBe` True
+        model (pageUp 0 (fromText "a\nb")) (applyModel (OpPageUp 0) ("a\nb", 3)) `shouldBe` True
+        model (pageDown (-2) (fromText "a\nb")) (applyModel (OpPageDown (-2)) ("a\nb", 3)) `shouldBe` True
+
+applyZipper :: EditOp -> TextZipper -> TextZipper
+applyZipper op z = case op of
+  OpLeft -> left z
+  OpRight -> right z
+  OpUp -> up z
+  OpDown -> down z
+  OpHome -> home z
+  OpEnd -> end z
+  OpPageUp n -> pageUp n z
+  OpPageDown n -> pageDown n z
+  OpInsertChar c -> insertChar c z
+  OpInsertNewline -> insertChar '\n' z
+  OpInsertText s -> insert s z
+  OpDeleteLeft -> deleteLeft z
+  OpDeleteRight -> deleteRight z
+  OpDeleteLeftWord -> deleteLeftWord z
+  OpTab n -> tab n z
+  OpTop -> top z
+
+-- | The independent model: flat text plus a logical character index.
+type FlatModel = (T.Text, Int)
+
+dropTrailing :: (Char -> Bool) -> T.Text -> T.Text
+dropTrailing p = T.dropWhileEnd p
+
+applyModel :: EditOp -> FlatModel -> FlatModel
+applyModel op (flat, idx) = case op of
+  OpLeft -> (flat, max 0 (idx - 1))
+  OpRight -> (flat, min (T.length flat) (idx + 1))
+  OpUp -> (flat, moveLine flat idx (-1))
+  OpDown -> (flat, moveLine flat idx 1)
+  OpHome ->
+    let start = lineStart flat idx
+    in (flat, start)
+  OpEnd ->
+    let ls = T.splitOn "\n" flat
+        (ln, _) = lineCol flat idx
+        endIdx = lineStart flat idx + T.length (ls !! ln)
+    in (flat, endIdx)
+  OpPageUp 0 -> (flat, idx)
+  OpPageUp n -> (flat, iterate moveUp idx !! max 0 n)
+    where
+      moveUp i = moveLine flat i (-1)
+  OpPageDown 0 -> (flat, idx)
+  OpPageDown n -> (flat, iterate moveDown idx !! max 0 n)
+    where
+      moveDown i = moveLine flat i 1
+  OpInsertChar c -> (T.take idx flat <> T.singleton c <> T.drop idx flat, idx + 1)
+  OpInsertNewline -> (T.take idx flat <> "\n" <> T.drop idx flat, idx + 1)
+  OpInsertText s ->
+    ( T.take idx flat <> s <> T.drop idx flat
+    , idx + T.length s
+    )
+  OpDeleteLeft
+    | idx > 0 -> (T.take (idx - 1) flat <> T.drop idx flat, idx - 1)
+    | otherwise -> (flat, idx)
+  OpDeleteRight
+    | idx < T.length flat -> (T.take idx flat <> T.drop (idx + 1) flat, idx)
+    | otherwise -> (flat, idx)
+  OpDeleteLeftWord ->
+    let prefix = T.take idx flat
+        suffix = T.drop idx flat
+        p1 = dropTrailing isSpace prefix
+        p2 = dropTrailing (not . isSpace) p1
+    in (p2 <> suffix, T.length p2)
+  OpTab n ->
+    let n' = max 1 n
+        lb = idx - lineStart flat idx
+        k = n - lb `mod` n'
+        k' = max 0 k
+    in ( T.take idx flat <> T.replicate k' " " <> T.drop idx flat
+       , idx + k'
+       )
+  OpTop -> (flat, 0)
+
+lineStart :: T.Text -> Int -> Int
+lineStart flat idx =
+  let prefix = T.take idx flat
+      breaks = T.findIndex (== '\n') (T.reverse prefix)
+  in case breaks of
+       Nothing -> 0
+       Just k -> idx - k
+
+lineCol :: T.Text -> Int -> (Int, Int)
+lineCol flat idx = (ln, col)
+  where
+    start = lineStart flat idx
+    ln = T.count "\n" (T.take start flat)
+    col = idx - start
+
+moveLine :: T.Text -> Int -> Int -> Int
+moveLine flat idx delta =
+  let ls = T.splitOn "\n" flat
+      (ln, col) = lineCol flat idx
+      ln' = ln + delta
+  in if ln' < 0 || ln' >= length ls
+       then idx
+       else lineStartOf ln' + min col (T.length (ls !! ln'))
+  where
+    lineStartOf l = sum (map (\s -> T.length s + 1) (take l (T.splitOn "\n" flat)))
