@@ -9,6 +9,8 @@ import qualified Data.Text.ZipperSpec
 import qualified Reflex.Vty.CanvasSpec
 import qualified Reflex.Vty.ColorProfileSpec
 import qualified Reflex.Vty.ColorSpec
+import qualified Reflex.Vty.Host.SignalSpec
+import qualified Reflex.Vty.Host.TriggerSpec
 import qualified Reflex.Vty.HostSpec
 import qualified Reflex.Vty.StyleJoinSpec
 import qualified Reflex.Vty.StyleSpec
@@ -23,8 +25,14 @@ import qualified Reflex.Vty.Widget.ScrollSpec
 
 main :: IO ()
 main = do
-  goldenMode <- goldenModeFromEnv
-  hspec (spec goldenMode)
+  childMode <- lookupEnv "REFLEX_VTY_SIGNAL_CHILD"
+  case childMode of
+    -- Isolated signal-child processes run their scenario and exit
+    -- before Hspec starts.
+    Just _mode -> Reflex.Vty.Host.SignalSpec.runSignalChild
+    Nothing -> do
+      goldenMode <- goldenModeFromEnv
+      hspec (spec goldenMode)
 
 -- | Read REFLEX_VTY_GOLDEN_UPDATE once at startup. An absent value or
 -- @0@ selects checking. @1@ selects updating and is forbidden when
@@ -52,6 +60,7 @@ spec goldenMode = do
   describe "Reflex.Vty.CanvasSpec" Reflex.Vty.CanvasSpec.spec
   describe "Reflex.Vty.ColorProfileSpec" Reflex.Vty.ColorProfileSpec.spec
   describe "Reflex.Vty.ColorSpec" Reflex.Vty.ColorSpec.spec
+  describe "Reflex.Vty.Host.TriggerSpec" Reflex.Vty.Host.TriggerSpec.spec
   describe "Reflex.Vty.HostSpec" Reflex.Vty.HostSpec.spec
   describe "Reflex.Vty.StyleSpec" Reflex.Vty.StyleSpec.spec
   describe "Reflex.Vty.StyleJoinSpec" Reflex.Vty.StyleJoinSpec.spec
@@ -61,4 +70,5 @@ spec goldenMode = do
   describe "Reflex.Vty.Widget.CursorSpec" Reflex.Vty.Widget.CursorSpec.spec
   describe "Reflex.Vty.Widget.MouseSpec" Reflex.Vty.Widget.MouseSpec.spec
   describe "Reflex.Vty.Widget.ScrollSpec" Reflex.Vty.Widget.ScrollSpec.spec
+  describe "Reflex.Vty.Host.SignalSpec" Reflex.Vty.Host.SignalSpec.spec
   describe "Reflex.Vty.Test.GoldenSpec" (Reflex.Vty.Test.GoldenSpec.spec goldenMode)
