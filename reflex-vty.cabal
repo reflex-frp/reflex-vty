@@ -15,6 +15,7 @@ category: FRP
 build-type: Simple
 extra-source-files:
   README.md
+  test/goldens/*.txt
 extra-doc-files:
   doc/tasks.png
   ChangeLog.md
@@ -66,6 +67,7 @@ library
     ref-tf >= 0.4.0 && < 0.6,
     reflex >= 0.9.2 && < 1,
     time >= 1.8.0 && < 1.15,
+    vector >= 0.12 && < 0.14,
     vty >= 6.0 && < 6.7,
     vty-crossplatform >= 0.1 && < 0.6
   if !os(windows)
@@ -223,6 +225,7 @@ test-suite reflex-vty-test
     Reflex.Vty.StyleJoinSpec
     Reflex.Vty.Test.Snapshot
     Reflex.Vty.Test.SnapshotSpec
+    Reflex.Vty.Test.GoldenPolicySpec
     Reflex.Vty.Test.GoldenSpec
     Reflex.Vty.Widget.BoxSpec
     Reflex.Vty.Widget.CursorSpec
@@ -231,11 +234,13 @@ test-suite reflex-vty-test
   build-depends:
     base,
     reflex,
+    bytestring,
     containers,
     directory,
     filepath,
     reflex-vty,
     text,
+    vector >= 0.12 && < 0.14,
     extra,
     QuickCheck >= 2.14 && < 2.16,
     hspec >= 2.7 && < 2.12,

@@ -1,2 +1,4 @@
 5x1
-hello
+"hello"
+--- spans ---
+0:0+5 text="hello" attr=FixedAttr {fixedStyle = 0, fixedForeColor = Nothing, fixedBackColor = Nothing, fixedURL = Nothing}

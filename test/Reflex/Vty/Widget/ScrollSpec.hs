@@ -25,7 +25,7 @@ spec = describe "Reflex.Vty.Widget.Scroll" $ do
     it "returns empty when viewport too narrow" $ do
       scrollbarImages ScrollbarAlways attr 10 50 0 1 `shouldBe` []
 
-    it "produces a thumb for ScrollbarAlways" $ do
+    it "produces a thumb and gutter for ScrollbarAlways" $ do
       let imgs = scrollbarImages ScrollbarAlways attr 10 50 0 20
       length imgs `shouldBe` 2 -- gutter + thumb
     it "produces only a thumb for ScrollbarThumbOnly" $ do
@@ -36,31 +36,35 @@ spec = describe "Reflex.Vty.Widget.Scroll" $ do
       length imgs `shouldBe` 1 -- thumb only
     it "places thumb at top when scrollLine is 0" $ do
       let imgs = scrollbarImages ScrollbarThumbOnly attr 10 50 0 20
-          grid = imageToGrid $ V.vertCat imgs
+          rows = imageText (V.vertCat imgs)
           -- Thumb should be at the top of the rightmost column
-          (row0, _) = case grid of
-            (r : _) -> (map cellChar r, 0)
-            [] -> ("", 0)
-      last row0 `shouldBe` '█'
+          firstChar [] = ' '
+          firstChar (c : _) = c
+      case rows of
+        (r : _) -> last r `shouldBe` '█'
+        [] -> expectationFailure "expected at least one rendered row"
+      case rows of
+        (r1 : _) -> firstChar r1 `shouldBe` ' '
+        [] -> expectationFailure "expected at least one rendered row"
 
     it "places thumb lower when scrolled down" $ do
       let imgsAtTop = scrollbarImages ScrollbarThumbOnly attr 10 50 0 20
           imgsScrolled = scrollbarImages ScrollbarThumbOnly attr 10 50 20 20
-          topGrid = imageToGrid $ V.vertCat imgsAtTop
-          scrolledGrid = imageToGrid $ V.vertCat imgsScrolled
-          topChar (row : _) = last (map cellChar row)
-          topChar [] = ' '
-      -- The thumb at position 0 should differ from thumb at position 20
-      topChar topGrid `shouldBe` '█'
-      -- When scrolled, the first row should not have the thumb
-      topChar scrolledGrid `shouldSatisfy` (/= '█')
+          topRow = imageText (V.vertCat imgsAtTop)
+          scrolledRows = imageText (V.vertCat imgsScrolled)
+      case (topRow, scrolledRows) of
+        ((top : _), (scrolled : _)) -> do
+          last top `shouldBe` '█'
+          -- When scrolled, the first row should not have the thumb
+          last scrolled `shouldSatisfy` (/= '█')
+        _ -> expectationFailure "expected rendered rows"
 
     it "thumb size is proportional to viewport/total ratio" $ do
-      let attr = V.defAttr
+      let attr' = V.defAttr
           -- vpHeight=10, totalLines=100 → thumbLen = max 1 (100/100) = 1
-          imgs1 = scrollbarImages ScrollbarThumbOnly attr 10 100 0 20
+          imgs1 = scrollbarImages ScrollbarThumbOnly attr' 10 100 0 20
           -- vpHeight=10, totalLines=20 → thumbLen = max 1 (100/20) = 5
-          imgs2 = scrollbarImages ScrollbarThumbOnly attr 10 20 0 20
+          imgs2 = scrollbarImages ScrollbarThumbOnly attr' 10 20 0 20
           heightOf [] = 0
           heightOf (img : _) = V.imageHeight img
       heightOf imgs1 `shouldBe` 1

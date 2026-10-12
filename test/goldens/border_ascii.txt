@@ -1,4 +1,8 @@
 5x3
-+---+
-|Box|
-+---+
+"+---+"
+"|Box|"
+"+---+"
+--- spans ---
+0:0+5 text="+---+" attr=FixedAttr {fixedStyle = 0, fixedForeColor = Nothing, fixedBackColor = Nothing, fixedURL = Nothing}
+1:0+5 text="|Box|" attr=FixedAttr {fixedStyle = 0, fixedForeColor = Nothing, fixedBackColor = Nothing, fixedURL = Nothing}
+2:0+5 text="+---+" attr=FixedAttr {fixedStyle = 0, fixedForeColor = Nothing, fixedBackColor = Nothing, fixedURL = Nothing}

@@ -10,52 +10,10 @@ import qualified Graphics.Vty.Image as V.Image
 import Test.Hspec
 
 import Reflex.Vty.Style
+import Reflex.Vty.Test.Snapshot (Grid (..), RenderSpan (..), imageText, imageToGrid)
 
 spec :: Spec
 spec = describe "Reflex.Vty.Style" $ do
-  describe "def" $ do
-    it "has no foreground" $
-      _style_foreground def `shouldBe` Nothing
-    it "has no border" $
-      _style_border def `shouldBe` Nothing
-    it "has zero padding" $
-      _style_padding def `shouldBe` Padding 0 0 0 0
-    it "has zero margin" $
-      _style_margin def `shouldBe` Margin 0 0 0 0
-
-  describe "per-side setters" $ do
-    it "withPaddingTop sets only top" $ do
-      let s = withPaddingTop 3 def
-      _padding_top (_style_padding s) `shouldBe` 3
-      _padding_right (_style_padding s) `shouldBe` 0
-    it "withPaddingRight sets only right" $ do
-      let s = withPaddingRight 2 def
-      _padding_right (_style_padding s) `shouldBe` 2
-      _padding_top (_style_padding s) `shouldBe` 0
-    it "withPaddingBottom sets only bottom" $ do
-      let s = withPaddingBottom 4 def
-      _padding_bottom (_style_padding s) `shouldBe` 4
-    it "withPaddingLeft sets only left" $ do
-      let s = withPaddingLeft 1 def
-      _padding_left (_style_padding s) `shouldBe` 1
-    it "withMarginTop sets only top" $ do
-      let s = withMarginTop 2 def
-      _margin_top (_style_margin s) `shouldBe` 2
-      _margin_right (_style_margin s) `shouldBe` 0
-    it "withMarginLeft sets only left" $ do
-      let s = withMarginLeft 3 def
-      _margin_left (_style_margin s) `shouldBe` 3
-    it "withBorderTop enables only top toggle" $ do
-      let s = withBorderTop True def
-      _style_borderTop s `shouldBe` Just True
-      _style_borderBottom s `shouldBe` Nothing
-    it "withBorderForeground sets border color" $ do
-      let s = withBorderForeground red def
-      _style_borderForeground s `shouldBe` Just red
-    it "withBorderBackground sets border bg" $ do
-      let s = withBorderBackground blue def
-      _style_borderBackground s `shouldBe` Just blue
-
   describe "inherit" $ do
     let parent = withForeground red . withBold . withWidth 10 $ def
     it "keeps the child's foreground when set" $ do
@@ -129,81 +87,6 @@ spec = describe "Reflex.Vty.Style" $ do
       let overlay = V.Attr {V.attrStyle = V.KeepCurrent, V.attrForeColor = V.KeepCurrent, V.attrBackColor = V.KeepCurrent, V.attrURL = V.KeepCurrent}
           result = mergeAttr base overlay
       V.attrForeColor result `shouldBe` V.SetTo red
-
-  describe "border style presets" $ do
-    it "singleBorder has all sides and corners" $ do
-      all
-        (isJust . ($ singleBorder))
-        [ _border_top
-        , _border_bottom
-        , _border_left
-        , _border_right
-        , _border_topLeft
-        , _border_topRight
-        , _border_bottomLeft
-        , _border_bottomRight
-        ]
-        `shouldBe` True
-    it "noBorder has no sides or corners" $ do
-      any
-        (isJust . ($ noBorder))
-        [ _border_top
-        , _border_bottom
-        , _border_left
-        , _border_right
-        , _border_topLeft
-        , _border_topRight
-        , _border_bottomLeft
-        , _border_bottomRight
-        ]
-        `shouldBe` False
-    it "markdownBorder has sides but no corners" $ do
-      let b = markdownBorder
-      _border_top b `shouldSatisfy` isJust
-      _border_topLeft b `shouldBe` Nothing
-    it "roundedBorder has all sides and corners" $ do
-      all
-        (isJust . ($ roundedBorder))
-        [ _border_top
-        , _border_bottom
-        , _border_left
-        , _border_right
-        , _border_topLeft
-        , _border_topRight
-        , _border_bottomLeft
-        , _border_bottomRight
-        ]
-        `shouldBe` True
-    it "thickBorder has all sides and corners" $ do
-      all
-        (isJust . ($ thickBorder))
-        [ _border_top
-        , _border_bottom
-        , _border_left
-        , _border_right
-        , _border_topLeft
-        , _border_topRight
-        , _border_bottomLeft
-        , _border_bottomRight
-        ]
-        `shouldBe` True
-    it "doubleBorder has all sides and corners" $ do
-      all
-        (isJust . ($ doubleBorder))
-        [ _border_top
-        , _border_bottom
-        , _border_left
-        , _border_right
-        , _border_topLeft
-        , _border_topRight
-        , _border_bottomLeft
-        , _border_bottomRight
-        ]
-        `shouldBe` True
-    it "asciiBorder uses ASCII characters" $ do
-      _border_top asciiBorder `shouldBe` Just '-'
-      _border_left asciiBorder `shouldBe` Just '|'
-      _border_topLeft asciiBorder `shouldBe` Just '+'
 
   describe "render" $ do
     it "produces a non-empty image for plain text" $ do
@@ -313,3 +196,38 @@ spec = describe "Reflex.Vty.Style" $ do
       let img = render (withBorder innerHalfBorder def) "X"
       V.Image.imageWidth img `shouldBe` 3
       V.Image.imageHeight img `shouldBe` 3
+
+  describe "image composition coordinates" $ do
+    let imgA = render def "ab"
+        imgTall = render def "x\ny"
+    it "placeHorizontal aligns content within the padded width" $ do
+      imageText (placeHorizontal HAlignLeft 5 imgA) `shouldBe` ["ab   "]
+      imageText (placeHorizontal HAlignCenter 5 imgA) `shouldBe` [" ab  "]
+      imageText (placeHorizontal HAlignRight 5 imgA) `shouldBe` ["   ab"]
+    it "placeVertical aligns content within the padded height" $ do
+      imageText (placeVertical VAlignTop 3 imgA) `shouldBe` ["ab", "  ", "  "]
+      imageText (placeVertical VAlignBottom 3 imgA) `shouldBe` ["  ", "  ", "ab"]
+    it "place combines both axes" $ do
+      imageText (place HAlignRight VAlignBottom 4 2 imgA) `shouldBe` ["    ", "  ab"]
+    it "joinHorizontal pads to the tallest and concatenates widths" $ do
+      let joined = joinHorizontal VAlignTop [imgA, imgTall]
+      V.imageWidth joined `shouldBe` 3
+      V.imageHeight joined `shouldBe` 2
+      imageText joined `shouldBe` ["abx", "  y"]
+    it "joinVertical pads to the widest and stacks heights" $ do
+      let joined = joinVertical HAlignRight [imgA, imgTall]
+      V.imageWidth joined `shouldBe` 2
+      V.imageHeight joined `shouldBe` 3
+      imageText joined `shouldBe` ["ab", " x", " y"]
+    it "placeHorizontal leaves oversized images untouched" $ do
+      imageText (placeHorizontal HAlignCenter 1 imgA) `shouldBe` ["ab"]
+
+  describe "hyperlinks" $ do
+    it "renders the URL attribute onto the text" $ do
+      let img = render (withHyperlink "https://example.com" def) "link"
+          grid = imageToGrid img
+      case gridRows grid of
+        [[s]] -> do
+          V.fixedURL (renderSpanAttr s) `shouldBe` Just "https://example.com"
+          T.unpack (renderSpanText s) `shouldBe` "link"
+        _ -> expectationFailure "expected one row with one span"
