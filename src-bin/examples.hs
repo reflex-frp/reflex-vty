@@ -8,6 +8,7 @@ import qualified Data.Text as T
 import Reflex
 import System.Environment (getArgs)
 
+import Example.CanvasDemo
 import Example.CellBuffer
 import Example.Common
 import Example.DoomFire
@@ -44,6 +45,7 @@ runExample = \case
   "realtime" -> realtime
   "simple" -> simple
   "fullscreen" -> fullscreen
+  "canvas" -> canvasDemo
   "progress" -> progressBar
   "progress-bar" -> progressBar
   "stopwatch" -> stopwatch

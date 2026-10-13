@@ -67,6 +67,7 @@ Each of these examples is a module in [`src-bin/Example/`](src-bin/Example/). Yo
 | **`realtime`** — background activity that never blocks input | <img src="https://vhs.charm.sh/vhs-7jC7TFTxH2A1xQmsJPGqFa.gif" alt="simulated background activity demo: an event counter advances while key presses display immediately" width="420"> |
 | **`simple`** — a five-second countdown that exits on its own | <img src="https://vhs.charm.sh/vhs-1fP0onE4lMVSBYRyN9HM16.gif" alt="automatic countdown demo: the program counts down from five seconds and exits without any key press" width="420"> |
 | **`fullscreen`** — the countdown on the alternate screen | <img src="https://vhs.charm.sh/vhs-CfyENW8ZOn5D389ESgdll.gif" alt="alternate-screen countdown demo: the countdown runs fullscreen and the prior shell screen returns on exit" width="420"> |
+| **`canvas`** — a glyph-level drawing board | <img src="https://vhs.charm.sh/vhs-4Pb8inOYo4dWwFvmYXf6ib.gif" alt="canvas board demo: a checkerboard with a wide glyph, a combining-mark glyph, an ellipsis-clipped glyph at the right edge, and a movable highlight overlay" width="420"> |
 
 **More demos**: full-screen canvas animations (the classic Doom fire, a plasma field, a starfield, an animated splash) live on the [examples page](EXAMPLES.md).
 
