@@ -7,6 +7,7 @@ import Test.Hspec
 
 import qualified Control.Monad.NodeIdSpec
 import qualified Data.Text.ZipperSpec
+import qualified Example.InteractionSpec
 import qualified Reflex.Vty.CanvasSpec
 import qualified Reflex.Vty.ColorProfileSpec
 import qualified Reflex.Vty.ColorSpec
@@ -67,6 +68,7 @@ spec :: GoldenMode -> Spec
 spec goldenMode = do
   describe "Control.Monad.NodeIdSpec" Control.Monad.NodeIdSpec.spec
   describe "Data.Text.ZipperSpec" Data.Text.ZipperSpec.spec
+  describe "Example.InteractionSpec" Example.InteractionSpec.spec
   describe "Reflex.Vty.CanvasSpec" Reflex.Vty.CanvasSpec.spec
   describe "Reflex.Vty.ColorProfileSpec" Reflex.Vty.ColorProfileSpec.spec
   describe "Reflex.Vty.ColorSpec" Reflex.Vty.ColorSpec.spec

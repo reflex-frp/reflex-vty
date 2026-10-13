@@ -62,6 +62,11 @@ Each of these examples is a module in [`src-bin/Example/`](src-bin/Example/). Yo
 | **`textinput`** — a focused text-input field    | <img src="https://vhs.charm.sh/vhs-4FzSVaJAnGq4V1NNrk1lal.gif" alt="text input demo" width="420">   |
 | **`pager`** — a scrollable text viewport        | <img src="https://vhs.charm.sh/vhs-7a2bCmFHleF9MG3KxY4yeh.gif" alt="pager demo" width="420">        |
 | **`views`** — toggle between two views          | <img src="https://vhs.charm.sh/vhs-7rflGBcgFrmIQgk0JmZNKe.gif" alt="views demo" width="420">        |
+| **`prevent-quit`** — confirm before exit        | <img src="https://vhs.charm.sh/vhs-4P7SjY4t2Jsa8UaifIVYBm.gif" alt="quit confirmation demo: pressing q opens a quit prompt, n returns to the running view, y exits" width="420"> |
+| **`print-key`** — inspect keyboard events       | <img src="https://vhs.charm.sh/vhs-QzhTzHfQoJmwratv2xaaW.gif" alt="keyboard event demo: each key press, arrow key, and key with modifiers is shown as a Vty event" width="420"> |
+| **`realtime`** — background activity that never blocks input | <img src="https://vhs.charm.sh/vhs-7jC7TFTxH2A1xQmsJPGqFa.gif" alt="simulated background activity demo: an event counter advances while key presses display immediately" width="420"> |
+| **`simple`** — a five-second countdown that exits on its own | <img src="https://vhs.charm.sh/vhs-1fP0onE4lMVSBYRyN9HM16.gif" alt="automatic countdown demo: the program counts down from five seconds and exits without any key press" width="420"> |
+| **`fullscreen`** — the countdown on the alternate screen | <img src="https://vhs.charm.sh/vhs-CfyENW8ZOn5D389ESgdll.gif" alt="alternate-screen countdown demo: the countdown runs fullscreen and the prior shell screen returns on exit" width="420"> |
 
 **More demos**: full-screen canvas animations (the classic Doom fire, a plasma field, a starfield, an animated splash) live on the [examples page](EXAMPLES.md).
 
