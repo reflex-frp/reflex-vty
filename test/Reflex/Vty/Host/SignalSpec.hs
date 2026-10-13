@@ -145,7 +145,7 @@ runChildScenario mode mapped = do
       case mOut of
         Nothing -> expectationFailure "child stdout was not piped"
         Just hOut -> do
-          hSetBinaryMode hOut False
+          hSetBinaryMode hOut True
           hSetBuffering hOut LineBuffering
           v <- startLineReader hOut
           awaitLine v "READY"
@@ -211,6 +211,7 @@ coverageChildTix mode = do
 runSignalChild :: IO ()
 runSignalChild = do
   hSetBuffering stdout LineBuffering
+  hSetNewlineMode stdout noNewlineTranslation
   mmode <- lookupEnv "REFLEX_VTY_SIGNAL_CHILD"
   case mmode of
     Nothing -> putStrLn "CHILDERR no mode" >> exitFailure
