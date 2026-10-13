@@ -265,7 +265,7 @@ windowsConsoleChild = do
   -- Temporarily retrieve the active (library) handler; invoking its
   -- callback with each console event exercises the mapping without a
   -- desktop console or a real shutdown.
-  active <- Console.installHandler (Console.Catch (pure ()))
+  active <- Console.installHandler (Console.Catch (\_ -> pure ()))
   case active of
     Console.Catch act ->
       forM_ [minBound .. maxBound] act
@@ -273,7 +273,7 @@ windowsConsoleChild = do
   _ <- Console.installHandler active -- restore the retrieved handler
   restore -- restore the counting handler
   -- The counting handler is active again.
-  counting <- Console.installHandler (Console.Catch (pure ()))
+  counting <- Console.installHandler (Console.Catch (\_ -> pure ()))
   case counting of
     Console.Catch act -> act Console.ControlC
     _ -> pure ()

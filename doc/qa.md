@@ -48,6 +48,9 @@ Coverage includes every declared module in both libraries, including modules tha
 These ratios do not prove complete behavioral coverage.
 Use GHC **9.12.3** with optimization disabled and a new instrumented build directory for baseline comparisons.
 Use the coverage commands in [the CI workflow](../.github/workflows/haskell.yml).
+CI pins GHCup metadata to install the original release and checks `ghc --numeric-version` before building.
+GHCup's current default metadata may resolve `9.12.3` to `9.12.3.20260311`; that dated rebuild does not match this baseline.
+When changing the coverage compiler, update the metadata pin, workflow version check, reporting tool, and measured baseline together.
 
 The reporting tool must use the Cabal version that wrote `setup-config`.
 The workflow specifies Cabal **3.16.1.0**. GHC can supply a different Cabal version.

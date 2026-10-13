@@ -120,10 +120,31 @@ jobs:
       REFLEX_VTY_COVERAGE_CHILD_DIR: ${{ github.workspace }}/dist-coverage/child-tix
     steps:
     - uses: actions/checkout@v4
+    - name: Pin coverage toolchain metadata
+      # Current GHCup metadata resolves 9.12.3 to 9.12.3.20260311.
+      # HPC baselines require the original compiler, not a dated rebuild.
+      shell: python
+      run: |
+        import json
+        import pathlib
+
+        base = "https://raw.githubusercontent.com/haskell/ghcup-metadata/9ce5a2cf018443f8ea9c9f4a06726279066e05e9"
+        config = pathlib.Path.home() / ".ghcup" / "config.yaml"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text(json.dumps({
+            "url-source": [
+                base + "/ghcup-0.0.9.yaml",
+                base + "/ghcup-vanilla-0.0.9.yaml",
+            ]
+        }))
     - uses: haskell-actions/setup@v2
       with:
         ghc-version: '9.12.3'
         cabal-version: '3.16.1.0'
+    - name: Verify coverage compiler
+      run: |
+        actual="$(ghc --numeric-version)"
+        test "$actual" = 9.12.3 || { echo "Coverage requires GHC 9.12.3, got $actual"; exit 1; }
     - run: cabal update
     - name: Install the specified Cabal metadata reader
       run: cabal install --lib Cabal-3.16.1.0 extra --package-env="$RUNNER_TEMP/reflex-vty-coverage.env"
