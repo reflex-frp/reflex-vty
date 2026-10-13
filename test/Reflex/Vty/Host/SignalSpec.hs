@@ -169,16 +169,22 @@ checkSignalDelivery ph v mode mapped = do
       awaitLine v "PRIOR"
 #else
 checkSignalDelivery _ v _ _ = do
-  forM_ consoleEvents $ \_ -> do
+  forM_ consoleEvents $ \(_, expected) -> do
     l <- awaitPrefix v "APP "
-    take 4 l `shouldBe` "APP "
+    l `shouldBe` ("APP " ++ show expected)
   awaitLine v "COUNT 1"
   awaitLine v "HOSTDONE"
 #endif
 
 #if defined(mingw32_HOST_OS)
-consoleEvents :: [()]
-consoleEvents = [(), (), (), (), ()]
+consoleEvents :: [(Console.ConsoleEvent, AppSignal)]
+consoleEvents =
+  [ (Console.ControlC, AppSignal_Interrupt)
+  , (Console.Break, AppSignal_Interrupt)
+  , (Console.Close, AppSignal_Hangup)
+  , (Console.Logoff, AppSignal_Hangup)
+  , (Console.Shutdown, AppSignal_Terminate)
+  ]
 #else
 childSignal :: String -> Signal
 childSignal mode = case mode of
@@ -262,13 +268,14 @@ windowsConsoleChild = do
   _ <- Console.installHandler (Console.Catch (\_ -> modifyIORef' countRef (+1)))
   restore <- installAppSignalHandlers $ \s ->
     putStrLn ("APP " ++ show s)
+  putStrLn "READY"
   -- Temporarily retrieve the active (library) handler; invoking its
   -- callback with each console event exercises the mapping without a
   -- desktop console or a real shutdown.
   active <- Console.installHandler (Console.Catch (\_ -> pure ()))
   case active of
     Console.Catch act ->
-      forM_ [minBound .. maxBound] act
+      forM_ consoleEvents (act . fst)
     _ -> pure ()
   _ <- Console.installHandler active -- restore the retrieved handler
   restore -- restore the counting handler
