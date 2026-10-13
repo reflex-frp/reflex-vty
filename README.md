@@ -115,7 +115,7 @@ cabal repl example   # to enter a repl for the example executable only
 ### Tests
 
 ```bash
-cabal test all
+cabal test all --enable-tests
 ```
 
 See the [QA guide](doc/qa.md) for golden files, terminal checks, and coverage commands.

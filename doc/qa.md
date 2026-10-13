@@ -7,7 +7,7 @@ Run these commands from the repository root.
 ## Test suite
 
 ```bash
-REFLEX_VTY_GOLDEN_UPDATE=0 cabal test all --test-show-details=direct
+REFLEX_VTY_GOLDEN_UPDATE=0 cabal test all --enable-tests --test-show-details=direct
 ```
 
 The portable suite uses an in-memory Vty to run the production host.
@@ -19,7 +19,7 @@ Missing or different golden files cause test failures. Tests do not change these
 To replace local golden files, use this command:
 
 ```bash
-REFLEX_VTY_GOLDEN_UPDATE=1 cabal test reflex-vty-test --test-option=--match=Golden
+REFLEX_VTY_GOLDEN_UPDATE=1 cabal test reflex-vty-test --enable-tests --test-option=--match=Golden
 ```
 
 Review each changed fixture before you commit it. Update mode cannot run when `CI=true`.
@@ -36,6 +36,8 @@ python3 test/pty_smoke.py "$(cabal list-bin -ftest-tools reflex-vty-test-driver)
 The PTY checks require POSIX, Python 3, a UTF-8 locale, and the `xterm-256color` terminfo entry.
 They check terminal input, paste, resize, and scrolling.
 They also check terminal restoration after normal exits, signals, and exceptions.
+The harness drains terminal output while waiting for shutdown, so PTY backpressure cannot block the child.
+On Darwin, restoration comparisons exclude only `PENDIN`, the kernel-managed pending-input flag set when canonical mode is restored; all other flags, speeds, and control characters must match.
 Windows runs the portable suite and separate console-handler checks.
 These tests do not check interactive ConPTY operation.
 

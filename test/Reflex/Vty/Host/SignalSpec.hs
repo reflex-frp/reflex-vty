@@ -58,7 +58,9 @@ import qualified Graphics.Vty as V
 import Reflex
 
 import Reflex.Vty.Host (AppSignal (..), VtyApp, VtyResult (..), defaultVtyAppConfig)
-import Reflex.Vty.Host.Signal ()
+#if defined(mingw32_HOST_OS)
+import Reflex.Vty.Host.Signal (installAppSignalHandlers)
+#endif
 import Reflex.Vty.Test.AppHarness (defaultRecordingVtyConfig, recordingVty, runHostAsync)
 
 -- | Deadline for one expected line from a child (microseconds).

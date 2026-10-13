@@ -204,9 +204,19 @@ class Session:
     # -- lifecycle --------------------------------------------------------
 
     def shutdown(self, expect_code=0):
-        """Wait for child termination within the time limit."""
-        code = reap(self.proc, expect_code)
+        """Drain output while waiting so a full PTY cannot block shutdown."""
+        deadline = time.monotonic() + REAP_TIMEOUT
+        while self.proc.poll() is None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                self.proc.kill()
+                self.proc.wait(timeout=REAP_TIMEOUT)
+                self.fail("shutdown timed out after %ss" % REAP_TIMEOUT)
+            self.drain_once(min(remaining, 0.05))
+        code = self.proc.returncode
         self.drain_available()
+        if expect_code is not None and code != expect_code:
+            self.fail("exit code %r, expected %r" % (code, expect_code))
         return code
 
     def close(self):
@@ -225,7 +235,14 @@ class Session:
 
     def assert_termios_restored(self, context):
         now = termios.tcgetattr(self.slave)
-        if now != self.termios_before:
+        before = self.termios_before.copy()
+        if sys.platform == "darwin":
+            # XNU sets PENDIN when tcsetattr restores ICANON. It records
+            # pending input reprocessing, not an application terminal mode.
+            # Compare every configurable flag, speed, and control character.
+            before[3] &= ~termios.PENDIN
+            now[3] &= ~termios.PENDIN
+        if now != before:
             raise AssertionError(
                 "%s: termios not restored\nbefore=%r\nafter=%r"
                 % (context, self.termios_before, now)
