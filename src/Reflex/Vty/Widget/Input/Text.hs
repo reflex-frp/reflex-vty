@@ -6,7 +6,6 @@ module Reflex.Vty.Widget.Input.Text
   , def
   ) where
 
-import Control.Monad (join)
 import Control.Monad.Fix (MonadFix)
 import Data.Default (Default (..))
 import Data.Function ((&))
@@ -17,7 +16,7 @@ import qualified Graphics.Vty as V
 import Reflex
 
 import Data.Text.Zipper
-import Reflex.Vty.Style (applyAttr)
+import Reflex.Vty.Style (Style, applyAttr)
 import Reflex.Vty.Theme (Theme (..))
 import Reflex.Vty.Widget
 import Reflex.Vty.Widget.Input.Mouse
@@ -93,8 +92,6 @@ textInput cfg = do
   dw <- viewportWidth
   bt <- themeAttr
   th <- theme
-  attr0 <- sample bt
-  cursorStyle0 <- sample (fmap _theme_textInputCursor th)
   rec -- we split up the events from vty and the one users provide to avoid cyclical
       -- update dependencies. This way, users may subscribe only to UI updates.
       let valueChangedByCaller = _textInputConfig_modify cfg
@@ -124,18 +121,24 @@ textInput cfg = do
             ]
       click <- mouseDown V.BLeft
 
-      let toCursorAttrs attr = applyAttr cursorStyle0 attr
-          rowInputDyn =
-            (,,)
+      -- The layout rows carry a marker tag instead of a resolved
+      -- attribute. The tag is @False@ for ordinary spans and @True@
+      -- for the cursor span (which exists only while focused).
+      -- Rendering maps those tags onto the /current/ theme attribute
+      -- and cursor style. A theme change then re-renders without any
+      -- input event.
+      let rows =
+            (\w s x -> displayLinesWithAlignment (_textInputConfig_alignment cfg) w False x s)
               <$> dw
               <*> (mapZipper <$> _textInputConfig_display cfg <*> v)
               <*> f
-          toDisplayLines attr (w, s, x) =
-            let c = if x then toCursorAttrs attr else attr
-            in displayLinesWithAlignment (_textInputConfig_alignment cfg) w attr c s
-      attrDyn <- holdDyn attr0 $ pushAlways (\_ -> sample bt) (updated rowInputDyn)
-      let rows = ffor2 attrDyn rowInputDyn toDisplayLines
-          img = images . _displayLines_spans <$> rows
+          img =
+            ( \dl attr cursorStyle ->
+                images . fmap (fmap (retagSpan attr cursorStyle)) $ _displayLines_spans dl
+            )
+              <$> current rows
+              <*> bt
+              <*> (fmap _theme_textInputCursor th)
       y <- holdUniqDyn $ fmap snd _displayLines_cursorPos <$> rows
       let newScrollTop :: Int -> (Int, Int) -> Int
           newScrollTop st (h, cursorY)
@@ -144,13 +147,19 @@ textInput cfg = do
             | otherwise = st
       let hy = attachWith newScrollTop scrollTop $ updated $ zipDyn dh y
       scrollTop <- hold 0 hy
-      tellImages $ (\imgs st -> (: []) . V.vertCat $ drop st imgs) <$> current img <*> scrollTop
+      tellImages $ (\imgs st -> (: []) . V.vertCat $ drop st imgs) <$> img <*> scrollTop
   return $
     TextInput
       { _textInput_value = value <$> v
       , _textInput_userInput = attachWith (&) (current v) valueChangedByUI
       , _textInput_lines = length . _displayLines_spans <$> rows
       }
+
+-- | Resolve a tagged span against the current theme. A cursor span
+-- applies the text-input cursor style over the theme attribute.
+retagSpan :: V.Attr -> Style -> Span Bool -> Span V.Attr
+retagSpan attr cursorStyle (Span isCursor txt) =
+  Span (if isCursor then applyAttr cursorStyle attr else attr) txt
 
 -- | A widget that allows multiline text input
 multilineTextInput
@@ -174,18 +183,39 @@ multilineTextInput cfg = do
 -- | Wraps a 'textInput' or 'multilineTextInput' in a tile. Uses
 -- the computed line count to greedily size the tile when vertically
 -- oriented, and uses the fallback width when horizontally oriented.
+-- The size is sampled after post-build and after content or width
+-- changes. This avoids demanding the recursive layout solution during
+-- construction.
 textInputTile
-  :: (MonadFix m, MonadHold t m, HasLayout t m, HasInput t m, HasFocus t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m)
+  :: (MonadFix m, MonadHold t m, PostBuild t m, PerformEvent t m, MonadSample t (Performable m), HasLayout t m, HasInput t m, HasFocus t m, HasImageWriter t m, HasDisplayRegion t m, HasFocusReader t m, HasTheme t m)
   => m (TextInput t)
   -> Dynamic t Int
   -> m (TextInput t)
 textInputTile txt width = do
+  -- The tile's size depends on its own region (the line count is a
+  -- function of the allocated width). The orientation is itself part
+  -- of the solved layout. Reading those during construction or during
+  -- a frame therefore deadlocks the layout knot. Seed a constant size
+  -- instead. Re-read the true size in post-frame IO: at post-build and
+  -- after every line-count or width change. The result is
+  -- deduplicated, so a stable size cannot re-trigger the solver.
   o <- askOrientation
+  pb <- getPostBuild
   rec t <- tile (Constraint_Fixed <$> sz) txt
-      let sz = join $ ffor o $ \case
-            Orientation_Column -> _textInput_lines t
-            Orientation_Row -> width
-  return t
+      let readSize = do
+            occ <- sample (current o)
+            case occ of
+              Orientation_Column -> sample (current (_textInput_lines t))
+              Orientation_Row -> sample (current width)
+          sizeMayChange =
+            leftmost
+              [ () <$ pb
+              , () <$ updated (_textInput_lines t)
+              , () <$ updated width
+              ]
+      reads <- performEvent $ ffor sizeMayChange $ \_ -> readSize
+      sz <- holdUniqDyn =<< holdDyn 1 reads
+  pure t
 
 -- | Turn a set of display line rows into a list of images (one per line)
 images :: [[Span V.Attr]] -> [V.Image]

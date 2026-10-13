@@ -4,8 +4,10 @@ module Reflex.Vty.ColorSpec (spec) where
 
 import qualified Graphics.Vty as V
 import Test.Hspec
+import Test.QuickCheck (counterexample, forAll, property)
 
 import Reflex.Vty.Color
+import Reflex.Vty.Test.Generators (genFiniteDouble, runPlanProperty)
 
 spec :: Spec
 spec = describe "Reflex.Vty.Color" $ do
@@ -90,3 +92,36 @@ spec = describe "Reflex.Vty.Color" $ do
       sampleGradient2D g2 1 1 `shouldBe` blue
     it "interpolates center" $ do
       sampleGradient2D g2 0.5 0.5 `shouldBe` RGB 128 64 128
+
+  describe "channel bounds" $ do
+    it "treats out-of-range factors as the nearest endpoint" $ do
+      darken 2.0 (RGB 200 200 200) `shouldBe` RGB 200 200 200
+      darken (-1.0) (RGB 200 200 200) `shouldBe` black
+      lighten 2.0 (RGB 200 200 200) `shouldBe` white
+      lighten (-1.0) (RGB 200 200 200) `shouldBe` RGB 200 200 200
+      mix 2.0 red blue `shouldBe` blue
+      mix (-1.0) red blue `shouldBe` red
+      alpha 2.0 red blue `shouldBe` red
+      alpha (-1.0) red blue `shouldBe` blue
+    it "unsorted stops use the actual interval selection" $ do
+      -- The stops are out of order. The implementation defines the
+      -- interval for each sample. Assert only the exact endpoints.
+      let grad = gradient1D [(1.0, white), (0.0, black)]
+      sampleGradient1D grad 0.0 `shouldBe` black
+      sampleGradient1D grad 1.0 `shouldBe` white
+    it "duplicate stops pin their shared position" $ do
+      let grad = gradient1D [(0.0, black), (0.5, red), (0.5, blue), (1.0, white)]
+      sampleGradient1D grad 0.5 `shouldSatisfy` \c -> c == red || c == blue
+    it "degenerate 2D dimensions sample the single corner color" $ do
+      let g = gradient2D red red red red
+      sampleGradient2D g 0 0 `shouldBe` red
+      sampleGradient2D g 0.7 0.3 `shouldBe` red
+
+  describe "interpolation rounding" $ do
+    it "stays within one channel unit of exact interpolation" $
+      runPlanProperty $
+        forAll genFiniteDouble $ \f ->
+          let exact = min 255 (max 0 (round (255 * f))) :: Int
+              RGB sampled _ _ = sampleGradient1D (gradient1D [(0.0, black), (1.0, white)]) f
+          in counterexample ("factor " ++ show f ++ " -> " ++ show sampled ++ ", exact " ++ show exact) $
+               abs (fromIntegral sampled - exact) <= 1

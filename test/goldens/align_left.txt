@@ -1,2 +1,4 @@
 20x1
-Left                
+"Left                "
+--- spans ---
+0:0+20 text="Left                " attr=FixedAttr {fixedStyle = 0, fixedForeColor = Nothing, fixedBackColor = Nothing, fixedURL = Nothing}

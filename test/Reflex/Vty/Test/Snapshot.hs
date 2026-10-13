@@ -1,265 +1,316 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 -- |
--- Description: Rendering snapshot harness for testing vty Image output
 --
--- Converts a 'V.Image' into a 2D grid of cells, each carrying the display
--- character and its 'V.Attr'. This lets tests assert on rendered output
--- without a real terminal — useful for golden-file comparison and precise
--- cell-level checks.
+-- Renders a 'V.Picture' (or 'V.Image') through Vty's own renderer
+-- ("Graphics.Vty.PictureToSpans" 'displayOpsForPic') and decodes the
+-- resulting spans into a test-friendly 'Grid'. The renderer produces
+-- the spans, so continuation columns and zero-width marks need no
+-- reconstruction. A span keeps its complete text and its reported
+-- column width.
+--
+-- Each row is a list of 'RenderSpan's covering the full row width.
+-- Trailing blank columns ('RowEnd') become default-attribute blank
+-- spans. Effective (fully resolved) attributes are computed per row,
+-- starting from terminal defaults, exactly as Vty's output stage does.
 --
 -- Golden file format (produced by 'renderGrid'):
 --
--- > 4x3
--- > ┌──┐
--- > │hi│
--- > └──┘
--- > --- attrs ---
--- > 1,1 'h' fg=red style=bold
+-- > 4x1
+-- > "a\30028b"
+-- > --- spans ---
+-- > 0:0+4 text="a\30028b" attr=FixedAttr {fixedStyle = 0, ...}
 --
--- The text grid is always shown. The @--- attrs ---@ section appears only
--- when at least one cell has an explicit ('SetTo') attribute, keeping
--- goldens clean for unstyled output.
+-- The first line is @WxH@. Then comes one Haskell-escaped row string
+-- per row (@show@ of the row's 'String'). Then comes @--- spans ---@
+-- and one line per canonical span:
+-- @row:column+width text=<quoted> attr=<show FixedAttr>@.
+-- Default attributes are included, as well as explicit colors,
+-- styles, and URLs.
 module Reflex.Vty.Test.Snapshot
-  ( Cell (..)
-  , Grid
+  ( RenderSpan (..)
+  , Grid (..)
+  , pictureToGrid
   , imageToGrid
   , imageText
   , renderGrid
   , gridEquals
+  , attrAt
+  , GoldenMode (..)
   , assertGolden
+  , goldenUpdateCommand
   ) where
 
+import Control.Exception (IOException, try)
+import qualified Data.ByteString as BS
 import Data.List (foldl')
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Encoding.Error as TEE
 import qualified Data.Text.Lazy as TL
-import Graphics.Text.Width (wcwidth)
+import qualified Data.Vector as Vec
 import qualified Graphics.Vty as V
-import Graphics.Vty.Image.Internal (Image (BGFill, Crop, EmptyImage, HorizJoin, HorizText, VertJoin))
+import Graphics.Vty.DisplayAttributes (fixDisplayAttr)
+import qualified Graphics.Vty.PictureToSpans as PTS
+import Graphics.Vty.Span (SpanOp (RowEnd, Skip, TextSpan))
 import System.Directory (createDirectoryIfMissing, doesFileExist)
 import System.FilePath ((<.>), (</>))
-import Test.Hspec (Expectation, shouldBe)
+import Test.Hspec (Expectation, expectationFailure, shouldBe)
 
--- | A single rendered cell: the display character and its vty attribute.
-data Cell = Cell
-  { cellChar :: !Char
-  , cellAttr :: !V.Attr
+-- | A rendered span: its total column width on screen, its complete
+-- text (including any zero-width marks), and its fully resolved
+-- attribute.
+data RenderSpan = RenderSpan
+  { renderSpanColumns :: !Int
+  , renderSpanText :: !T.Text
+  , renderSpanAttr :: !V.FixedAttr
   }
   deriving (Eq, Show)
 
--- | A grid is a list of rows (top-to-bottom), each a list of cells (left-to-right).
-type Grid = [[Cell]]
+-- | A rendered grid: requested dimensions plus one row of spans per
+-- display row. Every row's spans cover exactly 'gridWidth' columns.
+data Grid = Grid
+  { gridWidth :: !Int
+  , gridHeight :: !Int
+  , gridRows :: ![[RenderSpan]]
+  }
+  deriving (Eq, Show)
 
--- | Render a vty 'Image' to a 'Grid'. The grid dimensions match
--- 'V.imageWidth' × 'V.imageHeight'. Any cell not explicitly written by
--- the image (e.g. gaps in a sparse layout) defaults to a space with
--- 'V.defAttr'.
-imageToGrid :: Image -> Grid
+-- | Terminal default attributes; the starting point of attribute
+-- resolution on each row.
+defaultFixedAttr :: V.FixedAttr
+defaultFixedAttr = V.FixedAttr V.defaultStyleMask Nothing Nothing Nothing
+
+-- | Render a picture into a 'Grid' of the requested size, using Vty's
+-- own renderer. Requested negative dimensions are clamped to zero. A
+-- zero-area region yields a grid with those (nonnegative) dimensions
+-- and no rows. A picture with no layers is normalized to a single
+-- 'V.emptyImage' layer. Vty rejects a nonzero-sized picture with no
+-- layers.
+pictureToGrid :: V.DisplayRegion -> V.Picture -> Grid
+pictureToGrid (reqW, reqH) pic0
+  | w == 0 || h == 0 = Grid w h []
+  | otherwise = Grid w h padded
+  where
+    w = max 0 reqW
+    h = max 0 reqH
+    pic = case pic0 of
+      V.Picture {V.picLayers = []} -> pic0 {V.picLayers = [V.emptyImage]}
+      _ -> pic0
+    rows = map (decodeRow w . Vec.toList) (Vec.toList (PTS.displayOpsForPic pic (w, h)))
+    padded = rows ++ replicate (h - length rows) [blankSpan w]
+
+-- | Decode one row of span operations into canonical 'RenderSpan's,
+-- resolving attributes from terminal defaults and converting trailing
+-- blank columns to default-attribute blanks. The final picture stage
+-- must not produce 'Skip' operations. A 'Skip' is an oracle error,
+-- not a rendering result.
+decodeRow :: Int -> [SpanOp] -> [RenderSpan]
+decodeRow width ops =
+  padTo width . coalesceSpans . snd $ foldl' step (defaultFixedAttr, []) ops
+  where
+    step (cur, acc) op = case op of
+      TextSpan attr w _ tl ->
+        let eff = fixDisplayAttr cur attr
+        in (eff, acc ++ [RenderSpan w (TL.toStrict tl) eff])
+      RowEnd n -> (defaultFixedAttr, acc ++ [blankSpan n])
+      Skip n ->
+        error $
+          "oracle error: unexpected Skip ("
+            ++ show n
+            ++ " columns) in final picture spans"
+
+-- | A blank span of @n@ default-attribute columns.
+blankSpan :: Int -> RenderSpan
+blankSpan n = RenderSpan n (T.replicate n (T.singleton ' ')) defaultFixedAttr
+
+-- | Merge adjacent spans with equal effective attributes without
+-- changing their text or widths.
+coalesceSpans :: [RenderSpan] -> [RenderSpan]
+coalesceSpans = foldl' step []
+  where
+    step [] s = [s]
+    step acc s
+      | renderSpanAttr s == renderSpanAttr (last acc) =
+          init acc
+            ++ [ RenderSpan
+                   (renderSpanColumns (last acc) + renderSpanColumns s)
+                   (renderSpanText (last acc) <> renderSpanText s)
+                   (renderSpanAttr s)
+               ]
+      | otherwise = acc ++ [s]
+
+-- | Ensure a row's spans cover the full width by appending
+-- default-attribute blanks if the renderer left the row short.
+padTo :: Int -> [RenderSpan] -> [RenderSpan]
+padTo width ss =
+  let covered = sum (map renderSpanColumns ss)
+  in if covered < width then ss ++ [blankSpan (width - covered)] else ss
+
+-- | Render an image to a grid using the image's own dimensions.
+imageToGrid :: V.Image -> Grid
 imageToGrid img =
-  let w = V.imageWidth img
-      h = V.imageHeight img
-      cells = walkImage img 0 0 Map.empty
-  in [ [ Map.findWithDefault blankCell (x, y) cells
-       | x <- [0 .. max 0 (w - 1)]
-       ]
-     | y <- [0 .. max 0 (h - 1)]
-     ]
+  pictureToGrid (V.imageWidth img, V.imageHeight img) (V.picForImage img)
+
+-- | Extract the visible text of an image, one string per row. The
+-- text includes actual trailing blank columns. It never invents a
+-- space for a wide-glyph continuation column.
+imageText :: V.Image -> [String]
+imageText img =
+  map (T.unpack . T.concat . map renderSpanText) (gridRows (imageToGrid img))
+
+-- | Look up the effective attribute at a cell coordinate. A wide
+-- glyph's continuation column reports the same attribute as its start
+-- column. Both columns are covered by the same span. Out-of-bounds
+-- coordinates return 'Nothing'.
+attrAt :: Int -> Int -> Grid -> Maybe V.FixedAttr
+attrAt x y (Grid w h rows)
+  | x < 0 || y < 0 || x >= w || y >= h = Nothing
+  | otherwise = case drop y rows of
+      [] -> Nothing
+      (r : _) -> go 0 r
   where
-    blankCell = Cell ' ' V.defAttr
+    go _ [] = Nothing
+    go col (s : ss)
+      | x < col + renderSpanColumns s = Just (renderSpanAttr s)
+      | otherwise = go (col + renderSpanColumns s) ss
 
--- | Extract just the visible text from an image, one string per row.
--- Useful for quick visual inspection in test failures.
-imageText :: Image -> [String]
-imageText img = map (map cellChar) (imageToGrid img)
-
--- | Pretty-print a grid for debugging or golden-file comparison.
--- Format:
---
--- @
--- <width>x<height>
--- <text grid, one row per line>
--- --- attrs ---           -- only if any cell has explicit attrs
--- <row>,<col> '<char>' <formatted attrs>
--- @
---
--- Only cells with at least one 'V.SetTo' attribute appear in the attrs
--- section. Cells with pure 'V.Default' or 'V.KeepCurrent' attrs are
--- omitted, keeping goldens clean for unstyled output.
-renderGrid :: Grid -> String
-renderGrid grid =
-  unlines (header : textRows) ++ attrsSection
-  where
-    h = length grid
-    w = case grid of
-      [] -> 0
-      r : _ -> length r
-    header = show w ++ "x" ++ show h
-    textRows = map (map cellChar) grid
-    explicitCells =
-      [ (row, col, c)
-      | (row, line) <- zip [0 ..] grid
-      , (col, c) <- zip [0 ..] line
-      , hasExplicitAttr (cellAttr c)
-      ]
-    attrsSection
-      | null explicitCells = ""
-      | otherwise =
-          unlines $
-            "--- attrs ---"
-              : [ show row ++ "," ++ show col ++ " '" ++ [cellChar c] ++ "' " ++ showAttr (cellAttr c)
-                | (row, col, c) <- explicitCells
-                ]
-
--- | True if any field of the attr is 'V.SetTo' (i.e. explicitly set).
-hasExplicitAttr :: V.Attr -> Bool
-hasExplicitAttr a =
-  isSetTo (V.attrStyle a)
-    || isSetTo (V.attrForeColor a)
-    || isSetTo (V.attrBackColor a)
-    || isSetTo (V.attrURL a)
-  where
-    isSetTo (V.SetTo _) = True
-    isSetTo _ = False
-
--- | Check whether two grids are equal. Returns 'Nothing' if they match,
--- or a description of the first differing cell.
+-- | Check whether two grids are equal. Returns 'Nothing' when they
+-- match, or a description of the first difference in dimensions, text,
+-- widths, or effective attributes (including URLs).
 gridEquals :: Grid -> Grid -> Maybe String
 gridEquals a b
-  | length a /= length b = Just $ "row count: " ++ show (length a) ++ " vs " ++ show (length b)
-  | otherwise = go 0 a b
+  | gridWidth a /= gridWidth b =
+      Just $ "width: " ++ show (gridWidth a) ++ " vs " ++ show (gridWidth b)
+  | gridHeight a /= gridHeight b =
+      Just $ "height: " ++ show (gridHeight a) ++ " vs " ++ show (gridHeight b)
+  | otherwise = firstDiff 0 (gridRows a) (gridRows b)
   where
-    go _ [] [] = Nothing
-    go row (ra : ras) (rb : rbs)
-      | length ra /= length rb =
-          Just $ "row " ++ show row ++ " width: " ++ show (length ra) ++ " vs " ++ show (length rb)
-      | otherwise =
-          case findCellDiff row 0 ra rb of
-            Just d -> Just d
-            Nothing -> go (row + 1) ras rbs
-    findCellDiff _ _ [] [] = Nothing
-    findCellDiff row col (ca : cas) (cb : cbs)
-      | ca /= cb =
+    firstDiff _ [] [] = Nothing
+    firstDiff y (ra : ras) (rb : rbs) = case compareRows y ra rb of
+      Just d -> Just d
+      Nothing -> firstDiff (y + 1) ras rbs
+    firstDiff y [] _ = Just ("row " ++ show y ++ ": missing")
+    firstDiff y _ [] = Just ("row " ++ show y ++ ": extra")
+    compareRows y ra rb
+      | rowText ra /= rowText rb =
           Just $
-            "cell ("
-              ++ show (row, col)
-              ++ "): '"
-              ++ [cellChar ca]
-              ++ "' "
-              ++ showAttr (cellAttr ca)
-              ++ " vs '"
-              ++ [cellChar cb]
-              ++ "' "
-              ++ showAttr (cellAttr cb)
-      | otherwise = findCellDiff row (col + 1) cas cbs
+            "row "
+              ++ show y
+              ++ " text: "
+              ++ show (rowText ra)
+              ++ " vs "
+              ++ show (rowText rb)
+      | ra /= rb =
+          Just $
+            "row "
+              ++ show y
+              ++ " spans: "
+              ++ show ra
+              ++ " vs "
+              ++ show rb
+      | otherwise = Nothing
+    rowText = T.unpack . T.concat . map renderSpanText
 
-----------------------------------------------------------------------------
--- Internal: tree walker
-----------------------------------------------------------------------------
-
-type CellMap = Map (Int, Int) Cell
-
-walkImage :: Image -> Int -> Int -> CellMap -> CellMap
-walkImage img x y acc =
-  case img of
-    HorizText attr displayText _ _ ->
-      let chars = TL.unpack displayText
-      in placeText attr chars x y acc
-    HorizJoin partLeft partRight _ _ ->
-      let acc' = walkImage partLeft x y acc
-      in walkImage partRight (x + V.imageWidth partLeft) y acc'
-    VertJoin partTop partBottom _ _ ->
-      let acc' = walkImage partTop x y acc
-      in walkImage partBottom x (y + V.imageHeight partTop) acc'
-    BGFill outputWidth outputHeight ->
-      foldl'
-        (\m (dx, dy) -> Map.insertWith (\_ old -> old) (x + dx, y + dy) blank m)
-        acc
-        [ (dx, dy)
-        | dx <- [0 .. outputWidth - 1]
-        , dy <- [0 .. outputHeight - 1]
-        ]
-      where
-        blank = Cell ' ' V.defAttr
-    Crop croppedImage leftSkip topSkip outputWidth outputHeight ->
-      let innerCells = walkImage croppedImage 0 0 Map.empty
-          visible =
-            [ ( (x + kx - leftSkip, y + ky - topSkip)
-              , cell
-              )
-            | ((kx, ky), cell) <- Map.toList innerCells
-            , kx >= leftSkip
-            , kx < leftSkip + outputWidth
-            , ky >= topSkip
-            , ky < topSkip + outputHeight
-            ]
-      in foldl' (\m (pos, cell) -> Map.insert pos cell m) acc visible
-    EmptyImage -> acc
-
-placeText :: V.Attr -> String -> Int -> Int -> CellMap -> CellMap
-placeText attr chars x y =
-  go chars 0
+-- | Pretty-print a grid for golden-file comparison and debugging.
+-- See the module documentation for the exact format.
+renderGrid :: Grid -> String
+renderGrid grid =
+  unlines (header : rowStrings)
+    ++ unlines ("--- spans ---" : spanLines)
   where
-    go [] _ acc = acc
-    go (c : cs) dx acc =
-      let w = wcwidth c
-      in if w <= 0
-           then go cs dx acc
-           else
-             go cs (dx + w) $
-               Map.insert (x + dx, y) (Cell c attr) acc
-
-----------------------------------------------------------------------------
--- Internal: attr serialization
-----------------------------------------------------------------------------
-
-showAttr :: V.Attr -> String
-showAttr a =
-  concat
-    [ "fg="
-    , showMD V.attrForeColor
-    , " bg="
-    , showMD V.attrBackColor
-    , " style="
-    , showStyle
-    , " url="
-    , showMD V.attrURL
-    ]
-  where
-    showMD f = case f a of
-      V.Default -> "default"
-      V.KeepCurrent -> "keep"
-      V.SetTo v -> show v
-    styleMask = V.styleMask a
-    showStyle =
-      let styles =
-            [ ("bold", V.bold)
-            , ("underline", V.underline)
-            , ("reverse", V.reverseVideo)
-            , ("blink", V.blink)
-            , ("dim", V.dim)
-            , ("italic", V.italic)
-            , ("strikethrough", V.strikethrough)
-            ]
-          active = [name | (name, s) <- styles, V.hasStyle styleMask s]
-      in if null active then "none" else unwords active
+    header = show (gridWidth grid) ++ "x" ++ show (gridHeight grid)
+    rowStrings =
+      [ show (T.unpack (T.concat (map renderSpanText row)))
+      | row <- gridRows grid
+      ]
+    spanLines =
+      [ show y
+          ++ ":"
+          ++ show col
+          ++ "+"
+          ++ show (renderSpanColumns s)
+          ++ " text="
+          ++ show (T.unpack (renderSpanText s))
+          ++ " attr="
+          ++ show (renderSpanAttr s)
+      | (y, row) <- zip [0 :: Int ..] (gridRows grid)
+      , (col, s) <- zip (scanl (+) 0 (map renderSpanColumns row)) row
+      ]
 
 ----------------------------------------------------------------------------
 -- Golden file comparison
 ----------------------------------------------------------------------------
 
--- | Directory where golden files are stored.
-goldenDir :: FilePath
-goldenDir = "test" </> "goldens"
+-- | Whether golden fixtures are being checked (the default, and the
+-- only mode allowed in CI) or explicitly updated.
+data GoldenMode = CheckGoldens | UpdateGoldens
+  deriving (Eq, Show)
 
--- | Compare actual output against a golden file. If the file doesn't
--- exist yet, it is created (first-run golden creation). If it exists but
--- differs, the test fails with a unified diff.
-assertGolden :: String -> String -> Expectation
-assertGolden name actual = do
-  let path = goldenDir </> name <.> "txt"
-  createDirectoryIfMissing True goldenDir
-  exists <- doesFileExist path
-  if not exists
-    then writeFile path actual
-    else do
-      expected <- readFile path
-      actual `shouldBe` expected
+-- | The exact command that creates or updates golden fixtures.
+goldenUpdateCommand :: String
+goldenUpdateCommand =
+  "REFLEX_VTY_GOLDEN_UPDATE=1 cabal test reflex-vty-test"
+    ++ " --test-show-details=direct --test-option=--match=Golden"
+
+-- | Compare the serialized actual output against the golden fixture
+-- @\<dir>\</\<name>.txt@. In 'UpdateGoldens' mode, write the output
+-- instead of comparing.
+--
+-- In 'CheckGoldens' mode, create nothing. A missing file fails with
+-- the path and 'goldenUpdateCommand'. A mismatch fails through Hspec
+-- equality, so the expected and actual contents are visible. IO,
+-- permission, and encoding errors fail with the path in the message.
+--
+-- In 'UpdateGoldens' mode, create the directory. Write changed or
+-- missing files in UTF-8. Leave equal files untouched.
+assertGolden :: GoldenMode -> FilePath -> String -> String -> Expectation
+assertGolden mode dir name actual = do
+  let path = dir </> name <.> "txt"
+  case mode of
+    CheckGoldens -> do
+      exists <- doesFileExist path
+      if not exists
+        then
+          expectationFailure $
+            "missing golden file "
+              ++ path
+              ++ "; to create or update it, run: "
+              ++ goldenUpdateCommand
+        else do
+          er <- readGolden path
+          case er of
+            Left err -> expectationFailure err
+            Right expected -> expected `shouldBe` actual
+    UpdateGoldens -> do
+      createDirectoryIfMissing True dir
+      exists <- doesFileExist path
+      if not exists
+        then do
+          merr <- writeGolden path actual
+          maybe (pure ()) expectationFailure merr
+        else do
+          er <- readGolden path
+          case er of
+            Left err -> expectationFailure err
+            Right expected
+              | expected /= actual -> do
+                  merr <- writeGolden path actual
+                  maybe (pure ()) expectationFailure merr
+              | otherwise -> pure ()
+
+readGolden :: FilePath -> IO (Either String String)
+readGolden path = do
+  r <- try (TE.decodeUtf8With TEE.lenientDecode <$> BS.readFile path)
+  pure $ case r of
+    Left (e :: IOException) ->
+      Left ("could not read golden file " ++ path ++ ": " ++ show e)
+    Right txt -> Right (T.unpack txt)
+
+writeGolden :: FilePath -> String -> IO (Maybe String)
+writeGolden path contents = do
+  r <- try (BS.writeFile path (TE.encodeUtf8 (T.pack contents)))
+  pure $ case r of
+    Left (e :: IOException) ->
+      Just ("could not write golden file " ++ path ++ ": " ++ show e)
+    Right () -> Nothing

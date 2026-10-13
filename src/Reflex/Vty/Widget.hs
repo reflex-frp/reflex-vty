@@ -439,7 +439,10 @@ translateCursorState (Region left top width height) (CursorState visibility styl
 -- | Convert reflex-vty cursor state to vty's picture cursor.
 cursorStateToVtyCursor :: CursorState -> V.Cursor
 cursorStateToVtyCursor (CursorState CursorHidden _ _) = V.NoCursor
-cursorStateToVtyCursor (CursorState CursorVisible _ (x, y)) = V.Cursor x y
+-- reflex-vty cursor coordinates are terminal cells, so the visible
+-- cursor maps to 'V.AbsoluteCursor' (cell coordinates), not 'V.Cursor'
+-- (character offsets).
+cursorStateToVtyCursor (CursorState CursorVisible _ (x, y)) = V.AbsoluteCursor x y
 
 instance HasCursor t m => HasCursor t (ReaderT x m)
 instance HasCursor t m => HasCursor t (BehaviorWriterT t x m)
@@ -1087,7 +1090,7 @@ imagesInRegion reg = liftA2 (\r is -> map (withinImage r) is) reg
 -- | Low-level widget combinator that runs a child widget within
 -- a given region and context. This widget filters and modifies the input
 -- that the child widget receives such that:
--- * unfocused widgets receive no key events
+-- * widgets receive key and paste events only when they and their parent are focused
 -- * mouse inputs inside the region have their coordinates translated such
 --   that (0,0) is the top-left corner of the region
 -- * mouse drag sequences that start OFF the region are ignored
@@ -1099,11 +1102,16 @@ pane
   -- ^ Whether the widget should be focused when the parent is.
   -> m a
   -> m a
-pane dr foc child =
-  localRegion (const dr) $
-    mapImages (imagesInRegion $ current dr) $
-      localFocus (const foc) $
-        inputInFocusedRegion >>= \e -> localInput (const e) child
+pane dr foc child = do
+  parentViewport <- askViewport
+  let viewport = zipDynWith composeViewport parentViewport dr
+      composeViewport (Region px py _ _) (Region x y w h) =
+        Region (px + x) (py + y) w h
+  localRegion (const viewport) $
+    localLayoutRegion (const dr) $
+      mapImages (imagesInRegion $ current dr) $
+        localFocus (zipDynWith (&&) foc) $
+          inputInFocusedRegion >>= \e -> localInput (const e) child
 
 -- * Misc
 

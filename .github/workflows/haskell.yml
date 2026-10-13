@@ -8,7 +8,7 @@ jobs:
       fail-fast: false
       matrix:
         ghc: ['9.8', '9.12' ]
-        os: ['ubuntu-latest', 'macos-13'] # https://github.com/haskell-actions/setup/issues/77
+        os: ['ubuntu-latest', 'macos-latest']
         experimental: [false]
         include:
           - os: 'windows-latest'
@@ -27,7 +27,8 @@ jobs:
       id: setup
       with:
         ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.10.1.0'
+        # Cabal < 3.10.2 cannot verify current Hackage root metadata.
+        cabal-version: '3.16.1.0'
     - name: Cache
       uses: actions/cache@v3
       env:
@@ -46,8 +47,131 @@ jobs:
     - name: Build
       run: cabal build --enable-tests --enable-benchmarks all
     - name: Run tests
-      run: cabal test all
+      run: cabal test all --enable-tests
     - if: matrix.ghc != '8.4.4'
       # disable doc builds on older ghcs because some dependency docs aren't compatible
       name: Build Docs
       run: cabal haddock
+
+  packaged-source:
+    runs-on: ubuntu-latest
+    env:
+      REFLEX_VTY_GOLDEN_UPDATE: '0'
+    steps:
+    - uses: actions/checkout@v4
+    - uses: haskell-actions/setup@v2
+      with:
+        ghc-version: '9.12.3'
+        cabal-version: '3.16.1.0'
+    - run: cabal update
+    - run: cabal sdist
+    - name: Check packaged fixtures and run the extracted suite
+      shell: python
+      run: |
+        import pathlib
+        import subprocess
+        import tarfile
+        import tempfile
+
+        archives = list(pathlib.Path("dist-newstyle/sdist").glob("reflex-vty-*.tar.gz"))
+        assert len(archives) == 1, archives
+        expected = {str(p): p.read_bytes() for p in pathlib.Path("test/goldens").glob("*.txt")}
+        assert expected, "No repository goldens found"
+        with tempfile.TemporaryDirectory() as directory:
+            with tarfile.open(archives[0]) as archive:
+                roots = {name.split("/")[0] for name in archive.getnames()}
+                assert len(roots) == 1, roots
+                root = roots.pop()
+                for name, content in expected.items():
+                    member = archive.extractfile(f"{root}/{name}")
+                    assert member is not None and member.read() == content, name
+                archive.extractall(directory, filter="data")
+            source = pathlib.Path(directory) / root
+            subprocess.run(
+                ["cabal", "test", "all", "--enable-tests", "--test-show-details=direct"],
+                cwd=source, check=True,
+            )
+            for name, content in expected.items():
+                assert (source / name).read_bytes() == content, f"Golden rewritten: {name}"
+
+  terminal:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: haskell-actions/setup@v2
+      with:
+        ghc-version: '9.12.3'
+        cabal-version: '3.16.1.0'
+    - run: cabal update
+    - run: cabal build -ftest-tools reflex-vty-test-driver
+    - name: Check terminal input and shutdown
+      shell: bash
+      run: python3 test/pty_smoke.py "$(cabal list-bin -ftest-tools reflex-vty-test-driver)"
+
+  coverage:
+    runs-on: ubuntu-latest
+    env:
+      CI: 'true'
+      REFLEX_VTY_GOLDEN_UPDATE: '0'
+      REFLEX_VTY_COVERAGE_CHILD_DIR: ${{ github.workspace }}/dist-coverage/child-tix
+    steps:
+    - uses: actions/checkout@v4
+    - name: Pin coverage toolchain metadata
+      # Current GHCup metadata resolves 9.12.3 to 9.12.3.20260311.
+      # HPC baselines require the original compiler, not a dated rebuild.
+      shell: python
+      run: |
+        import json
+        import pathlib
+
+        base = "https://raw.githubusercontent.com/haskell/ghcup-metadata/9ce5a2cf018443f8ea9c9f4a06726279066e05e9"
+        config = pathlib.Path.home() / ".ghcup" / "config.yaml"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text(json.dumps({
+            "url-source": [
+                base + "/ghcup-0.0.9.yaml",
+                base + "/ghcup-vanilla-0.0.9.yaml",
+            ]
+        }))
+    - uses: haskell-actions/setup@v2
+      with:
+        ghc-version: '9.12.3'
+        cabal-version: '3.16.1.0'
+    - name: Verify coverage compiler
+      run: |
+        actual="$(ghc --numeric-version)"
+        test "$actual" = 9.12.3 || { echo "Coverage requires GHC 9.12.3, got $actual"; exit 1; }
+    - run: cabal update
+    - name: Install the specified Cabal metadata reader
+      run: cabal install --lib Cabal-3.16.1.0 extra --package-env="$RUNNER_TEMP/reflex-vty-coverage.env"
+    - name: Build the instrumented libraries and test suite
+      run: cabal build reflex-vty-test --enable-tests --builddir=dist-coverage --disable-optimization --enable-coverage
+    - name: Check coverage calculations
+      run: |
+        runghc -package-env="$RUNNER_TEMP/reflex-vty-coverage.env" \
+          -package=Cabal -package=hpc -package=extra -package=directory \
+          -package=filepath -package=process -package=time -package=containers \
+          test/Coverage.hs self-test
+    - name: Run the instrumented test suite
+      run: |
+        mkdir -p "$REFLEX_VTY_COVERAGE_CHILD_DIR"
+        touch "$REFLEX_VTY_COVERAGE_CHILD_DIR/run-start"
+        cabal test reflex-vty-test --enable-tests --builddir=dist-coverage --disable-optimization --enable-coverage --test-show-details=direct
+    - name: Check coverage against the baseline
+      run: |
+        runghc -package-env="$RUNNER_TEMP/reflex-vty-coverage.env" \
+          -package=Cabal -package=hpc -package=extra -package=directory \
+          -package=filepath -package=process -package=time -package=containers \
+          test/Coverage.hs check dist-coverage test/coverage-baseline.tsv dist-coverage/report
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: complete-library-coverage
+        path: |
+          dist-coverage/report
+          dist-coverage/**/*.tix
+          dist-coverage/**/hpc

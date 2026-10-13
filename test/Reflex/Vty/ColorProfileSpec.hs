@@ -3,6 +3,7 @@
 
 module Reflex.Vty.ColorProfileSpec (spec) where
 
+import Control.Monad (forM_)
 import qualified Graphics.Vty as V
 import qualified Graphics.Vty.Attributes.Color as V.Color
 import Test.Hspec
@@ -59,3 +60,37 @@ spec = describe "Reflex.Vty.ColorProfile" $ do
       let attr = V.withURL V.defAttr "https://example.com"
       V.attrURL (applyProfile ColorProfile_NoTTY attr)
         `shouldBe` V.SetTo "https://example.com"
+
+  describe "applyProfile (fields)" $ do
+    it "downsamples both foreground and background under Ansi256" $ do
+      let attr = V.withBackColor (V.withForeColor V.defAttr (V.Color.RGBColor 10 20 30)) (V.Color.RGBColor 40 50 60)
+          applied = applyProfile ColorProfile_Ansi256 attr
+      V.attrForeColor applied `shouldSatisfy` \case
+        V.SetTo (V.Color.Color240 _) -> True
+        _ -> False
+      V.attrBackColor applied `shouldSatisfy` \case
+        V.SetTo (V.Color.Color240 _) -> True
+        _ -> False
+    it "resets only the color fields of a fully transparent attr under Ascii" $ do
+      let attr = V.Attr V.KeepCurrent V.KeepCurrent V.KeepCurrent V.KeepCurrent
+          applied = applyProfile ColorProfile_Ascii attr
+      -- Ascii supports no colors at all. Color requests collapse to
+      -- Default, even transparent ones. Style and URL survive.
+      V.attrForeColor applied `shouldBe` V.Default
+      V.attrBackColor applied `shouldBe` V.Default
+      V.attrStyle applied `shouldBe` V.KeepCurrent
+      V.attrURL applied `shouldBe` V.KeepCurrent
+    it "keeps ISO colors under Ansi256" $ do
+      let attr = V.withBackColor (V.withForeColor V.defAttr V.Color.blue) V.Color.red
+          applied = applyProfile ColorProfile_Ansi256 attr
+      V.attrForeColor applied `shouldBe` V.SetTo V.Color.blue
+      V.attrBackColor applied `shouldBe` V.SetTo V.Color.red
+    it "only ever produces valid output colors" $ do
+      let attr = V.withBackColor (V.withForeColor V.defAttr (V.Color.RGBColor 1 2 3)) (V.Color.RGBColor 250 251 252)
+      forM_ [ColorProfile_TrueColor, ColorProfile_Ansi256, ColorProfile_Ansi16] $ \profile ->
+        forM_ [V.attrForeColor, V.attrBackColor] $ \sel ->
+          sel (applyProfile profile attr) `shouldSatisfy` \case
+            V.SetTo V.Color.RGBColor {} -> profile == ColorProfile_TrueColor
+            V.SetTo (V.Color.Color240 _) -> profile == ColorProfile_Ansi256
+            V.SetTo V.Color.ISOColor {} -> profile == ColorProfile_Ansi16
+            _ -> False

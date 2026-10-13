@@ -17,7 +17,7 @@ import qualified Data.Map as Map
 import Data.String
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Internal (Text (..), text)
+import Data.Text.Internal (Text (..))
 import Data.Text.Internal.Fusion (stream)
 import Data.Text.Internal.Fusion.Types (Step (..), Stream (..))
 import Data.Text.Unsafe
@@ -233,12 +233,10 @@ data DisplayLines tag = DisplayLines
 --
 -- because the first character has a width of two (see 'charWidth' for more on that).
 splitAtWidth :: Int -> Text -> (Text, Text)
-splitAtWidth n t@(Text arr off len)
+splitAtWidth n t
   | n <= 0 = (T.empty, t)
   | n >= textWidth t = (t, T.empty)
-  | otherwise =
-      let k = characterIndexFromWidth n t
-      in (text arr off k, text arr (off + k) (len - k))
+  | otherwise = T.splitAt (characterIndexFromWidth n t) t
 
 -- | Convert a physical width index to a character index. For example, the
 -- physical index 3 of the string "ᄀabc" corresponds to the character index 2,

@@ -1,2 +1,4 @@
 4x1
-a文 b
+"a\25991b"
+--- spans ---
+0:0+4 text="a\25991b" attr=FixedAttr {fixedStyle = 0, fixedForeColor = Nothing, fixedBackColor = Nothing, fixedURL = Nothing}

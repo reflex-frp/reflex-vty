@@ -1,6 +1,8 @@
 tags
 dist/
 dist-newstyle/
+dist-coverage*/
+test/__pycache__/
 .direnv/
 .envrc.local
 doc/reflex-vty.gif

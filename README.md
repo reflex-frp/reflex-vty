@@ -112,6 +112,14 @@ cabal repl           # to enter a multi-repl covering all components
 cabal repl example   # to enter a repl for the example executable only
 ```
 
+### Tests
+
+```bash
+cabal test all --enable-tests
+```
+
+See the [QA guide](doc/qa.md) for golden files, terminal checks, and coverage commands.
+
 ## About Obsidian Systems
 
 reflex-vty is built and maintained by **[Obsidian Systems](https://obsidian.systems)**. We provide frontier engineering for high-assurance systems: we build production software in Haskell and Nix, and we're long-time stewards of open-source tooling like [Obelisk](https://github.com/obsidiansystems/obelisk), [Reflex](https://reflex-frp.org/), and [nix-thunk](https://github.com/obsidiansystems/nix-thunk).

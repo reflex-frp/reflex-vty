@@ -1,6 +1,4 @@
 3x1
-Rev
---- attrs ---
-0,0 'R' fg=keep bg=keep style=reverse url=keep
-0,1 'e' fg=keep bg=keep style=reverse url=keep
-0,2 'v' fg=keep bg=keep style=reverse url=keep
+"Rev"
+--- spans ---
+0:0+3 text="Rev" attr=FixedAttr {fixedStyle = 4, fixedForeColor = Nothing, fixedBackColor = Nothing, fixedURL = Nothing}

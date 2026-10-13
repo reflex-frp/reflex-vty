@@ -1,4 +1,8 @@
 5x3
-╔═══╗
-║Box║
-╚═══╝
+"\9556\9552\9552\9552\9559"
+"\9553Box\9553"
+"\9562\9552\9552\9552\9565"
+--- spans ---
+0:0+5 text="\9556\9552\9552\9552\9559" attr=FixedAttr {fixedStyle = 0, fixedForeColor = Nothing, fixedBackColor = Nothing, fixedURL = Nothing}
+1:0+5 text="\9553Box\9553" attr=FixedAttr {fixedStyle = 0, fixedForeColor = Nothing, fixedBackColor = Nothing, fixedURL = Nothing}
+2:0+5 text="\9562\9552\9552\9552\9565" attr=FixedAttr {fixedStyle = 0, fixedForeColor = Nothing, fixedBackColor = Nothing, fixedURL = Nothing}

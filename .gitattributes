@@ -1,0 +1,2 @@
+# Golden fixtures are compared byte-for-byte on every platform.
+test/goldens/*.txt text eol=lf

@@ -1,5 +1,19 @@
 # Revision history for reflex-vty
 
+## 1.3.0.0
+
+* Fix: `splitAtWidth` uses character boundaries instead of storage offsets. This preserves Unicode text when the function wraps wide characters.
+* Fix: The host checks post-build shutdown before it draws output or starts input. On normal and exceptional exits, it restores signal handlers and waits for the input worker to stop. Closed event queues reject writes even when capacity remains.
+* Fix: Nested panes inherit focus and add their viewport origins to the parent origin. Terminal cursors use cell coordinates. Draggable splits start without sampling a recursive layout and follow the mouse row. Scroll requests and display offsets stay within content bounds.
+* Text inputs apply local theme changes immediately. `textInputTile` samples its size after each frame to prevent a recursive-layout deadlock. It also requires `PostBuild`, `PerformEvent`, and `MonadSample t (Performable m)`. The standard widget host supplies these constraints.
+* Golden tests fail if a fixture is missing. They change fixtures only when `REFLEX_VTY_GOLDEN_UPDATE=1` and `CI` is not `true`.
+* Add widget and composition tests that use the production host. Check fixture bytes in source packages. Add POSIX PTY checks and a GHC 9.12.3 coverage baseline for all library modules. Coverage reports combine parent and signal-child tick counts.
+* Fix CI portability: use supported macOS runners, explicitly enable Cabal test suites, and import the Windows signal installer in its console test. PTY checks drain output during shutdown and distinguish Darwin's kernel-managed `PENDIN` state from configurable terminal modes.
+* Fix the Windows console-test callback types and pin coverage toolchain metadata so GHCup installs the baseline's exact GHC 9.12.3 release rather than a dated rebuild.
+* Fix the Windows signal test's explicit console-event enumeration and child readiness handshake, and verify each event's mapped application signal.
+* Keep golden fixtures and signal-child protocol lines in LF form on Windows. Golden-policy checks exercise file locking rather than platform-specific permission bits and no longer depend on exception formatting.
+* *Breaking change*: `Reflex.Vty.Canvas` uses `CanvasCell` instead of `(Char, V.Attr)` for each glyph. A cell contains the column width and attributed text for one base character and its zero-width marks. `canvasCells :: Map (Int, Int) CanvasCell` uses each glyph's start column as its key. `canvasCellAt` returns the covering glyph for each column of a wide glyph. It returns `Nothing` for transparent positions. `imageToCanvas` reads Vty's rendered spans to preserve joins, clipping, backgrounds, wide characters, and combining marks. `canvasToImage` uses `V.backgroundFill` for transparent gaps so that lower images remain visible. Partial wide glyphs use Vty's ellipsis rule: the remaining half becomes a one-column `…`. Right-edge clipping removes the combining suffix. Left-edge clipping keeps the suffix. Use `CanvasCell` values when you construct a `Canvas` map.
+
 ## 1.2.0.0
 
 * Fix: `inputInFocusedRegion` now drops `EvPaste` events in unfocused regions, so paste doesn't go to every `textInput` on screen. Previously only `EvKey` was gated on focus.

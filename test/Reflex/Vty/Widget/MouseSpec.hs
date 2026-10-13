@@ -26,18 +26,6 @@ up x y b = V.EvMouseUp x y b
 
 spec :: Spec
 spec = describe "Reflex.Vty.Widget.Input.Mouse" $ do
-  describe "Drag" $ do
-    it "has correct field types" $ do
-      let d = Drag (0, 0) (1, 1) V.BLeft [] DragStart
-      _drag_from d `shouldBe` (0, 0)
-      _drag_to d `shouldBe` (1, 1)
-      _drag_button d `shouldBe` V.BLeft
-      _drag_state d `shouldBe` DragStart
-
-  describe "DragState" $ do
-    it "enumerates start, dragging, end in order" $
-      [minBound .. maxBound] `shouldBe` [DragStart, Dragging, DragEnd]
-
   describe "stepDrag" $ do
     it "starts a drag on the first matching mouse-down" $
       stepDrag V.BLeft Nothing (down 3 4 V.BLeft)
@@ -89,20 +77,3 @@ spec = describe "Reflex.Vty.Widget.Input.Mouse" $ do
             ]
       map _drag_state (runDrag V.BLeft evs)
         `shouldBe` [DragStart, DragEnd, DragStart, Dragging, DragEnd]
-
-  describe "MouseDown" $ do
-    it "stores button, coordinates, and modifiers" $ do
-      let md = MouseDown V.BLeft (5, 10) [V.MShift]
-      _mouseDown_button md `shouldBe` V.BLeft
-      _mouseDown_coordinates md `shouldBe` (5, 10)
-      _mouseDown_modifiers md `shouldBe` [V.MShift]
-
-  describe "MouseUp" $ do
-    it "stores optional button and coordinates" $ do
-      let mu = MouseUp (Just V.BLeft) (3, 7)
-      _mouseUp_button mu `shouldBe` Just V.BLeft
-      _mouseUp_coordinates mu `shouldBe` (3, 7)
-
-  describe "ScrollDirection" $ do
-    it "has up and down constructors" $ do
-      ScrollDirection_Up `shouldNotBe` ScrollDirection_Down

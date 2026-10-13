@@ -19,10 +19,10 @@ module Reflex.Vty.Host
   , VtyEvent
   ) where
 
-import Control.Concurrent (forkIO, killThread)
+import Control.Concurrent.Async (AsyncCancelled, async, cancel, link, waitCatch)
 import Control.Concurrent.STM (atomically)
-import Control.Exception (onException)
-import Control.Monad (forM, forM_, forever)
+import Control.Exception (SomeException, catch, mask, throwIO, try)
+import Control.Monad (forM, forM_, forever, void)
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.Fix (MonadFix, fix)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -31,7 +31,7 @@ import Control.Monad.Primitive (PrimMonad)
 import Control.Monad.Ref (MonadRef, Ref, readRef)
 import Data.Default (Default (..))
 import Data.Dependent.Sum (DSum ((:=>)))
-import Data.IORef (IORef, readIORef)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Maybe (catMaybes)
 import Graphics.Vty (DisplayRegion)
 import qualified Graphics.Vty as V
@@ -130,6 +130,18 @@ defaultVtyAppConfig :: VtyAppConfig
 defaultVtyAppConfig = def
 
 -- | Runs a 'VtyApp' in a given 'Graphics.Vty.Vty'.
+--
+-- The whole run is wrapped in one masked lifecycle. Resources are
+-- acquired and recorded under masking. Exactly one cleanup path owns
+-- teardown. Every exit path uses it: normal shutdown, guest failure,
+-- rendering or input failure, or external cancellation. The cleanup
+-- steps run in order. They close the event queue and release blocked
+-- producers. They cancel and join the input worker if it was started.
+-- They restore the OS signal handlers if they were installed. They
+-- restore the default cursor style and the primary screen. They shut
+-- Vty down exactly once. Every step is attempted even if an earlier
+-- step failed. The application's own exception, if any, takes
+-- precedence over cleanup failures.
 runVtyAppWithHandle
   :: VtyAppConfig
   -- ^ Host configuration (event-queue capacity, etc.). Use
@@ -139,157 +151,191 @@ runVtyAppWithHandle
   -> (forall t m. VtyApp t m)
   -- ^ A functional reactive vty application.
   -> IO ()
-runVtyAppWithHandle cfg vty vtyGuest = flip onException (V.shutdown vty) $
-  -- We are using the 'Spider' implementation of reflex. Running the host
-  -- allows us to take actions on the FRP timeline. The scoped type signature
-  -- specifies that our host runs on the Global timeline.
-  -- For more information, see 'Reflex.Spider.Internal.runSpiderHost'.
-  (runSpiderHost :: SpiderHost Global a -> IO a) $ do
-    -- Create an 'Event' and a "trigger" reference for that event. The trigger
-    -- reference can be used to determine whether anyone is "subscribed" to
-    -- that 'Event' and, therefore, whether we need to bother performing any
-    -- updates when the 'Event' fires.
-    -- The 'Event' below will be used to convey vty input events.
-    (vtyEvent, vtyEventTriggerRef) <- newEventWithTriggerRef
+runVtyAppWithHandle cfg vty vtyGuest = mask $ \restore -> do
+  workerRef <- newIORef Nothing
+  signalRestoreRef <- newIORef Nothing
+  pending <- newBoundedEventQueue (fromIntegral (max 1 (_vtyConfig_eventQueueCapacity cfg)))
+  appResult <-
+    try $
+      restore $
+        (runSpiderHost :: SpiderHost Global () -> IO ()) $ do
+          -- We are using the 'Spider' implementation of reflex. Running the host
+          -- allows us to take actions on the FRP timeline. The scoped type signature
+          -- specifies that our host runs on the Global timeline.
+          -- For more information, see 'Reflex.Spider.Internal.runSpiderHost'.
 
-    -- Create the "post-build" event and associated trigger. This event fires
-    -- once, when the application starts.
-    (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
+          -- Create an 'Event' and a "trigger" reference for that event. The trigger
+          -- reference can be used to determine whether anyone is "subscribed" to
+          -- that 'Event' and, therefore, whether we need to bother performing any
+          -- updates when the 'Event' fires.
+          -- The 'Event' below will be used to convey vty input events.
+          (vtyEvent, vtyEventTriggerRef) <- newEventWithTriggerRef
 
-    -- Create an 'Event' for OS signals.
-    (signalEvent, signalTriggerRef) <- newEventWithTriggerRef
+          -- Create the "post-build" event and associated trigger. This event fires
+          -- once, when the application starts.
+          (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
 
-    -- A bounded, closeable queue into which external triggers write their
-    -- pending invocations. Boundedness gives us backpressure (a producer that
-    -- fires faster than the host can process has its @fire@ block when the
-    -- queue is full), which bounds memory without dropping occurrences. The
-    -- guest runs in 'BoundedTriggerT' below so that its 'TriggerEvent'
-    -- methods (and hence 'Reflex.performEventAsync') route writes through
-    -- this queue.
-    pending <-
-      liftIO $
-        newBoundedEventQueue (fromIntegral (max 1 (_vtyConfig_eventQueueCapacity cfg)))
+          -- Create an 'Event' for OS signals.
+          (signalEvent, signalTriggerRef) <- newEventWithTriggerRef
 
-    displayRegion0 <- liftIO $ V.displayBounds $ V.outputIface vty
+          displayRegion0 <- liftIO $ V.displayBounds $ V.outputIface vty
 
-    -- Run the vty "guest" application, providing the appropriate context. The
-    -- result is a 'VtyResult', and a 'FireCommand' that will be used to
-    -- trigger events.
-    (vtyResult, fc@(FireCommand fire)) <- do
-      hostPerformEventT $ -- Allows the guest app to run
-      -- 'performEvent', so that actions
-      -- (e.g., IO actions) can be run when
-      -- 'Event's fire.
-        flip runPostBuildT postBuild $ -- Allows the guest app to access to
-        -- a "post-build" 'Event'
-          flip runBoundedTriggerT pending $ -- Allows the guest app to create new
-          -- events and triggers; writes route
-          -- through the bounded queue above so
-          -- that hot producers backpressure
-          -- instead of leaking.
-            vtyGuest displayRegion0 vtyEvent signalEvent
-    -- The guest app is provided the
-    -- initial display region, an
-    -- 'Event' of vty inputs, and an
-    -- 'Event' of OS signals.
+          -- Run the vty "guest" application, providing the appropriate context.
+          -- The result is a 'VtyResult', and a 'FireCommand' that will be used to
+          -- trigger events. The guest runs in 'BoundedTriggerT' so that its
+          -- 'TriggerEvent' methods (and hence 'Reflex.performEventAsync') route
+          -- writes through the bounded queue above. A producer that fires
+          -- faster than the host can process then blocks instead of leaking
+          -- memory.
+          (vtyResult, fc@(FireCommand fire)) <- do
+            hostPerformEventT $ -- Allows the guest app to run
+            -- 'performEvent', so that actions
+            -- (e.g., IO actions) can be run when
+            -- 'Event's fire.
+              flip runPostBuildT postBuild $ -- Allows the guest app to access to
+              -- a "post-build" 'Event'
+                flip runBoundedTriggerT pending $
+                  vtyGuest displayRegion0 vtyEvent signalEvent
+          -- The guest app is provided the
+          -- initial display region, an
+          -- 'Event' of vty inputs, and an
+          -- 'Event' of OS signals.
 
-    -- Reads the current value of the 'Picture' behavior and updates the
-    -- display with it. This will be called whenever we determine that a
-    -- display update is necessary. In this implementation that is when various
-    -- events occur.
-    let updateVty =
-          sample (_vtyResult_picture vtyResult) >>= liftIO . V.update vty
+          -- Subscribe, before anything is fired or drawn, to the 'Event' the
+          -- guest application can use to request shutdown. SIGINT, SIGTERM,
+          -- and SIGHUP from the host also trigger shutdown. This early
+          -- subscription means the frame that fires post-build observes a
+          -- shutdown request made at post-build.
+          let sigShutdown =
+                () <$ ffilter (\s -> s == AppSignal_Interrupt || s == AppSignal_Terminate || s == AppSignal_Hangup) signalEvent
+          shutdown <- subscribeEvent $ leftmost [_vtyResult_shutdown vtyResult, sigShutdown]
+          let readShutdown =
+                readEvent shutdown >>= \case
+                  Nothing -> return False
+                  Just _ -> return True
 
-    -- Read the trigger reference for the post-build event. This will be
-    -- 'Nothing' if the guest application hasn't subscribed to this event.
-    mPostBuildTrigger <- readRef postBuildTriggerRef
+          -- Install OS signal handlers now. This happens after guest
+          -- construction and shutdown subscription, but before firing
+          -- post-build or drawing the first picture. Record how to restore
+          -- the previous handlers. From this point on, a signal is enqueued
+          -- and processed by the main loop below.
+          liftIO $ do
+            restoreSignals <-
+              installAppSignalHandlers $ \appSignal ->
+                atomically $
+                  writeBoundedEventQueue pending [EventTriggerRef signalTriggerRef :=> TriggerInvocation appSignal (return ())]
+            writeIORef signalRestoreRef (Just restoreSignals)
 
-    -- When there is a subscriber to the post-build event, fire the event.
-    forM_ mPostBuildTrigger $ \postBuildTrigger ->
-      fire [postBuildTrigger :=> Identity ()] $ return ()
+          -- Reads the current value of the 'Picture' behavior and updates the
+          -- display with it. This will be called whenever we determine that a
+          -- display update is necessary.
+          let updateVty = sample (_vtyResult_picture vtyResult) >>= liftIO . V.update vty
 
-    -- After firing the post-build event, sample the vty result and update
-    -- the display.
-    updateVty
+          -- Read the trigger reference for the post-build event. This will be
+          -- 'Nothing' if the guest application hasn't subscribed to this event.
+          -- When firing it, the read phase checks the (already subscribed)
+          -- shutdown event. Every frame result returned by @fire@ is
+          -- examined, including follow-up frames from 'performEvent'
+          -- actions. A shutdown requested at post-build therefore terminates
+          -- here, before the input worker starts or an unnecessary frame is
+          -- drawn.
+          mPostBuildTrigger <- readRef postBuildTriggerRef
+          stopAtPostBuild <- case mPostBuildTrigger of
+            Nothing -> return False
+            Just postBuildTrigger -> or <$> fire [postBuildTrigger :=> Identity ()] readShutdown
 
-    -- Subscribe to an 'Event' of that the guest application can use to
-    -- request application shutdown. We'll check whether this 'Event' is firing
-    -- to determine whether to terminate. SIGINT, SIGTERM, and SIGHUP from the
-    -- host also trigger shutdown.
-    let sigShutdown = () <$ ffilter (\s -> s == AppSignal_Interrupt || s == AppSignal_Terminate || s == AppSignal_Hangup) signalEvent
-    shutdown <- subscribeEvent $ leftmost [_vtyResult_shutdown vtyResult, sigShutdown]
-
-    -- Fork a thread and continuously get the next vty input event, and then
-    -- write the input event to our channel of FRP 'Event' triggers.
-    -- The thread is forked here because 'nextEvent' blocks.
-    nextEventThread <- liftIO $ forkIO $ forever $ do
-      -- Retrieve the next input event.
-      ne <- V.nextEvent vty
-      let -- The reference to the vty input 'EventTrigger'. This is the trigger
-          -- we'd like to associate the input event value with.
-          triggerRef = EventTriggerRef vtyEventTriggerRef
-          -- Create an event 'TriggerInvocation' with the value that we'd like
-          -- the event to have if it is fired. It may not fire with this value
-          -- if nobody is subscribed to the 'Event'.
-          triggerInvocation = TriggerInvocation ne $ return ()
-      -- Write our input event's 'EventTrigger' with the newly created
-      -- 'TriggerInvocation' value to the queue of events. (Like all external
-      -- triggers, this is subject to backpressure if the queue is full; in
-      -- practice input never saturates it.)
-      atomically $ writeBoundedEventQueue pending [triggerRef :=> triggerInvocation]
-
-    -- Install OS signal handlers.
-    liftIO $ installAppSignalHandlers $ \appSignal ->
-      atomically $ writeBoundedEventQueue pending [EventTriggerRef signalTriggerRef :=> TriggerInvocation appSignal (return ())]
-
-    -- The main application loop. We block until at least one batch of events
-    -- is available, then drain every other batch that has accumulated in the
-    -- meantime, fire each batch in its own Reflex frame, and redraw once.
-    --
-    -- Draining the whole queue each frame keeps the host from falling behind
-    -- under bursts, while the queue's bounded capacity (see 'VtyAppConfig')
-    -- backpressures a producer that fires faster than the host can process,
-    -- bounding memory without dropping occurrences. Firing each batch in its
-    -- own frame preserves every occurrence even when many firings of the same
-    -- trigger land in one drain (Reflex collapses simultaneous same-trigger
-    -- firings, so merging them into one frame would drop occurrences); drawing
-    -- only once per drain decouples the display rate from the event rate.
-    fix $ \loop -> do
-      -- Block until at least one batch is available, then atomically drain
-      -- every other batch that has accumulated.
-      mBatches <- liftIO $ drainBoundedEventQueue pending
-      case mBatches of
-        -- Queue was closed and empty (e.g. another thread triggered
-        -- shutdown); stop the loop.
-        Nothing -> return ()
-        Just batches -> do
-          -- Fire each batch in its own frame, stopping early if the shutdown
-          -- event fires.
-          let fireUntilShutdown [] = return False
-              fireUntilShutdown (b : bs) = do
-                stops <-
-                  fireEventTriggerRefs fc b $
-                    readEvent shutdown >>= \case
-                      Nothing -> return False
-                      Just _ -> return True
-                if or stops then return True else fireUntilShutdown bs
-          stop <- fireUntilShutdown batches
-          if stop
-            then liftIO $ do
-              -- If we received a shutdown 'Event', close the queue first so
-              -- any producer blocked on a full queue is released, then stop
-              -- reading input, restore the primary screen, and shut vty down.
-              closeBoundedEventQueue pending
-              killThread nextEventThread
-              setScreenMode (V.outputIface vty) ScreenNormal
-              V.shutdown vty
+          if stopAtPostBuild
+            then return ()
             else do
-              -- Otherwise, update the display and loop.
+              -- Draw the first picture.
               updateVty
-              loop
+
+              -- Continuously read the next vty input event and enqueue it.
+              -- nextEvent blocks, so this runs on its own thread. The worker
+              -- is linked, so an unexpected input-reader failure is rethrown
+              -- in this (host) thread. Deliberate cancellation during
+              -- teardown completes the worker normally and does not
+              -- propagate.
+              inputWorker <-
+                liftIO $
+                  async $
+                    ( restore $ forever $ do
+                        ne <- V.nextEvent vty
+                        atomically $
+                          writeBoundedEventQueue pending [EventTriggerRef vtyEventTriggerRef :=> TriggerInvocation ne (return ())]
+                    )
+                      `catch` \(_ :: AsyncCancelled) -> return ()
+              liftIO $ link inputWorker
+              liftIO $ writeIORef workerRef (Just inputWorker)
+
+              -- The main application loop. We block until at least one batch
+              -- of events is available, then drain every other batch that has
+              -- accumulated in the meantime, fire each batch in its own
+              -- Reflex frame, and redraw once.
+              --
+              -- Draining the whole queue each frame keeps the host from
+              -- falling behind under bursts, while the queue's bounded
+              -- capacity (see 'VtyAppConfig') backpressures a producer that
+              -- fires faster than the host can process, bounding memory
+              -- without dropping occurrences. Firing each batch in its own
+              -- frame preserves every occurrence even when many firings of
+              -- the same trigger land in one drain (Reflex collapses
+              -- simultaneous same-trigger firings, so merging them into one
+              -- frame would drop occurrences); drawing only once per drain
+              -- decouples the display rate from the event rate.
+              fix $ \loop -> do
+                -- Block until at least one batch is available, then
+                -- atomically drain every other batch that has accumulated.
+                mBatches <- liftIO $ restore $ drainBoundedEventQueue pending
+                case mBatches of
+                  -- Queue was closed and empty (e.g. another thread
+                  -- triggered shutdown); stop the loop.
+                  Nothing -> return ()
+                  Just batches -> do
+                    -- Fire each batch in its own frame, stopping early if
+                    -- the shutdown event fires in any frame. This includes
+                    -- follow-up frames from 'performEvent' actions.
+                    let fireUntilShutdown [] = return False
+                        fireUntilShutdown (b : bs) = do
+                          stops <- fireEventTriggerRefs fc b readShutdown
+                          if or stops then return True else fireUntilShutdown bs
+                    stop <- fireUntilShutdown batches
+                    if stop
+                      then return ()
+                      else do
+                        updateVty
+                        loop
+
+  -- Exactly one cleanup path owns teardown. Each step is attempted even
+  -- if a previous step failed. The application's own exception, if any,
+  -- takes precedence over the first cleanup failure.
+  firstCleanupFailure <- do
+    let steps =
+          [ closeBoundedEventQueue pending
+          , do
+              mw <- readIORef workerRef
+              forM_ mw $ \w -> cancel w >> void (waitCatch w)
+          , do
+              mr <- readIORef signalRestoreRef
+              forM_ mr id
+          , setCursorStyle (V.outputIface vty) CursorStyleDefault
+          , setScreenMode (V.outputIface vty) ScreenNormal
+          , V.shutdown vty
+          ]
+    results <- mapM (\act -> try act :: IO (Either SomeException ())) steps
+    return $ case [e | Left e <- results] of
+      (e : _) -> Just e
+      [] -> Nothing
+  case (appResult, firstCleanupFailure) of
+    (Left appErr, _) -> throwIO (appErr :: SomeException)
+    (Right (), Just cleanupErr) -> throwIO (cleanupErr :: SomeException)
+    (Right (), Nothing) -> return ()
   where
     -- \| Use the given 'FireCommand' to fire events that have subscribers
-    -- and call the callback for the 'TriggerInvocation' of each.
+    -- and call the callback for the 'TriggerInvocation' of each. The
+    -- completion callback of every /processed/ batch runs exactly once,
+    -- whether or not its trigger has a subscriber. Batches dropped after
+    -- closure, and batches never drained, do not run callbacks.
     fireEventTriggerRefs
       :: (Monad (ReadPhase m), MonadIO m)
       => FireCommand t m

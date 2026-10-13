@@ -9,7 +9,7 @@ module Reflex.Vty.Widget.Input
 import Control.Monad (join)
 import Control.Monad.Fix (MonadFix)
 import Data.Default (Default (..))
-import Data.List (foldl')
+import qualified Data.List as List
 import Data.Text (Text)
 import qualified Graphics.Vty as V
 import Reflex
@@ -164,7 +164,7 @@ checkbox cfg v0 = do
   return v
   where
     combineStyles :: V.Attr -> [V.Style] -> V.Attr
-    combineStyles x xs = foldl' V.withStyle x xs
+    combineStyles x xs = List.foldl' V.withStyle x xs
 
 -- | The ctrl-c keypress event
 ctrlc :: (Monad m, HasInput t m, Reflex t) => m (Event t ())

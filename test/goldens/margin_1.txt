@@ -1,4 +1,8 @@
 3x3
-   
- m 
-   
+"   "
+" m "
+"   "
+--- spans ---
+0:0+3 text="   " attr=FixedAttr {fixedStyle = 0, fixedForeColor = Nothing, fixedBackColor = Nothing, fixedURL = Nothing}
+1:0+3 text=" m " attr=FixedAttr {fixedStyle = 0, fixedForeColor = Nothing, fixedBackColor = Nothing, fixedURL = Nothing}
+2:0+3 text="   " attr=FixedAttr {fixedStyle = 0, fixedForeColor = Nothing, fixedBackColor = Nothing, fixedURL = Nothing}
