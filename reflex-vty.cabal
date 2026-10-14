@@ -205,10 +205,16 @@ executable examples
   default-language: Haskell2010
   other-modules:
     Example.CellBuffer
+    Example.CanvasDemo
     Example.Common
     Example.DoomFire
+    Example.Fullscreen
     Example.Pager
+    Example.PreventQuit
+    Example.PrintKey
     Example.Progress
+    Example.Realtime
+    Example.Simple
     Example.Space
     Example.Spinner
     Example.Splash
@@ -263,7 +269,7 @@ executable reflex-vty-test-driver
     build-depends: unix >= 2.7 && < 2.10
 
 test-suite reflex-vty-test
-  hs-source-dirs: test
+  hs-source-dirs: test src-bin
   main-is: Spec.hs
   type: exitcode-stdio-1.0
   ghc-options: -threaded
@@ -296,6 +302,10 @@ test-suite reflex-vty-test
     Reflex.Vty.CompositionSpec
     Reflex.Vty.Widget.MouseSpec
     Reflex.Vty.Widget.ScrollSpec
+    Example.Common
+    Example.PreventQuit
+    Example.PrintKey
+    Example.InteractionSpec
   build-depends:
     base,
     reflex,
@@ -321,3 +331,10 @@ test-suite reflex-vty-test
   if !os(windows)
     build-depends: unix >= 2.7 && < 2.10
   default-language: Haskell2010
+  -- Example.Common is compiled into this test suite from src-bin; it uses
+  -- ConstraintKinds for its capability alias.
+  default-extensions:
+    ConstraintKinds
+    FlexibleContexts
+    RankNTypes
+    ScopedTypeVariables

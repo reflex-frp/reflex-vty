@@ -168,3 +168,72 @@ Once it's done you can test the following:
   * Make sure that after quitting, the terminal restores the content that was on screen before the app launched (alternate screen mode).
 
 There should be 8 examples to cover (Todo List, Text Editor, Scrollable text display, Clickable buttons, CPU Usage, Scrollbar modes, Cursor, Showcase). If there are more or fewer than this then this QA guide is out of date and QA should fail.
+
+## Gallery demos
+
+Each runs with `cabal run examples -- <name>` (see the README gallery for
+recordings). These complement the Showcase checks above.
+
+  * `canvas` — a `Reflex.Vty.Canvas` drawing board.
+    * Make sure a checkerboard of dim and faint dots fills a 22-column board; the
+      gaps between dots are transparent, so the terminal background shows through.
+    * Make sure the wide glyph `漢` (two columns) and the marked glyph `á` (base
+      `a` plus a pink combining acute) appear on the third board row.
+    * Make sure the rightmost glyph on that row renders as a one-column `…`
+      ellipsis: the wide glyph's second column falls past the board's right
+      edge, following Vty's clipping policy.
+    * Make sure the arrow keys move a `█`-and-bracket highlight overlay in
+      two-column steps horizontally and one-row steps vertically, clamped to
+      the board.
+    * Move the highlight over the `…` cell: the overlay covers it, and the
+      clipped glyph reappears (still clipped) when the highlight moves away.
+      Moving the highlight over the whole wide glyph removes it; moving away
+      restores it.
+    * Type <kbd>q</kbd> and make sure the terminal restores the prior screen.
+
+  * `prevent-quit` — confirmation before exit.
+    * Make sure the running view says `Application is running.` with a dim
+      `q or Ctrl+C: request exit` hint.
+    * Press <kbd>q</kbd>: a `Really quit? [y/N]` confirmation appears and the
+      app does not exit. Press <kbd>n</kbd>, <kbd>N</kbd>, <kbd>Enter</kbd>, or
+      <kbd>Esc</kbd> to return to the running view.
+    * Press <kbd>Ctrl</kbd>+<kbd>C</kbd>: the same confirmation appears.
+    * Press <kbd>y</kbd> or <kbd>Y</kbd> while confirming: the app exits.
+      Pressing <kbd>q</kbd> or <kbd>Ctrl</kbd>+<kbd>C</kbd> while confirming
+      keeps the confirmation open.
+
+  * `print-key` — raw keyboard-event inspection.
+    * Make sure the view starts with `No key received.`
+    * Press keys (letters, <kbd>Esc</kbd>, <kbd>Enter</kbd>, <kbd>Tab</kbd>,
+      arrows, function keys, Unicode text): the display shows the Vty event's
+      `show` form, including the modifier list (e.g. `EvKey (KChar 'a')
+      [MCtrl]` for <kbd>Ctrl</kbd>+<kbd>A</kbd>).
+    * Make sure <kbd>q</kbd> only updates the display; it does not exit.
+    * Paste text: the display keeps the last key event and the app keeps
+      running.
+    * Type <kbd>Ctrl</kbd>+<kbd>C</kbd> to quit.
+
+  * `realtime` — background activity without blocking input.
+    * Make sure `Events received: N` starts at 0 and advances through 1, 2, 3,
+      ... roughly every 0.3-0.7 seconds (delays repeat 300/700/500 ms).
+    * Type keys while an activity is pending: the keyboard-event line updates
+      immediately, without waiting for the background action.
+    * Type <kbd>q</kbd> or <kbd>Ctrl</kbd>+<kbd>C</kbd>: the app exits without
+      waiting for another activity.
+
+  * `simple` — a five-second automatic countdown.
+    * Make sure the display starts at `This program exits in 5 seconds.` and
+      counts down to 1, then the program exits at about five seconds with no
+      key press.
+    * Press <kbd>q</kbd> or <kbd>Ctrl</kbd>+<kbd>C</kbd> to exit sooner.
+    * Suspend the process (<kbd>Ctrl</kbd>+<kbd>Z</kbd>, or SIGSTOP from a
+      shell) for a few seconds and resume it: the countdown catches up to
+      elapsed time and finishes near its original deadline rather than running
+      five more delivered ticks.
+
+  * `fullscreen` — the countdown on the alternate screen.
+    * Make sure the app switches to the alternate screen (the prior shell
+      content disappears) and runs the same five-second countdown as `simple`.
+    * Make sure the app returns to the normal screen and the prior shell
+      content is restored when the countdown ends, when you press <kbd>q</kbd>
+      or <kbd>Ctrl</kbd>+<kbd>C</kbd>, and on SIGTERM.

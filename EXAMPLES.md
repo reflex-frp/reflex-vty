@@ -38,3 +38,15 @@ brighter and drawn with a bolder char. ([source](src-bin/Example/Space.hs))
 Introducing... ([source](src-bin/Example/Splash.hs))
 
 <img src="https://vhs.charm.sh/vhs-1QNXpqEc9fg8E2WKtkDsD9.gif" alt="splash screen" width="560">
+
+### `canvas`: a glyph-level drawing board
+
+An interactive tour of `Reflex.Vty.Canvas`. A checkerboard of dots shows
+transparency (the gaps are transparent, not dark). The glyph row holds the
+two-column glyph `漢`, the marked glyph `á` (a base `a` plus a combining acute
+in its own color), and a `…` ellipsis where a wide glyph crosses the board's
+right edge — Vty's partial-glyph clipping policy. Arrow keys move a `█`
+highlight overlay; placing it over a glyph clips or covers it per the same
+policy, and moving away restores it. ([source](src-bin/Example/CanvasDemo.hs))
+
+<img src="https://vhs.charm.sh/vhs-4Pb8inOYo4dWwFvmYXf6ib.gif" alt="canvas board demo: a checkerboard with a wide glyph, a combining-mark glyph, an ellipsis-clipped glyph at the right edge, and a movable highlight overlay" width="560">

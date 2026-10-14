@@ -15,6 +15,7 @@ type Demo t m =
   ( Reflex t
   , MonadFix m
   , MonadHold t m
+  , MonadSample t m
   , MonadIO m
   , MonadIO (Performable m)
   , PerformEvent t m

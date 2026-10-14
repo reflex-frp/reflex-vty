@@ -1,5 +1,10 @@
 # Revision history for reflex-vty
 
+## Unreleased
+
+* Add five interactive gallery examples to the `examples` executable: `prevent-quit` (confirm before exit), `print-key` (inspect keyboard events), `realtime` (background activity that never blocks input), `simple` (a five-second countdown that exits on its own), and `fullscreen` (the countdown on the alternate screen). Each has a VHS tape under `doc/examples/` and a hosted recording linked from the README gallery.
+* Add the `canvas` gallery example: an interactive `Reflex.Vty.Canvas` board showing transparency, wide glyphs, combining marks with distinct attributes, and Vty's ellipsis clipping, with keyboard-driven overlay movement.
+
 ## 1.3.0.0
 
 * Fix: `splitAtWidth` uses character boundaries instead of storage offsets. This preserves Unicode text when the function wraps wide characters.
