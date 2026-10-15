@@ -23,9 +23,20 @@ Wait+Screen /increment/
 Sleep 800ms
 Show
 
-# The rendered screen: generated key help, demo title.
-Sleep 2s
+# --- Increment twice with x, then remap to i with r: help text updates. ---
+Type "xx"
+Sleep 600ms
+Type "r"
+Sleep 600ms
 
-# Quit cleanly via q (background-layer binding).
+# --- Toggle columns with F6: 6 cells regroup from 3 to 2 columns. ---
+Type "\x1b[17~"
+Sleep 600ms
+
+# --- Switch paginator to numeric with F8. ---
+Type "\x1b[18~"
+Sleep 600ms
+
+# --- Quit cleanly via q (background-layer binding). ---
 Type "q"
 Sleep 1s
