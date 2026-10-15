@@ -14,5 +14,6 @@ in
     ];
     inputsFrom = [
       release.${compiler}.env
+      release.widgets.${compiler}.env
     ];
   }
