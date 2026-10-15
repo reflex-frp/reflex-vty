@@ -338,6 +338,7 @@ test-suite reflex-vty-test
   -- ConstraintKinds for its capability alias.
   default-extensions:
     ConstraintKinds
+    PackageImports
     FlexibleContexts
     RankNTypes
     ScopedTypeVariables

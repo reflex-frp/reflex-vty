@@ -1,3 +1,4 @@
+{-# LANGUAGE PackageImports #-}
 module Reflex.Vty.Widget.KeySpec (spec) where
 
 import qualified Data.Text as T
