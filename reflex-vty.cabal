@@ -269,7 +269,10 @@ executable reflex-vty-test-driver
     build-depends: unix >= 2.7 && < 2.10
 
 test-suite reflex-vty-test
-  hs-source-dirs: test src-bin
+  -- test-support holds the shared harness sources (moved into the
+  -- reflex-vty-widgets package); both suites compile them from their
+  -- own package root.
+  hs-source-dirs: test src-bin reflex-vty-widgets/test-support
   main-is: Spec.hs
   type: exitcode-stdio-1.0
   ghc-options: -threaded
