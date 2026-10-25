@@ -1,5 +1,27 @@
 #!/usr/bin/env python3
-"""VHS-only transport for F6–F9; the demo's bindings remain unchanged."""
+"""VHS-only transport for the Tier A demo recording.
+
+The demo's own bindings are untouched.  This adapter does two recording-only
+jobs:
+
+* It rewrites four transport bytes to the F6-F9 escape sequences (VHS has no
+  native F-key commands, and ``Type`` does not decode hex escapes).
+* It draws a five-row caption band below the child's viewport and selects its
+  scene from eleven more transport bytes.  Those bytes are stripped before
+  the demo sees them; they are recording controls, not application bindings.
+  The child PTY is five rows shorter than the outer terminal, so the band is
+  truly outside the demo's viewport.
+
+The band is repainted only between complete child terminal sequences (and
+complete UTF-8 characters).  Read chunks are not sequence boundaries, so the
+adapter tracks escape/OSC/string/UTF-8 state before injecting anything.  A
+scroll region matching the child viewport keeps child scrolling out of the
+band, and no band bytes are emitted after the child leaves the alternate
+screen or exits.
+
+Run it as ``widgets-demo-pty.py <widgets-demo-binary>`` inside the VHS tape.
+The child's exit status is propagated.
+"""
 
 import errno
 import fcntl
@@ -7,6 +29,7 @@ import os
 import pty
 import selectors
 import signal
+import struct
 import sys
 import termios
 import time
@@ -14,6 +37,11 @@ import tty
 
 TIMEOUT = 180
 HIGH_WATER = 65536
+BAND_ROWS = 5
+MIN_CHILD_ROWS = 24
+
+# VHS transport bytes.  These select F-keys without adding bindings to the
+# demo.  Ctrl+C, Tab, Escape, paste, and ordinary text pass through unchanged.
 KEYS = {
     0x06: b"\x1b[17~",  # Ctrl+F -> F6
     0x07: b"\x1b[18~",  # Ctrl+G -> F7
@@ -21,9 +49,283 @@ KEYS = {
     0x14: b"\x1b[20~",  # Ctrl+T -> F9
 }
 
+# Caption scenes.  The tape sends these control bytes deliberately at each
+# milestone; the adapter consumes them so neither the demo nor its text
+# fields ever see them.
+SCENES = {
+    0x01: (  # Ctrl+A: after the counter reaches 2
+        "x x",
+        "Count 2 - the grid field is unchanged",
+        "Root bindings fire while a grid field has focus: x increments the counter.",
+        "The focused cell still holds its own text; counter and grid are independent.",
+    ),
+    0x02: (  # Ctrl+B: before typing into the focused grid cell
+        "type",
+        "Edit the focused grid cell",
+        "Typed characters go to the cell, not to the counter, help, or paginator.",
+        "This text must survive regrouping the grid into two columns.",
+    ),
+    0x05: (  # Ctrl+E: before F6
+        "F6",
+        "Regroup the grid to two columns",
+        "Cell text and focus are preserved through the layout change.",
+        "The paginator is a separate widget and is not involved in this regroup.",
+    ),
+    0x0B: (  # Ctrl+K: before F8
+        "F8",
+        "Paginator: switch to numeric mode",
+        "This paginator is independent of the grid; only its display mode changes.",
+        "23 items at five per page means five pages.",
+    ),
+    0x0C: (  # Ctrl+L: before Ctrl+Right
+        "Ctrl+\u2192",
+        "Next page",
+        "Paginator navigation is handled by the paginator widget, not the grid.",
+        "Grid text and focus stay exactly as they were.",
+    ),
+    0x0E: (  # Ctrl+N: before m
+        "m",
+        "Open the modal dialog",
+        "The dialog owns printable keys; background bindings and q no longer fire.",
+        "Ctrl+C still quits from every layer.",
+    ),
+    0x10: (  # Ctrl+P: before typing in the form
+        "type first \u00b7 Tab \u00b7 type second",
+        "Edit both form fields",
+        "Typing goes to the focused field; Tab moves focus between First and Second.",
+        "The counter, map, paginator, and grid stay unchanged behind the dialog.",
+    ),
+    0x12: (  # Ctrl+R: before p
+        "p",
+        "Open the nested popover",
+        "The popover is a child overlay above the form and deliberately ignores typing.",
+        "Only Escape or an outside left click dismisses this topmost layer.",
+    ),
+    0x15: (  # Ctrl+U: before the first Escape
+        "Esc",
+        "Close only the popover",
+        "The first Escape removes the topmost layer and returns focus to the form.",
+        "The dialog remains open, so background input is still blocked.",
+    ),
+    0x16: (  # Ctrl+V: before the second Escape
+        "Esc",
+        "Close the dialog",
+        "The second Escape dismisses the dialog and restores the background layer.",
+        "Grid text and focus come back exactly as they were.",
+    ),
+    0x17: (  # Ctrl+W: before q
+        "q",
+        "Quit from the background",
+        "q quits here; inside the dialog it is ordinary text.",
+        "The demo exits cleanly and the terminal is restored.",
+    ),
+}
+
+INTRO_SCENE = (
+    "x x",
+    "Increment the counter without editing the grid",
+    "Press x twice: the root key map consumes it before the focused field can.",
+    "Root controls stay live while the grid owns focus; text goes only to the field.",
+)
+
+# Dracula colours from VHS's theme file: background #1e1f29, foreground
+# #f8f8f2, magenta #ff79c6, plus the canonical comment colour for the rule.
+BG = b"\x1b[48;2;30;31;41m"
+TEXT = BG + b"\x1b[38;2;248;248;242m"
+SECONDARY = BG + b"\x1b[38;2;187;187;187m"
+DIM = BG + b"\x1b[38;2;98;114;164m"
+BADGE = b"\x1b[48;2;255;121;198m\x1b[38;2;30;31;41m"
+SAVE_CURSOR = b"\x1b7"
+RESTORE_CURSOR = b"\x1b8"
+
 
 def window_size():
     return fcntl.ioctl(0, termios.TIOCGWINSZ, bytes(8))
+
+
+def dimensions(size):
+    rows, cols, _, _ = struct.unpack("HHHH", size)
+    return rows, cols
+
+
+def sized(rows, cols):
+    return struct.pack("HHHH", rows, cols, 0, 0)
+
+
+def truncate(text, width):
+    if width <= 0:
+        return ""
+    if len(text) <= width:
+        return text
+    if width == 1:
+        return text[:1]
+    return text[: width - 1] + "\u2026"
+
+
+def styled_line(row, cols, segments):
+    """Render one full-width band row; the background fills every cell."""
+    parts = [b"\x1b[" + str(row).encode("ascii") + b";1H", BG]
+    used = 0
+    for style, text in segments:
+        text = truncate(text, cols - used)
+        if not text:
+            break
+        parts.append(style)
+        parts.append(text.encode("utf-8"))
+        used += len(text)
+    parts.append(BG)
+    parts.append(b" " * (cols - used))
+    return b"".join(parts)
+
+
+def render_band(cols, rows, child_rows, scene):
+    """Five rows below the child viewport: rule, gap, badge, two captions.
+
+    The scroll region is set while the cursor is saved, so child scrolling can
+    never move text into the band and the app's cursor is restored unchanged.
+    """
+    badge, title, first, second = scene
+    top = rows - BAND_ROWS + 1
+    margin = b"\x1b[1;" + str(max(1, child_rows)).encode("ascii") + b"r"
+    return b"".join(
+        [
+            SAVE_CURSOR,
+            margin,
+            styled_line(top, cols, [(DIM, "\u2500" * cols)]),
+            styled_line(top + 1, cols, []),
+            styled_line(
+                top + 2,
+                cols,
+                [(BG, "  "), (BADGE, f" {badge} "), (TEXT, f"  {title}")],
+            ),
+            styled_line(top + 3, cols, [(BG, "  "), (TEXT, first)]),
+            styled_line(top + 4, cols, [(BG, "  "), (SECONDARY, second)]),
+            # Leave a defined pen state for terminals whose DECRC restores only
+            # the cursor, and cancel any pending autowrap from the last row.
+            b"\x1b[0m",
+            b"\x1b[1;1H",
+            RESTORE_CURSOR,
+        ]
+    )
+
+
+class ChildStream:
+    """Track whether child output ended between complete terminal sequences."""
+
+    GROUND = 0
+    ESC = 1
+    CSI = 2
+    OSC = 3
+    OSC_ESC = 4
+    STRING = 5
+    STRING_ESC = 6
+    UTF8 = 7
+    ESC_INTERMEDIATE = 8
+
+    def __init__(self):
+        self.state = self.GROUND
+        self.utf8 = 0
+        self.csi = bytearray()
+        self.alt = False
+        self.done = False
+
+    def ground(self):
+        return self.state == self.GROUND
+
+    def feed(self, data):
+        for byte in data:
+            self._byte(byte)
+        return self.done
+
+    def _byte(self, byte):
+        state = self.state
+        if state == self.UTF8:
+            if 0x80 <= byte <= 0xBF:
+                self.utf8 -= 1
+                if self.utf8 == 0:
+                    self.state = self.GROUND
+                return
+            # Not a continuation byte: abandon the partial character and
+            # interpret this byte on its own.
+            self.utf8 = 0
+            self.state = self.GROUND
+
+        if self.state == self.GROUND:
+            if byte == 0x1B:
+                self.state = self.ESC
+            elif 0xC2 <= byte <= 0xDF:
+                self.utf8 = 1
+                self.state = self.UTF8
+            elif 0xE0 <= byte <= 0xEF:
+                self.utf8 = 2
+                self.state = self.UTF8
+            elif 0xF0 <= byte <= 0xF4:
+                self.utf8 = 3
+                self.state = self.UTF8
+        elif self.state == self.ESC:
+            if byte == 0x1B:
+                self.state = self.ESC
+            elif byte == ord("["):
+                self.csi.clear()
+                self.state = self.CSI
+            elif byte == ord("]"):
+                self.state = self.OSC
+            elif byte in (ord("P"), ord("X"), ord("^"), ord("_")):
+                self.state = self.STRING
+            elif 0x20 <= byte <= 0x2F:
+                # ESC intermediates such as ESC ( B are not complete yet.
+                self.state = self.ESC_INTERMEDIATE
+            elif 0x30 <= byte <= 0x7E:
+                self.state = self.GROUND
+            else:
+                self.state = self.GROUND
+        elif self.state == self.ESC_INTERMEDIATE:
+            if byte == 0x1B:
+                self.state = self.ESC
+            elif 0x20 <= byte <= 0x2F:
+                self.state = self.ESC_INTERMEDIATE
+            elif 0x30 <= byte <= 0x7E:
+                self.state = self.GROUND
+            else:
+                self.state = self.GROUND
+        elif self.state == self.CSI:
+            if byte == 0x1B:
+                self.state = self.ESC
+            elif 0x20 <= byte <= 0x3F:
+                if len(self.csi) < 32:
+                    self.csi.append(byte)
+            elif 0x40 <= byte <= 0x7E:
+                params = bytes(self.csi)
+                if byte == ord("h") and params in (b"?1049", b"?1047", b"?47"):
+                    self.alt = True
+                elif byte == ord("l") and params in (
+                    b"?1049",
+                    b"?1047",
+                    b"?47",
+                ):
+                    self.alt = False
+                    self.done = True
+                self.state = self.GROUND
+            elif byte in (0x18, 0x1A):
+                self.state = self.GROUND
+        elif self.state == self.OSC:
+            if byte == 0x07:
+                self.state = self.GROUND
+            elif byte == 0x1B:
+                self.state = self.OSC_ESC
+        elif self.state == self.OSC_ESC:
+            if byte == ord("\\"):
+                self.state = self.GROUND
+            elif byte != 0x1B:
+                self.state = self.OSC
+        elif self.state == self.STRING:
+            if byte == 0x1B:
+                self.state = self.STRING_ESC
+        elif self.state == self.STRING_ESC:
+            if byte == ord("\\"):
+                self.state = self.GROUND
+            elif byte != 0x1B:
+                self.state = self.STRING
 
 
 def terminate(pid):
@@ -42,11 +344,14 @@ def terminate(pid):
 
 def forward(executable):
     original_termios = termios.tcgetattr(0)
-    size = window_size()
+    outer = window_size()
+    outer_rows, outer_cols = dimensions(outer)
+    band_rows = BAND_ROWS if outer_rows >= MIN_CHILD_ROWS + BAND_ROWS else 0
+    child = sized(outer_rows - band_rows, outer_cols)
     pid, master = pty.fork()
     if pid == 0:
         try:
-            fcntl.ioctl(0, termios.TIOCSWINSZ, size)
+            fcntl.ioctl(0, termios.TIOCSWINSZ, child)
             os.execv(executable, [executable])
         except OSError as exc:
             print(f"widgets-demo-pty: exec: {exc}", file=sys.stderr)
@@ -70,6 +375,35 @@ def forward(executable):
             os.set_blocking(fd, False)
         to_child = bytearray()
         to_terminal = bytearray()
+        child_stream = ChildStream()
+        state = {
+            "scene": INTRO_SCENE,
+            "cols": outer_cols,
+            "rows": outer_rows,
+            "child_rows": outer_rows - band_rows,
+            "exited": False,
+        }
+
+        def band_if_safe():
+            if (
+                band_rows
+                and child_stream.alt
+                and not child_stream.done
+                and not state["exited"]
+                and child_stream.ground()
+                and status is None
+            ):
+                to_terminal.extend(
+                    render_band(
+                        state["cols"],
+                        state["rows"],
+                        state["child_rows"],
+                        state["scene"],
+                    )
+                )
+                return True
+            return False
+
         stdin_eof = child_eof = False
         deadline = time.monotonic() + TIMEOUT
         with selectors.DefaultSelector() as selector:
@@ -90,6 +424,7 @@ def forward(executable):
                     waited, child_status = os.waitpid(pid, os.WNOHANG)
                     if waited:
                         status = child_status
+                        state["exited"] = True
                 if child_eof and not to_terminal and status is not None:
                     code = os.waitstatus_to_exitcode(status)
                     return code if code >= 0 else 128 - code
@@ -97,8 +432,23 @@ def forward(executable):
                 if remaining <= 0:
                     raise TimeoutError(f"exceeded {TIMEOUT}-second recording deadline")
                 if resized:
-                    fcntl.ioctl(master, termios.TIOCSWINSZ, window_size())
                     resized = False
+                    outer = window_size()
+                    outer_rows, outer_cols = dimensions(outer)
+                    band_rows = (
+                        BAND_ROWS
+                        if outer_rows >= MIN_CHILD_ROWS + BAND_ROWS
+                        else 0
+                    )
+                    fcntl.ioctl(
+                        master,
+                        termios.TIOCSWINSZ,
+                        sized(outer_rows - band_rows, outer_cols),
+                    )
+                    state["cols"] = outer_cols
+                    state["rows"] = outer_rows
+                    state["child_rows"] = outer_rows - band_rows
+                    band_if_safe()
                 watch(0, selectors.EVENT_READ if not stdin_eof and not child_eof
                       and len(to_child) < HIGH_WATER else 0)
                 watch(1, selectors.EVENT_WRITE if to_terminal else 0)
@@ -120,14 +470,33 @@ def forward(executable):
                             if chunk:
                                 # Build complete sequences before forwarding, never
                                 # send a separately timed Escape as a function key.
-                                to_child.extend(b"".join(KEYS.get(byte, bytes((byte,)))
-                                                         for byte in chunk))
+                                shortened = bytearray()
+                                scene_changed = False
+                                for byte in chunk:
+                                    scene = SCENES.get(byte)
+                                    if scene is not None:
+                                        state["scene"] = scene
+                                        scene_changed = True
+                                    else:
+                                        shortened.extend(
+                                            KEYS.get(byte, bytes((byte,)))
+                                        )
+                                if shortened:
+                                    to_child.extend(shortened)
+                                if scene_changed:
+                                    band_if_safe()
                             else:
                                 stdin_eof = True
                         elif chunk:
+                            # The child stream is parsed before the band is
+                            # considered: the band is only injected when the
+                            # chunk ended between terminal sequences.
+                            child_stream.feed(chunk)
                             to_terminal.extend(chunk)
+                            band_if_safe()
                         else:
                             child_eof = True
+                            state["exited"] = True
                             to_child.clear()
                     if events & selectors.EVENT_WRITE:
                         pending = to_terminal if fd == 1 else to_child

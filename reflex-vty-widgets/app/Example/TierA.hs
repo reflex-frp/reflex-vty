@@ -1,10 +1,12 @@
 {-# LANGUAGE PackageImports #-}
 
--- | Interactive Tier A demonstration: remappable keys with generated
--- help, a state-preserving grid, a paginator, and a dialog\/popover.
--- All background controls are routed through one 'withKeyMap' at the
--- root so dialog text entry never sees them; @q@ exits only where the
--- background layer owns input, and Ctrl+C exits from any state.
+-- | Interactive Tier A widget showcase: a titled, sectioned
+-- background with remappable keys and generated help, a labelled
+-- state-preserving grid, an explicitly independent paginator, and a
+-- dialog\/popover. All background controls are routed through one
+-- 'withKeyMap' at the root so dialog text entry never sees them; @q@
+-- exits only where the background layer owns input, and Ctrl+C exits
+-- from any state.
 module Example.TierA (runDemo, demoWidget) where
 
 import Control.Monad.Fix (MonadFix)
@@ -49,17 +51,25 @@ demoWidget = do
               increments <- count (command CmdIncrement actions)
               let liveMap = rootKeyMap <$> remapped <*> enabled
               (actions, ()) <- withKeyMap liveMap $ col $ do
+                grout (fixed (pure 1)) $ showcaseTitle
                 grout (fixed (pure 1)) $
                   statusRow increments ((\r -> if r then 'i' else 'x') <$> remapped) enabled
+                grout (fixed (pure 1)) $ sectionHeading "Shortcuts (root key map)"
                 grout (fixed (pure 7)) $ void $
                   rowWithSpacing (def { _spacingConfig_gap = pure 2 })
                     [ grout flex $ keyHelp (KeyMap . take 7 . _keyMap_bindings <$> liveMap)
                     , grout flex $ keyHelp (KeyMap . drop 7 . _keyMap_bindings <$> liveMap)
                     ]
+                grout (fixed (pure 1)) $
+                  sectionHeading "Editable fields (F6 columns, +/- gap, F7 padding)"
                 grout flex $ gridSection actions
+                grout (fixed (pure 1)) $ sectionHeading "Paginator (independent of fields)"
                 grout (fixed (pure 1)) $ paginationRow actions
-                grout (fixed (pure 2)) $
-                  text (pure "Tab/Shift+Tab: field focus | m: dialog\nq: quit background only | Ctrl+C: quit anywhere")
+                grout (fixed (pure 1)) $
+                  text
+                    ( pure
+                        "Tab/Shift+Tab: field focus | m: dialog | q: quit background | Ctrl+C: quit"
+                    )
           pure actions)
         dialogBody
       let rootActions = _overlay_background outer
@@ -143,6 +153,32 @@ rootKeyMap remapped enabled =
     , KeyBinding CmdQuit [(V.KChar 'q', [])] "quit" True
     ]
 
+-- | Bold left-aligned copy used for the showcase title, section
+-- headings, and field labels. Rendering is text-only, so the screen
+-- stays usable at the baseline 80x24 viewport.
+boldText
+  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m)
+  => Behavior t T.Text
+  -> m ()
+boldText =
+  richText
+    RichTextConfig
+      { _richTextConfig_attributes = pure (V.withStyle V.defAttr V.bold)
+      }
+
+-- | The demo title on the first screen row.
+showcaseTitle
+  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m)
+  => m ()
+showcaseTitle = boldText (pure "Tier A widget showcase")
+
+-- | A labelled section heading in the background.
+sectionHeading
+  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m)
+  => T.Text
+  -> m ()
+sectionHeading = boldText . pure
+
 statusRow
   :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m)
   => Dynamic t Int -> Dynamic t Char -> Dynamic t Bool -> m ()
@@ -199,7 +235,14 @@ gridSection cmdE = do
           }
   results <-
     grid cfg $
-      [ tile' flex (textInput def {_textInputConfig_initialValue = fromText (T.pack label)})
+      [ tile' flex $ col $ do
+          grout (fixed (pure 1)) $ boldText (pure ("Field " <> T.pack label))
+          grout (fixed (pure 1)) $
+            axis (pure Orientation_Row) (fixed (pure 1)) $ do
+              grout (fixed (pure 1)) $ text (pure "[")
+              void $ grout flex $
+                textInput def {_textInputConfig_initialValue = fromText (T.pack label)}
+              grout (fixed (pure 1)) $ text (pure "]")
       | label <- ["A", "B", "C", "D", "E", "F"]
       ]
   pb <- getPostBuild

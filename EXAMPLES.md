@@ -60,8 +60,9 @@ nix-shell --run 'cabal run widgets-demo'
 ```
 
 [`Example.TierA`](reflex-vty-widgets/app/Example/TierA.hs) combines live key-map
-help, six persistent grid fields, a paginator, and a two-field dialog with a
-nested read-only popover. The displayed bindings are authoritative: `r` remaps
+help, six labeled, bracketed grid fields, an independent paginator, and a
+two-field dialog with a nested read-only popover. The paginator demonstrates
+page state; it does not paginate the fields. The displayed bindings are authoritative: `r` remaps
 increment from `x` to `i`, and `d` disables it (the disabled key then edits the
 focused field). F6 changes columns, `+`/`-` change spacing, F7 changes padding,
 F8 changes the page indicator, and F9 cycles the item total. Ctrl+Left/Right
@@ -80,8 +81,16 @@ nix-shell --run 'cabal build widgets-demo'
 nix-shell -p vhs ttyd ffmpeg chromium python3 --run 'vhs doc/widgets-demo.tape'
 ```
 
+The guided recording shows one change at a time, with longer reading pauses
+and a visible key badge and explanation below the application. It demonstrates
+typing, preserving field contents across reflow, independent pagination, and
+closing the popup and dialog separately, rather than racing through every control.
+
 The tape alone uses [`widgets-demo-pty.py`](doc/widgets-demo-pty.py) to translate
-four VHS transport keys into complete F6–F9 terminal sequences. It does not add
-application bindings. Production-widget harness scenarios cover the demo;
+four VHS transport keys into complete F6–F9 terminal sequences and select
+captions with recording-only control bytes. The adapter reserves five terminal
+rows outside the child's viewport for the caption band; it never inserts
+captions inside a partial terminal escape sequence or after application cleanup.
+It does not add application bindings. Production-widget harness scenarios cover the demo;
 direct-PTY acceptance runs the binary without that adapter to verify input,
 resizing, exit status, and terminal restoration independently of the GIF.

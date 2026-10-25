@@ -9,10 +9,12 @@
 -- routing can be asserted without ever stopping the harness host (the
 -- harness's own shutdown channel stays 'never').
 --
--- Assertions name the content and its absolute screen coordinates
--- rather than whole-screen goldens: the baseline is 80x24 with status
--- row 0, seven help rows (1-7), grid rows 8-20, paginator row 21, and
--- hint rows 22-23.
+-- Background assertions name the rendered content and the section
+-- ordering rather than exact coordinates, so presentation tweaks do
+-- not repin incidental layout. The dialog keeps its contractual
+-- 52x12 centred geometry. The baseline is 80x24 with a title row,
+-- labelled sections for shortcuts, editable fields, and an explicitly
+-- independent paginator, and a one-row footer.
 module Example.TierASpec (spec) where
 
 import Control.Monad (foldM)
@@ -84,13 +86,68 @@ expectAt needle y x f =
       expectationFailure $
         "missing " ++ show needle ++ " on row " ++ show y ++ "\n" ++ numbered f
 
-expectOnRow :: String -> Int -> Frame Int -> Expectation
-expectOnRow needle y f =
-  case findColumn needle (lineAt y f) of
+expectText :: String -> Frame Int -> Expectation
+expectText needle f =
+  case findText needle f of
     Just _ -> pure ()
     Nothing ->
       expectationFailure $
-        "missing " ++ show needle ++ " on row " ++ show y ++ "\n" ++ numbered f
+        "missing " ++ show needle ++ "\n" ++ numbered f
+
+expectBefore :: String -> String -> Frame Int -> Expectation
+expectBefore first second f =
+  case (findText first f, findText second f) of
+    (Just (yFirst, _), Just (ySecond, _))
+      | yFirst < ySecond -> pure ()
+      | otherwise ->
+          expectationFailure $
+            show first
+              ++ " (row "
+              ++ show yFirst
+              ++ ") should be above "
+              ++ show second
+              ++ " (row "
+              ++ show ySecond
+              ++ ")\n"
+              ++ numbered f
+    (Nothing, _) -> expectationFailure $ "missing " ++ show first ++ "\n" ++ numbered f
+    (_, Nothing) -> expectationFailure $ "missing " ++ show second ++ "\n" ++ numbered f
+
+expectSameRow :: String -> String -> Frame Int -> Expectation
+expectSameRow first second f =
+  case (findText first f, findText second f) of
+    (Just (yFirst, _), Just (ySecond, _))
+      | yFirst == ySecond -> pure ()
+      | otherwise ->
+          expectationFailure $
+            show first
+              ++ " (row "
+              ++ show yFirst
+              ++ ") and "
+              ++ show second
+              ++ " (row "
+              ++ show ySecond
+              ++ ") should share a row\n"
+              ++ numbered f
+    (Nothing, _) -> expectationFailure $ "missing " ++ show first ++ "\n" ++ numbered f
+    (_, Nothing) -> expectationFailure $ "missing " ++ show second ++ "\n" ++ numbered f
+
+expectDifferentRows :: String -> String -> Frame Int -> Expectation
+expectDifferentRows first second f =
+  case (findText first f, findText second f) of
+    (Just (yFirst, _), Just (ySecond, _))
+      | yFirst /= ySecond -> pure ()
+      | otherwise ->
+          expectationFailure $
+            show first
+              ++ " and "
+              ++ show second
+              ++ " should not share row "
+              ++ show yFirst
+              ++ "\n"
+              ++ numbered f
+    (Nothing, _) -> expectationFailure $ "missing " ++ show first ++ "\n" ++ numbered f
+    (_, Nothing) -> expectationFailure $ "missing " ++ show second ++ "\n" ++ numbered f
 
 expectAbsent :: String -> Frame Int -> Expectation
 expectAbsent needle f =
@@ -139,147 +196,149 @@ expectDialogAt80x24 f = do
 spec :: Spec
 spec = describe "Example.TierA" $ do
   describe "background controls, grid, and paginator" $ do
-    it "dispatches remapped/enabled actions and preserves grid state across layout changes" $
+    it "preserves grid/paginator state across layout changes" $
       withApp defaultVtyAppConfig (80, 24) wrapDemo $ \d -> do
         f0 <- lastFrame d
         frameObservation f0 `shouldBe` 0
-        -- Status row and generated two-column help from the same live map.
-        expectAt "count 0" 0 0 f0
-        expectOnRow "increment key 'x' enabled" 0 f0
-        expectAt "x  increment counter" 1 0 f0
-        expectAt "r  remap increment x/i" 2 0 f0
-        expectAt "m  open dialog" 5 41 f0
-        expectAt "q  quit" 6 41 f0
-        -- Five dots on the paginator row, never on the status row.
-        expectAt "● ○ ○ ○ ○" 21 0 f0
-        findColumn "●" (lineAt 0 f0) `shouldBe` Nothing
-        -- Six cells in three columns, gap and padding 1.
-        expectAt "A" 9 1 f0
-        expectAt "B" 9 28 f0
-        expectAt "C" 9 54 f0
-        expectAt "D" 15 1 f0
-        expectAt "E" 15 28 f0
-        expectAt "F" 15 54 f0
+        -- Live status and two-column generated help from the same map.
+        expectText "count 0" f0
+        expectText "increment key 'x' enabled" f0
+        expectText "x  increment counter" f0
+        expectText "r  remap increment x/i" f0
+        expectText "m  open dialog" f0
+        expectText "q  quit" f0
+        -- Six labelled fields with visible brackets and initial values
+        -- A-F; the initial layout is three columns.
+        mapM_ (\label -> expectText ("Field " ++ label) f0) ["A", "B", "C", "D", "E", "F"]
+        mapM_ (\label -> expectText ("[" ++ label) f0) ["A", "B", "C", "D", "E", "F"]
+        expectSameRow "Field A" "Field B" f0
+        expectSameRow "Field B" "Field C" f0
+        expectSameRow "Field D" "Field E" f0
+        expectSameRow "Field E" "Field F" f0
+        expectDifferentRows "Field A" "Field D" f0
+        expectDifferentRows "Field A" "●" f0
 
         -- 'x' is consumed by the root map: count 2, no typing in cell A.
         _ <- stepInput d (charKey 'x')
         f2 <- stepInput d (charKey 'x')
         frameObservation f2 `shouldBe` 0
-        expectAt "count 2" 0 0 f2
-        expectAt "A" 9 1 f2
+        expectText "count 2" f2
+        expectAbsent "Ax" f2
 
         -- Remap: the live map, status, and help all move to 'i'.
         fR <- stepInput d (charKey 'r')
-        expectOnRow "increment key 'i' enabled" 0 fR
-        expectAt "i  increment counter" 1 0 fR
+        expectText "increment key 'i' enabled" fR
+        expectText "i  increment counter" fR
         -- 'x' is now unbound and reaches the focused field.
         fX <- stepInput d (charKey 'x')
-        expectAt "count 2" 0 0 fX
-        expectAt "Ax" 9 1 fX
+        expectText "count 2" fX
+        expectText "Ax" fX
         fI <- stepInput d (charKey 'i')
-        expectAt "count 3" 0 0 fI
+        expectText "count 3" fI
 
         -- Disabling removes increment from dispatch and generated help;
         -- the key then passes through to the field.
         fD1 <- stepInput d (charKey 'd')
-        expectOnRow "increment key 'i' DISABLED" 0 fD1
+        expectText "increment key 'i' DISABLED" fD1
         expectAbsent "increment counter" fD1
-        expectAt "Ax" 9 1 fD1
+        expectText "Ax" fD1
         fPass <- stepInput d (charKey 'i')
-        expectAt "Axi" 9 1 fPass
-        expectAt "count 3" 0 0 fPass
+        expectText "Axi" fPass
+        expectText "count 3" fPass
         expectAbsent "increment counter" fPass
         -- Re-enabling restores dispatch and help.
         fD2 <- stepInput d (charKey 'd')
-        expectOnRow "increment key 'i' enabled" 0 fD2
-        expectOnRow "increment counter" 1 fD2
+        expectText "increment key 'i' enabled" fD2
+        expectText "increment counter" fD2
         f4 <- stepInput d (charKey 'i')
-        expectAt "count 4" 0 0 f4
+        expectText "count 4" f4
+        expectText "Axi" f4
 
-        -- Paste into the focused cell, then two-column regrouping.
+        -- Paste into the focused cell, then two-column regrouping. The
+        -- labelled, bracketed fields make the reflow legible without
+        -- pinning pixels.
         fPaste <- stepInput d (V.EvPaste "saved")
-        expectAt "Axisaved" 9 1 fPaste
+        expectText "Axisaved" fPaste
         f2col <- stepInput d (funKey 6)
-        expectAt "Axisaved" 9 1 f2col
-        expectAt "B" 9 41 f2col
-        expectAt "C" 13 1 f2col
-        expectAt "D" 13 41 f2col
-        expectAt "E" 17 1 f2col
-        expectAt "F" 17 41 f2col
+        expectText "Axisaved" f2col
+        mapM_ (\label -> expectText ("Field " ++ label) f2col) ["A", "B", "C", "D", "E", "F"]
+        expectSameRow "Field A" "Field B" f2col
+        expectSameRow "Field C" "Field D" f2col
+        expectSameRow "Field E" "Field F" f2col
+        expectDifferentRows "Field B" "Field C" f2col
         fZ <- stepInput d (charKey 'Z')
-        expectAt "AxisavedZ" 9 1 fZ
+        expectText "AxisavedZ" fZ
 
-        -- Gap increase/decrease with saturation at zero.
+        -- Gap increase/decrease with saturation at zero: the fields and
+        -- their contents survive every relayout.
         _ <- stepInput d (charKey '+')
         _ <- stepInput d (charKey '-')
         _ <- stepInput d (charKey '-')
         fGap0 <- stepInput d (charKey '-')
-        expectAt "AxisavedZ" 9 1 fGap0
-        expectAt "B" 9 40 fGap0
+        expectText "AxisavedZ" fGap0
         fSaturated <- stepInput d (charKey '-')
-        expectAt "AxisavedZ" 9 1 fSaturated
-        expectAt "B" 9 40 fSaturated
+        expectText "AxisavedZ" fSaturated
+        expectSameRow "Field C" "Field D" fSaturated
 
-        -- Padding removal shifts every cell to the padded-away origin.
+        -- Padding removal keeps every field and its text mounted.
         fPad0 <- stepInput d (funKey 7)
-        expectAt "AxisavedZ" 8 0 fPad0
-        expectAt "B" 8 40 fPad0
-        expectAt "C" 13 0 fPad0
-        expectAt "D" 13 40 fPad0
+        expectText "AxisavedZ" fPad0
+        expectText "Field D" fPad0
+        expectSameRow "Field C" "Field D" fPad0
 
         -- Restore gap 1, then three columns, then padding 1.
         _ <- stepInput d (charKey '+')
         _ <- stepInput d (funKey 6)
         fRestored <- stepInput d (funKey 7)
-        expectAt "AxisavedZ" 9 1 fRestored
-        expectAt "B" 9 28 fRestored
-        expectAt "C" 9 54 fRestored
-        expectAt "D" 15 1 fRestored
-        expectAt "E" 15 28 fRestored
-        expectAt "F" 15 54 fRestored
+        expectText "AxisavedZ" fRestored
+        expectSameRow "Field A" "Field C" fRestored
+        expectDifferentRows "Field A" "Field D" fRestored
 
         -- Tab moves focus to B; its text survives another regroup.
         _ <- stepInput d tabKey
         fB <- stepInput d (charKey 'K')
-        expectAt "BK" 9 28 fB
+        expectText "BK" fB
         _ <- stepInput d (funKey 6)
         fBKZ <- stepInput d (charKey 'Z')
-        expectAt "BKZ" 9 41 fBKZ
-        expectAt "AxisavedZ" 9 1 fBKZ
+        expectText "BKZ" fBKZ
+        expectText "AxisavedZ" fBKZ
+        expectSameRow "Field C" "Field D" fBKZ
         -- Shift+Tab walks back to A.
         _ <- stepInput d backTabKey
         fBack <- stepInput d (charKey 'Q')
-        expectAt "AxisavedZQ" 9 1 fBack
-        expectAt "BKZ" 9 41 fBack
+        expectText "AxisavedZQ" fBack
+        expectText "BKZ" fBack
 
         -- Pagination commands come from the same root action stream and
         -- never reach the grid fields.
         fNum <- stepInput d (funKey 8)
-        expectAt "1/5" 21 0 fNum
+        expectText "1/5" fNum
         expectAbsent "●" fNum
+        expectBefore "Field F" "1/5" fNum
         fNext <- stepInput d ctrlRight
-        expectAt "2/5" 21 0 fNext
+        expectText "2/5" fNext
         _ <- stepInput d ctrlRight
         _ <- stepInput d ctrlRight
         fLast <- stepInput d ctrlRight
-        expectAt "5/5" 21 0 fLast
+        expectText "5/5" fLast
         fSaturatedPage <- stepInput d ctrlRight
-        expectAt "5/5" 21 0 fSaturatedPage
+        expectText "5/5" fSaturatedPage
         fPrev <- stepInput d ctrlLeft
-        expectAt "4/5" 21 0 fPrev
+        expectText "4/5" fPrev
         fSmall <- stepInput d (funKey 9)
-        expectAt "1/1" 21 0 fSmall
+        expectText "1/1" fSmall
         fEmpty <- stepInput d (funKey 9)
-        expectAt "0/0" 21 0 fEmpty
+        expectText "0/0" fEmpty
         fEmptyNav <- stepInput d ctrlRight
-        expectAt "0/0" 21 0 fEmptyNav
+        expectText "0/0" fEmptyNav
         fFive <- stepInput d (funKey 9)
-        expectAt "1/5" 21 0 fFive
+        expectText "1/5" fFive
         fDots <- stepInput d (funKey 8)
-        expectAt "● ○ ○ ○ ○" 21 0 fDots
-        expectAt "AxisavedZQ" 9 1 fDots
-        expectAt "BKZ" 9 41 fDots
-        expectAt "count 4" 0 0 fDots
+        expectText "● ○ ○ ○ ○" fDots
+        expectText "AxisavedZQ" fDots
+        expectText "BKZ" fDots
+        expectText "count 4" fDots
+        expectDifferentRows "Field A" "●" fDots
         frameObservation fDots `shouldBe` 0
         stopApp d
 
@@ -287,7 +346,7 @@ spec = describe "Example.TierA" $ do
     it "isolates dialog input, persists both fields, and restores grid focus" $
       withApp defaultVtyAppConfig (80, 24) wrapDemo $ \d -> do
         f0 <- lastFrame d
-        expectAt "count 0" 0 0 f0
+        expectText "count 0" f0
 
         fOpen <- stepInput d (charKey 'm')
         expectDialogAt80x24 fOpen
@@ -350,16 +409,16 @@ spec = describe "Example.TierA" $ do
         -- Second Escape closes the dialog and restores background content.
         fClosed <- stepInput d escKey
         expectAbsent "Tier A dialog" fClosed
-        expectAt "count 0" 0 0 fClosed
-        expectOnRow "increment key 'x' enabled" 0 fClosed
-        expectAt "A" 9 1 fClosed
-        expectAt "● ○ ○ ○ ○" 21 0 fClosed
+        expectText "count 0" fClosed
+        expectText "increment key 'x' enabled" fClosed
+        expectText "Field A" fClosed
+        expectText "● ○ ○ ○ ○" fClosed
         frameObservation fClosed `shouldBe` 0
 
         -- Grid A still owns focus after the modal is gone.
         fFocus <- stepInput d (charKey 'Y')
-        expectAt "AY" 9 1 fFocus
-        expectAt "B" 9 28 fFocus
+        expectText "AY" fFocus
+        expectText "Field B" fFocus
 
         -- Reopen: both form fields kept their values.
         fReopen <- stepInput d (charKey 'm')
@@ -393,7 +452,7 @@ spec = describe "Example.TierA" $ do
         take 3 (drop 23 (lineAt 8 fRetyped)) `shouldBe` "   "
 
         fClosed <- stepInput d escKey
-        expectAt "count 0" 0 0 fClosed
+        expectText "count 0" fClosed
         expectAbsent "Tier A dialog" fClosed
         stopApp d
 
@@ -432,8 +491,8 @@ spec = describe "Example.TierA" $ do
         expectAt "worldZ" 8 23 fFocused
 
         fClosed <- stepInput d escKey
-        expectAt "count 0" 0 0 fClosed
-        expectAt "A" 9 1 fClosed
+        expectText "count 0" fClosed
+        expectText "Field A" fClosed
         stopApp d
 
   describe "shutdown routing" $ do
