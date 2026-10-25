@@ -143,7 +143,9 @@ solveGrid vp cols colGap rowGap pad childCount colIds rowIds =
       top = min h (_padding_top pad)
       cw = max 0 (w - left - min (w - left) (_padding_right pad))
       ch = max 0 (h - top - min (h - top) (_padding_bottom pad))
-      content = Region (_region_left vp + left) (_region_top vp + top) cw ch
+      -- Parent-pane-local coordinates: the caller's 'Core.pane' adds
+      -- the viewport origin exactly once when composing cell panes.
+      content = Region left top cw ch
       rows = 1 + ((childCount - 1) `div` cols)
       colRegions = trackRegions Orientation_Row content cols colGap cw (take cols colIds) (drop cols colIds)
       rowRegions = trackRegions Orientation_Column content rows rowGap ch (take rows rowIds) (drop rows rowIds)

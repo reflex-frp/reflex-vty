@@ -1,5 +1,6 @@
 import Test.Hspec
 
+import qualified Example.TierASpec
 import qualified Reflex.Vty.Widget.GridSpec
 import qualified Reflex.Vty.Widget.KeySpec
 import qualified Reflex.Vty.Widget.Layout.SpacingSpec
@@ -11,6 +12,7 @@ main = hspec spec
 
 spec :: Spec
 spec = do
+  Example.TierASpec.spec
   Reflex.Vty.Widget.GridSpec.spec
   Reflex.Vty.Widget.KeySpec.spec
   Reflex.Vty.Widget.Layout.SpacingSpec.spec

@@ -5,12 +5,11 @@
 -- All background controls are routed through one 'withKeyMap' at the
 -- root so dialog text entry never sees them; @q@ exits only where the
 -- background layer owns input, and Ctrl+C exits from any state.
-module Example.TierA (runDemo) where
+module Example.TierA (runDemo, demoWidget) where
 
 import Control.Monad.Fix (MonadFix)
 import Data.Functor (void)
 import qualified Data.Text as T
-import Data.Text (Text)
 import Data.Text.Zipper (fromText)
 import qualified Graphics.Vty as V
 import Reflex
@@ -19,85 +18,96 @@ import "reflex-vty" Reflex.Vty
 
 import "reflex-vty-widgets" Reflex.Vty.Widget
 
--- | One screen exercising all four Tier A groups.
+-- | The executable and regression harness share the same widget.
 runDemo :: IO ()
-runDemo =
-  mainWidget def $ do
-    enterAlternateScreen
-    quitE <- quitEvents
-    -- Raw key events for remap/enable drive the key map itself; the
-    -- pre-frame sampling in withKeyMap/keyEvents makes this loop safe.
-    remappedD <-
-      foldDyn
-        (const not)
-        False
-        =<< key (V.KChar 'r')
-    enabledD <-
-      foldDyn
-        (const not)
-        True
-        =<< key (V.KChar 'd')
-    (_rootActions, _) <-
-      withKeyMap (rootKeyMap <$> remappedD) $ do
-        initManager_ $ col $ do
-          incE <- key (V.KChar 'x')
-          incEI <- key (V.KChar 'i')
-          let enabledNowE =
-                push (\() -> do
-                  e <- sample (current enabledD)
-                  pure (if e then Just () else Nothing)) (leftmost [void incE, void incEI])
-          incCountD <- count enabledNowE
-          grout (fixed (pure 1)) $ statusRow incCountD ((\r -> if r then 'i' else 'x') <$> remappedD) enabledD
-          grout (fixed (pure 3)) $ keyHelp (rootKeyMap <$> remappedD)
-          _ <- tile flex $ gridSection =<< rawGridEvents
-          _ <- paginationRow =<< rawPagEvents
-          grout (fixed (pure 2)) $
-            text
-              ( pure
-                  ( T.pack
-                      "r remap x/i, d disable, F6 cols, +/- gap, F7 pad | Ctrl+Left/Right pages, F8 view, F9 total | m dialog, q quit"
-                  )
-              )
-    pure quitE
+runDemo = mainWidget def demoWidget
 
--- Grid and paginator commands come from raw key events (they do not
--- overlap with the remappable binding keys).
-rawGridEvents :: (Reflex t, Monad m, HasInput t m) => m (Event t RootCmd)
-rawGridEvents = do
-  f6 <- key (V.KFun 6)
-  plus <- key (V.KChar '+')
-  minus <- key (V.KChar '-')
-  f7 <- key (V.KFun 7)
-  pure $ leftmost
-    [ CmdColumns <$ void f6
-    , CmdGapUp <$ void plus
-    , CmdGapDown <$ void minus
-    , CmdPadding <$ void f7
-    ]
-
-rawPagEvents :: (Reflex t, Monad m, HasInput t m) => m (Event t RootCmd)
-rawPagEvents = do
-  cleft <- keyCombo (V.KLeft, [V.MCtrl])
-  cright <- keyCombo (V.KRight, [V.MCtrl])
-  f8 <- key (V.KFun 8)
-  f9 <- key (V.KFun 9)
-  pure $ leftmost
-    [ CmdPagePrev <$ void cleft
-    , CmdPageNext <$ void cright
-    , CmdDisplay <$ void f8
-    , CmdTotal <$ void f9
-    ]
-
--- q exits only where the background layer owns input; Ctrl+C arrives
--- as a raw key event and exits from any state.
-quitEvents :: (Reflex t, Monad m, HasInput t m) => m (Event t ())
-quitEvents = do
-  q <- key (V.KChar 'q')
-  i <- input
-  let ctrlC = fforMaybe i $ \case
+demoWidget
+  :: ( MonadVtyApp t m, MonadNodeId m, HasImageWriter t m
+     , HasDisplayRegion t m, HasFocusReader t m, HasInput t m
+     , HasTheme t m, HasColorProfile t m, HasCursor t m
+     , HasScreenMode t m
+     )
+  => m (Event t ())
+demoWidget = do
+  enterAlternateScreen
+  events <- input
+  let ctrlC = fforMaybe events $ \case
         V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
         _ -> Nothing
-  pure (leftmost [void q, ctrlC])
+  rec requested <- holdDyn False $ leftmost
+        [False <$ _overlay_dismissed outer, True <$ command CmdOpenDialog rootActions]
+      outer <- dialog
+        (def { _overlayConfig_size = pure (52,12)
+             , _overlayConfig_position = pure OverlayCentered
+             , _overlayConfig_backdrop = pure (SolidBackdrop def)
+             , _overlayConfig_childActive = nestedVisible })
+        (pure "Tier A dialog") requested
+        (do
+          rec remapped <- foldDyn (const not) False (command CmdRemap actions)
+              enabled <- foldDyn (const not) True (command CmdToggleEnabled actions)
+              increments <- count (command CmdIncrement actions)
+              let liveMap = rootKeyMap <$> remapped <*> enabled
+              (actions, ()) <- withKeyMap liveMap $ col $ do
+                grout (fixed (pure 1)) $
+                  statusRow increments ((\r -> if r then 'i' else 'x') <$> remapped) enabled
+                grout (fixed (pure 7)) $ void $
+                  rowWithSpacing (def { _spacingConfig_gap = pure 2 })
+                    [ grout flex $ keyHelp (KeyMap . take 7 . _keyMap_bindings <$> liveMap)
+                    , grout flex $ keyHelp (KeyMap . drop 7 . _keyMap_bindings <$> liveMap)
+                    ]
+                grout flex $ gridSection actions
+                grout (fixed (pure 1)) $ paginationRow actions
+                grout (fixed (pure 2)) $
+                  text (pure "Tab/Shift+Tab: field focus | m: dialog\nq: quit background only | Ctrl+C: quit anywhere")
+          pure actions)
+        dialogBody
+      let rootActions = _overlay_background outer
+          nestedVisible = _overlay_foreground outer
+  pure $ leftmost [ctrlC, command CmdQuit rootActions]
+
+command :: Reflex t => RootCmd -> Event t RootCmd -> Event t ()
+command cmd = void . ffilter (== cmd)
+
+dialogBody
+  :: ( Reflex t, MonadFix m, MonadHold t m, MonadNodeId m, PostBuild t m
+     , HasInput t m, HasFocusReader t m, HasDisplayRegion t m
+     , HasImageWriter t m, HasTheme t m, HasCursor t m
+     )
+  => m (Dynamic t Bool)
+dialogBody = do
+  rec requested <- holdDyn False $ leftmost
+        [False <$ _overlay_dismissed popup, True <$ openPopup]
+      popup <- popover
+        (defaultPopoverConfig { _overlayConfig_size = pure (28,4) })
+        anchor requested
+        (withKeyMap
+          (pure (KeyMap [KeyBinding () [(V.KChar 'p', [])] "open popover" True]))
+          dialogForm)
+        (grout flex $ text (pure "Nested popover\nEscape closes this popup"))
+      let (openPopup, anchor) = _overlay_background popup
+  pure (_overlay_visible popup)
+
+dialogForm
+  :: ( Reflex t, MonadFix m, MonadHold t m, PostBuild t m
+     , HasInput t m, HasFocusReader t m, HasDisplayRegion t m
+     , HasImageWriter t m, HasTheme t m, HasFocus t m, HasLayout t m
+     )
+  => m (Dynamic t Region)
+dialogForm = col $ do
+  (firstId, _) <- axis (pure Orientation_Row) (fixed (pure 1)) $ do
+    grout (fixed (pure 8)) $ text (pure "First:")
+    tile' flex (textInput def)
+  void $ axis (pure Orientation_Row) (fixed (pure 1)) $ do
+    grout (fixed (pure 8)) $ text (pure "Second:")
+    tile' flex (textInput def)
+  pb <- getPostBuild
+  requestFocus (Refocus_Id firstId <$ pb)
+  anchor <- region (fixed (pure 1))
+  pane anchor (pure True) $ text (pure "p: open popover")
+  grout (fixed (pure 1)) $ text (pure "Tab/Shift+Tab: switch field")
+  grout (fixed (pure 1)) $ text (pure "Escape: close dialog")
+  pure anchor
 
 data RootCmd
   = CmdIncrement
@@ -111,11 +121,13 @@ data RootCmd
   | CmdPageNext
   | CmdDisplay
   | CmdTotal
+  | CmdOpenDialog
+  | CmdQuit
   deriving (Eq, Show)
 
-rootKeyMap :: Bool -> KeyMap RootCmd
-rootKeyMap remapped =
-  KeyMap
+rootKeyMap :: Bool -> Bool -> KeyMap RootCmd
+rootKeyMap remapped enabled =
+  setBindingEnabled CmdIncrement enabled $ KeyMap
     [ KeyBinding CmdIncrement [(V.KChar (if remapped then 'i' else 'x'), [])] "increment counter" True
     , KeyBinding CmdRemap [(V.KChar 'r', [])] "remap increment x/i" True
     , KeyBinding CmdToggleEnabled [(V.KChar 'd', [])] "enable/disable increment" True
@@ -127,6 +139,8 @@ rootKeyMap remapped =
     , KeyBinding CmdPageNext [(V.KRight, [V.MCtrl])] "next page" True
     , KeyBinding CmdDisplay [(V.KFun 8, [])] "dots/numeric" True
     , KeyBinding CmdTotal [(V.KFun 9, [])] "cycle total" True
+    , KeyBinding CmdOpenDialog [(V.KChar 'm', [])] "open dialog" True
+    , KeyBinding CmdQuit [(V.KChar 'q', [])] "quit" True
     ]
 
 statusRow
@@ -150,12 +164,12 @@ statusRow countD actionD enabledD =
     )
 
 gridSection
-  :: ( Reflex t, MonadHold t m, MonadFix m, MonadNodeId m
+  :: ( Reflex t, MonadHold t m, MonadFix m, MonadNodeId m, PostBuild t m
      , HasInput t m, HasImageWriter t m, HasDisplayRegion t m
      , HasFocusReader t m, HasTheme t m, HasFocus t m, HasLayout t m
      )
   => Event t RootCmd
-  -> m (Dynamic t Text)
+  -> m ()
 gridSection cmdE = do
   let colsE = fforMaybe cmdE $ \case
         CmdColumns -> Just ()
@@ -183,13 +197,15 @@ gridSection cmdE = do
           , _gridConfig_rowGap = gapD
           , _gridConfig_padding = (\p -> Padding p p p p) <$> padD
           }
-  tabNavigation
   results <-
     grid cfg $
-      [ tile flex (textInput def {_textInputConfig_initialValue = fromText (T.pack label)})
+      [ tile' flex (textInput def {_textInputConfig_initialValue = fromText (T.pack label)})
       | label <- ["A", "B", "C", "D", "E", "F"]
       ]
-  pure (T.concat <$> sequenceA (_textInput_value <$> results))
+  pb <- getPostBuild
+  case results of
+    (firstId, _) : _ -> requestFocus (Refocus_Id firstId <$ pb)
+    [] -> pure ()
 
 paginationRow
   :: ( Reflex t, MonadHold t m, MonadFix m
@@ -208,15 +224,20 @@ paginationRow cmdE = do
   totalD <- foldDyn (const cycleTotal) 23 totalE
   -- Apply the pre-frame command through movePage and feed the resulting
   -- index back as an explicit set request.
-  _stD <-
-    paginator
-      def
-        { _paginatorConfig_totalItems = totalD
-        , _paginatorConfig_pageSize = pure 5
-        , _paginatorConfig_keys = pure paginatorKeys
-        , _paginatorConfig_display = current dispD
-        , _paginatorConfig_initialPage = 0
-        }
+  let navCommandE = fforMaybe cmdE $ \case
+        CmdPagePrev -> Just PagePrevious
+        CmdPageNext -> Just PageNext
+        _ -> Nothing
+  rec stateD <- paginator
+        def
+          { _paginatorConfig_totalItems = totalD
+          , _paginatorConfig_pageSize = pure 5
+          , _paginatorConfig_keys = pure (KeyMap [])
+          , _paginatorConfig_setPage =
+              attachWith (\st cmd -> pageIndex (movePage cmd st)) (current stateD) navCommandE
+          , _paginatorConfig_display = current dispD
+          , _paginatorConfig_initialPage = 0
+          }
   pure ()
   where
     toggleDisplay d = case d of
@@ -227,11 +248,3 @@ paginationRow cmdE = do
       3 -> 0
       _ -> 23
 
-paginatorKeys :: KeyMap PageCommand
-paginatorKeys =
-  KeyMap
-    [ KeyBinding PagePrevious [(V.KLeft, [V.MCtrl]), (V.KPageUp, [])] "previous page" True
-    , KeyBinding PageNext [(V.KRight, [V.MCtrl]), (V.KPageDown, [])] "next page" True
-    , KeyBinding PageFirst [(V.KHome, [])] "first page" True
-    , KeyBinding PageLast [(V.KEnd, [])] "last page" True
-    ]

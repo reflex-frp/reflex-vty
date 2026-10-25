@@ -9,13 +9,12 @@ import Test.Hspec
 import Reflex.Vty.Host (defaultVtyAppConfig)
 import Reflex.Vty.Test.AppHarness
 import Reflex.Vty.Test.Snapshot (Grid (..), RenderSpan (..), gridHeight, gridRows)
+import Data.Text.Zipper (fromText)
 import Reflex.Vty.Widget.Grid
 import Reflex.Vty.Style (Padding (..))
 import Reflex.Vty.Widget.Input.Text
 import "reflex-vty" Reflex.Vty.Widget
 import Reflex.Vty.Widget.Layout
-import "reflex-vty" Reflex.Vty.Widget
-import Reflex.Vty.Widget.Layout.Spacing
 
 lastFrame :: AppDriver c o -> IO (Frame o)
 lastFrame driver = do
@@ -49,6 +48,39 @@ spec = describe "Reflex.Vty.Widget.Grid" $ do
       _ <- stepCommand driver GridTwoColumns
       f2 <- stepInput driver (V.EvKey (V.KChar 'b') [])
       frameObservation f2 `shouldBe` "ab"
+      stopApp driver
+
+  it "nested pane renders six cells at parent-local origins and targets mouse clicks" $
+    withApp defaultVtyAppConfig (20, 12) nestedGridApp $ \driver -> do
+      f0 <- lastFrame driver
+      -- Parent pane Region 3 2 14 8, grid gaps/padding 1: cells sit at
+      -- parent-local (1,1)/(6,1)/(10,1)/(1,5)/(6,5)/(10,5), i.e. the
+      -- absolute origins below. The parent origin must be applied
+      -- exactly once (by pane), so cell coordinates stay local.
+      charAt 4 3 (frameGrid f0) `shouldBe` Just 'A'
+      charAt 9 3 (frameGrid f0) `shouldBe` Just 'B'
+      charAt 13 3 (frameGrid f0) `shouldBe` Just 'C'
+      charAt 4 7 (frameGrid f0) `shouldBe` Just 'D'
+      charAt 9 7 (frameGrid f0) `shouldBe` Just 'E'
+      charAt 13 7 (frameGrid f0) `shouldBe` Just 'F'
+      -- Only the blank cell may appear at the doubled-offset position
+      -- a parent-relative + viewport-relative mix would produce.
+      charAt 7 5 (frameGrid f0) `shouldBe` Just ' '
+      -- A click inside cell E must reach E's field through the
+      -- translation chain, not be lost by a double-applied origin.
+      _ <- stepInput driver (V.EvMouseDown 10 8 V.BLeft [])
+      _ <- stepInput driver (V.EvMouseUp 10 8 (Just V.BLeft))
+      fz <- stepInput driver (V.EvKey (V.KChar 'z') [])
+      frameObservation fz `shouldBe` "ABCDEzF"
+      charAt 9 7 (frameGrid fz) `shouldBe` Just 'E'
+      charAt 10 7 (frameGrid fz) `shouldBe` Just 'z'
+      -- Same for bottom-row cell D.
+      _ <- stepInput driver (V.EvMouseDown 5 8 V.BLeft [])
+      _ <- stepInput driver (V.EvMouseUp 5 8 (Just V.BLeft))
+      fy <- stepInput driver (V.EvKey (V.KChar 'y') [])
+      frameObservation fy `shouldBe` "ABCDyEzF"
+      charAt 4 7 (frameGrid fy) `shouldBe` Just 'D'
+      charAt 5 7 (frameGrid fy) `shouldBe` Just 'y'
       stopApp driver
 
 -- | Six labeled flex cells in a three-column grid with one-cell gaps
@@ -96,3 +128,36 @@ gridRowText :: Int -> Grid -> String
 gridRowText y g
   | y < 0 || y >= gridHeight g = ""
   | otherwise = T.unpack . T.concat . map renderSpanText $ gridRows g !! y
+
+-- | Character at absolute screen coordinates, if any.
+charAt :: Int -> Int -> Grid -> Maybe Char
+charAt x y g
+  | y < 0 || y >= gridHeight g = Nothing
+  | otherwise = case drop x (T.unpack (T.concat (map renderSpanText (gridRows g !! y)))) of
+      (c : _) -> Just c
+      [] -> Nothing
+
+-- | Six labeled text inputs in a three-column grid with one-cell gaps
+-- and padding 1, mounted in a parent pane at Region 3 2 14 8 of a
+-- (20,12) terminal. The observation is the concatenation of the six
+-- field values in child order, so a keystroke reveals which cell
+-- received it.
+nestedGridApp :: TestApp () T.Text
+nestedGridApp _cmdEv = do
+  let cfg =
+        GridConfig
+          { _gridConfig_columns = pure 3
+          , _gridConfig_columnGap = pure 1
+          , _gridConfig_rowGap = pure 1
+          , _gridConfig_padding = pure (Padding 1 1 1 1)
+          }
+  initManager_ $ do
+    tabNavigation
+    pane (pure (Region 3 2 14 8)) (pure True) $
+      grout flex $ do
+        results <- grid cfg (map (tile flex . labeledInput) "ABCDEF")
+        let values = foldr (\r acc -> liftA2 (<>) (_textInput_value r) acc) (pure "") results
+        pure (values, never)
+  where
+    labeledInput c =
+      textInput def {_textInputConfig_initialValue = fromText (T.singleton c)}

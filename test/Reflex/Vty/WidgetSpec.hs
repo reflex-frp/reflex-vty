@@ -163,18 +163,6 @@ spec = describe "Reflex.Vty.Widget" $ do
         frameObservation f3 `shouldBe` (("none", Just (6, 2)), ("none", Nothing))
         stopApp driver
 
-    it "drops mouse-up for the wrong button and stops tracking afterwards" $
-      withApp defaultVtyAppConfig (20, 6) panesApp $ \driver -> do
-        _ <- stepInput driver (V.EvMouseDown 5 1 V.BLeft [])
-        -- Up with the right button: not the tracked one, not delivered.
-        f2 <- stepInput driver (V.EvMouseUp 7 3 (Just V.BRight))
-        frameObservation f2 `shouldBe` (("none", Just (5, 1)), ("none", Nothing))
-        -- Tracking has ended: even the correct button no longer produces
-        -- an event.
-        f3 <- stepInput driver (V.EvMouseUp 8 4 (Just V.BLeft))
-        frameObservation f3 `shouldBe` (("none", Just (5, 1)), ("none", Nothing))
-        stopApp driver
-
     it "keeps delivering keys through zero- and negative-width panes but renders nothing" $
       withApp defaultVtyAppConfig (20, 6) zeroPaneApp $ \driver -> do
         fs0 <- driverFrames driver

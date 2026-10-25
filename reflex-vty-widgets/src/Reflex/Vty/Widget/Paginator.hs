@@ -15,6 +15,7 @@ module Reflex.Vty.Widget.Paginator
   , defaultPaginatorKeyMap
   ) where
 
+import Control.Applicative ((<|>))
 import Control.Monad.Fix (MonadFix)
 import Data.Default (Default (..))
 import qualified Data.Map.Strict as Map
@@ -167,24 +168,16 @@ paginator cfg = do
       -- Explicit set wins over keyboard command in the same frame.
       setE = PageSet <$> _paginatorConfig_setPage cfg
       cmdE = leftmost [setE, keyActions]
-      -- Both a parameter update and a command in one frame: parameters
-      -- first (normalize), then the command.
       -- Both a parameter update and a command can fire in the same
-      -- frame; combine them with a prompt sampling of the command.
+      -- frame; merge the optional halves so neither side is discarded.
       frameE =
-        attachWithMaybe
-          ( \mc e ->
-              let cmd = case mc of
-                    Just c -> Just c
-                    Nothing -> Nothing
-               in case e of
-                    Just p -> Just (FrameUpdate (Just p) cmd)
-                    Nothing -> fmap (FrameUpdate Nothing . Just) cmd
-          )
-          (current (pure Nothing))
-          (leftmost [Just <$> paramE, Nothing <$ cmdE])
-      _ = ()
-  stateD <- foldDyn applyFrame (makePageState 0 10 (_paginatorConfig_initialPage cfg)) frameE
+        mergeWith
+          (\(FrameUpdate mp1 mc1) (FrameUpdate mp2 mc2) -> FrameUpdate (mp1 <|> mp2) (mc1 <|> mc2))
+          [ (\p -> FrameUpdate (Just p) Nothing) <$> paramE
+          , (\c -> FrameUpdate Nothing (Just c)) <$> cmdE
+          ]
+  (total0, size0) <- sample (current paramPairs)
+  stateD <- foldDyn applyFrame (makePageState total0 size0 (_paginatorConfig_initialPage cfg)) frameE
   -- Render the one-row indicator.
   vpW <- Core.viewportWidth
   vpH <- Core.viewportHeight
@@ -215,7 +208,10 @@ paginator cfg = do
                 d -> d
            in case disp' of
                 PaginatorNumeric ->
-                  let row = T.pack (show (pageIndex st + 1) ++ "/" ++ show (pageCount st))
+                  let row =
+                        if pageCount st == 0
+                          then "0/0"
+                          else T.pack (show (pageIndex st + 1) ++ "/" ++ show (pageCount st))
                    in [V.text' act (T.take wd row)]
                 PaginatorDots ->
                   [ V.crop wd ht $ V.horizCat $

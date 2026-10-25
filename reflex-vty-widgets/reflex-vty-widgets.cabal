@@ -77,10 +77,12 @@ executable widgets-demo
 test-suite reflex-vty-widgets-test
   import: library-settings
   type: exitcode-stdio-1.0
-  hs-source-dirs: test test-support
+  hs-source-dirs: test test-support app
   main-is: Spec.hs
   ghc-options: -threaded -Wall
   other-modules:
+    Example.TierA
+    Example.TierASpec
     Reflex.Vty.Test.AppHarness
     Reflex.Vty.Test.Snapshot
     Reflex.Vty.Widget.KeySpec

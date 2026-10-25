@@ -31,7 +31,6 @@ import Control.Monad.Fix (MonadFix)
 import Data.Default (Default (..))
 import Data.Semigroup (Last (..))
 import Data.Text (Text)
-import qualified Data.Text as T
 import Data.Text.Zipper (TextAlignment (..))
 import qualified Data.Map.Strict as Map
 import qualified Graphics.Vty as V
@@ -43,7 +42,6 @@ import Reflex.Vty.Canvas
   ( Canvas
   , blankCanvas
   , canvasToImage
-  , imageToCanvas
   , placeCanvas
   )
 import Reflex.Vty.Style (Style, applyAttr)
@@ -197,158 +195,155 @@ runOverlay mTitle cfg requestedD bgChild fgChild = do
   vp <- Core.askViewport
   inp <- Core.input
   pb <- getPostBuild
+  ambFocD <- Core.focus
+  let fgRectD = fitRect <$> vp <*> _overlayConfig_size cfg <*> _overlayConfig_position cfg
+      bodyRectD = ffor fgRectD $ \(Region _ _ w h) -> case mTitle of
+        Nothing -> Region 0 0 w h
+        Just _ -> Region (min 1 w) (min 1 h) (max 0 (w - 2)) (max 0 (h - 2))
+      bgAreaD = hasArea <$> vp
+      fgAreaD = hasArea <$> bodyRectD
 
-  -- Geometry: fitted foreground rectangle.
-  let fgRectD =
-        fitRect
-          <$> vp
-          <*> _overlayConfig_size cfg
-          <*> _overlayConfig_position cfg
-      fitRect :: Region -> (Int, Int) -> OverlayPosition -> Region
-      fitRect vp' (rw, rh) pos =
-        let w = max 0 (min (Core._region_width vp') rw)
-            h = max 0 (min (Core._region_height vp') rh)
-            slackW = Core._region_width vp' - w
-            slackH = Core._region_height vp' - h
-            centered = (Core._region_left vp' + slackW `div` 2, Core._region_top vp' + slackH `div` 2)
-            (x0, y0) = case pos of
-              OverlayCentered -> centered
-              OverlayAt x y ->
-                ( max (Core._region_left vp') (min (Core._region_left vp' + slackW) x)
-                , max (Core._region_top vp') (min (Core._region_top vp' + slackH) y)
-                )
-              OverlayBelow anchor ->
-                let belowY = Core._region_top anchor + Core._region_height anchor
-                    aboveY = Core._region_top anchor - h
-                    yBelow =
-                      if h <= Core._region_height vp' - belowY
-                        then belowY
-                        else max (Core._region_top vp') aboveY
-                    x' =
-                      max (Core._region_left vp')
-                        (min (Core._region_left vp' + slackW) (Core._region_left anchor))
-                 in (x', yBelow)
-         in Region x0 y0 w h
-
-  -- Gesture deferral: track the current non-wheel button at the
-  -- boundary. Requested visibility applies only when no ordinary
-  -- mouse-button gesture is in progress; wheel input does not hold
-  -- changes. The final release is delivered to the currently visible
-  -- layer (input routing uses pre-frame visibility), then the latest
-  -- requested visibility applies in the settled frame.
-  let stepGesture e _ = case e of
-        V.EvMouseDown _ _ btn _
+  -- The first ordinary button owns the gesture. Neither wheel activity
+  -- nor another button's release can settle it.
+  let stepGesture e old = case (old, e) of
+        (WaitingForInput, V.EvMouseDown _ _ btn _)
           | btn /= V.BScrollUp && btn /= V.BScrollDown -> Just (Tracking btn)
-        V.EvMouseUp _ _ _ -> Just WaitingForInput
+        (Tracking btn, V.EvMouseUp _ _ released)
+          | released == Nothing || released == Just btn -> Just WaitingForInput
         _ -> Nothing
   gestureD <- foldDynMaybe stepGesture WaitingForInput inp
-  let settled = (== WaitingForInput) <$> gestureD
-  visibleD <- foldDyn
-    (\(req, ok) old -> if ok then req else old)
-    False
-    (attachWith (\ok req -> (req, ok)) (current settled) (updated requestedD))
+  initialVisible <- sample (current requestedD)
+  visibleD <- foldDynMaybe
+    (\(requested, gesture) old ->
+      if gesture == WaitingForInput && requested /= old then Just requested else Nothing)
+    initialVisible
+    (updated (zipDyn requestedD gestureD))
 
-  -- Dismiss detection at the boundary. Pre-frame sampling of actual
-  -- visibility, child-active, and ambient focus: the Escape that
-  -- closes an inner overlay does not also dismiss this one, and the
-  -- opener is not replayed.
-  ambFocD <- Core.focus
-  let dismissKeyE =
-        attachWithMaybe
-          ( \(tbl, vis, childActive, ambientFocus) e -> case e of
-              V.EvKey k mods
-                | vis && not childActive && ambientFocus ->
-                    fmap (const OverlayDismissKey) (Map.lookup (k, mods) tbl)
-              _ -> Nothing
-          )
-          ( (,,,)
-              <$> (current (dispatchTable <$> _overlayConfig_dismissKeys cfg))
-              <*> current visibleD
-              <*> current (_overlayConfig_childActive cfg)
-              <*> current ambFocD
-          )
-          inp
-      outsideE =
-        if _overlayConfig_dismissOnOutsideClick cfg
-          then
-            attachPromptlyDynWithMaybe
-              ( \fgRect e -> case e of
-                  V.EvMouseDown x y V.BLeft _
-                    | x < Core._region_left fgRect
-                        || y < Core._region_top fgRect
-                        || x >= Core._region_left fgRect + Core._region_width fgRect
-                        || y >= Core._region_top fgRect + Core._region_height fgRect ->
-                        Just OverlayDismissOutside
-                  _ -> Nothing
-              )
-              fgRectD
-              inp
-          else never
+  -- All boundary decisions use pre-frame values. An opener or closing
+  -- release belongs to the old layer, never the newly active one.
+  let eligible = (&&) <$> current visibleD
+        <*> ((&&) <$> (not <$> current (_overlayConfig_childActive cfg)) <*> current ambFocD)
+      dismissKeyE = attachWithMaybe
+        (\(ok, tbl) e -> case e of
+          V.EvKey k mods | ok -> OverlayDismissKey <$ Map.lookup (k, mods) tbl
+          _ -> Nothing)
+        ((,) <$> eligible <*> current (dispatchTable <$> _overlayConfig_dismissKeys cfg))
+        inp
+      outsideE
+        | _overlayConfig_dismissOnOutsideClick cfg = attachWithMaybe
+            (\(ok, r) e -> case e of
+              V.EvMouseDown x y V.BLeft _
+                | ok && not (Core.withinRegion r x y) -> Just OverlayDismissOutside
+              _ -> Nothing)
+            ((,) <$> eligible <*> current fgRectD)
+            inp
+        | otherwise = never
       dismissed = leftmost [dismissKeyE, outsideE]
-
-  -- Route input: while actually visible, the background gets no user
-  -- input at all (keyboard, paste, scroll, clicks); the foreground
-  -- gets everything, routed through its fitted pane. Terminal
-  -- focus/resize notifications reach both layers in both states; they
-  -- do not represent user activation. Visibility decisions use the
-  -- pre-frame value; a dismissal in this frame does not also expose
-  -- the background in the same frame.
-  let routeInput vis e = case e of
+      routeInput active e = case e of
         V.EvResize {} -> Just e
         V.EvGainedFocus -> Just e
         V.EvLostFocus -> Just e
-        _ -> if vis then Just e else Nothing
-      bgRoute = attachWithMaybe (\vis ev -> routeInput vis ev) (current visibleD) inp
-      fgRoute = inp
-  (bgResult, bgImages, bgCursor) <- runLayer bgRoute bgChild
-  (fgResult, fgImages, fgCursor) <- runLayer inp fgChild
+        _ -> if active then Just e else Nothing
+      bgRoute = attachWithMaybe (routeInput . not) (current visibleD) inp
+      fgRoute = difference (attachWithMaybe routeInput (current visibleD) inp) dismissed
+      bgActiveD = (&&) <$> (not <$> visibleD) <*> bgAreaD
+      fgActiveD = (&&) <$> visibleD <*> fgAreaD
+  (bgResult, bgImages, bgCursor) <-
+    Core.localFocus (zipDynWith (&&) bgActiveD) $
+      runLayer bgRoute (gateArea bgAreaD bgChild)
+  (fgResult, fgImages, fgCursor) <-
+    Core.localFocus (zipDynWith (&&) fgActiveD) $
+      runLayer fgRoute $
+        Core.pane fgRectD (pure True) $ do
+          case mTitle of
+            Nothing -> Core.blank
+            Just title -> do
+              let frameArea = (\r -> _region_width r >= 2 && _region_height r >= 2) <$> fgRectD
+              Core.mapImages (liftA2 (\ok images -> if ok then images else []) (current frameArea)) $
+                boxTitle (pure TextAlignment_Center) (pure singleBoxStyle) title Core.blank
+          Core.pane bodyRectD (pure True) $ gateArea fgAreaD fgChild
 
-  -- Emit images: background, then backdrop, then panel backing, then
-  -- foreground. Later emissions are on top because the core reverses
-  -- layers for the final picture.
-  vpW <- Core.viewportWidth
-  vpH <- Core.viewportHeight
-  let backdropB = _overlayConfig_backdrop cfg
-      panelB = _overlayConfig_panelStyle cfg
-      composeImages vis vw vh bgIm fgIm bd panel =
-        if not vis
-          then bgIm
-          else
-            bgIm
-              ++ backdropImages vw vh bd
-              ++ panelImages vw vh panel
-              ++ fgIm
+  -- Capture happens inside runLayer, outside the panel pane, so images
+  -- have their local panel translation and cursors are already absolute.
   Core.tellImages $
-    composeImages
-      <$> current visibleD
-      <*> current vpW
-      <*> current vpH
-      <*> bgImages
-      <*> fgImages
-      <*> backdropB
-      <*> panelB
+    (\vis viewport rect bgIm fgIm backdrop panel ->
+      if not vis then bgIm else
+        bgIm ++ backdropImages (_region_width viewport) (_region_height viewport) backdrop
+          ++ panelImages rect panel ++ fgIm)
+      <$> current visibleD <*> current vp <*> current fgRectD
+      <*> bgImages <*> fgImages
+      <*> _overlayConfig_backdrop cfg <*> _overlayConfig_panelStyle cfg
 
-  -- Cursor: emit only the active layer's state, including visibility
-  -- transitions, so closing restores the background cursor even if it
-  -- emitted no new event.
-  pure
-    Overlay
-      { _overlay_background = bgResult
-      , _overlay_foreground = fgResult
-      , _overlay_visible = visibleD
-      , _overlay_dismissed = dismissed
-      }
+  bgCursorD <- holdDyn Core.defaultCursorState (getLast <$> bgCursor)
+  fgCursorD <- holdDyn Core.defaultCursorState (getLast <$> fgCursor)
+  let activeAreaD = zipDynWith (\vis (bg, fg) -> if vis then fg else bg)
+        visibleD (zipDyn bgAreaD fgAreaD)
+      selectedD =
+        (\vis area bg fg ->
+          let selected = if vis then fg else bg
+          in if area then selected else selected { Core._cursorState_visibility = Core.CursorHidden })
+          <$> visibleD <*> activeAreaD <*> bgCursorD <*> fgCursorD
+      cursorTrigger = leftmost
+        [ pb
+        , () <$ updated visibleD
+        , () <$ updated activeAreaD
+        , () <$ gate (current (not <$> visibleD)) bgCursor
+        , () <$ gate (current visibleD) fgCursor
+        ]
+  Core.tellCursor $ tagPromptlyDyn selectedD cursorTrigger
+  pure Overlay
+    { _overlay_background = bgResult
+    , _overlay_foreground = fgResult
+    , _overlay_visible = visibleD
+    , _overlay_dismissed = dismissed
+    }
   where
-    backdropImages :: Int -> Int -> OverlayBackdrop -> [V.Image]
+    hasArea r = _region_width r > 0 && _region_height r > 0
+
+    -- Retain notifications and completion of captured gestures even when
+    -- the drawable body has shrunk to zero. Keep the child mounted.
+    gateArea areaD child = do
+      events <- Core.input
+      let gated = attachWithMaybe
+            (\area e -> case e of
+              V.EvKey {} -> if area then Just e else Nothing
+              V.EvPaste {} -> if area then Just e else Nothing
+              V.EvMouseDown {} -> if area then Just e else Nothing
+              _ -> Just e)
+            (current areaD) events
+      Core.localInput (const gated) child
+
     backdropImages vw vh bd = case bd of
       NoBackdrop -> []
       SolidBackdrop st ->
-        [V.charFill (applyAttr st V.defAttr) ' ' vw vh]
+        [V.charFill (applyAttr st V.defAttr) ' ' (max 0 vw) (max 0 vh)]
       CanvasBackdrop c ->
-        [canvasToImage (placeCanvas 0 0 c (blankCanvas vw vh))]
+        [canvasToImage (placeCanvas 0 0 c (blankCanvas (max 0 vw) (max 0 vh)))]
 
-    panelImages :: Int -> Int -> Maybe Style -> [V.Image]
-    panelImages _ _ _ = []
+    panelImages _ Nothing = []
+    panelImages rect (Just style)
+      | hasArea rect =
+          [Core.withinImage rect $
+            V.charFill (applyAttr style V.defAttr) ' ' (_region_width rect) (_region_height rect)]
+      | otherwise = []
+
+-- | Fitted coordinates are local to the caller; pane applies its origin.
+fitRect :: Region -> (Int, Int) -> OverlayPosition -> Region
+fitRect viewport (rw, rh) position =
+  let vw = max 0 (_region_width viewport)
+      vh = max 0 (_region_height viewport)
+      w = max 0 (min vw rw)
+      h = max 0 (min vh rh)
+      slackW = vw - w
+      slackH = vh - h
+      clamp hi = max 0 . min hi
+      (x, y) = case position of
+        OverlayCentered -> (slackW `div` 2, slackH `div` 2)
+        OverlayAt px py -> (px, py)
+        OverlayBelow anchor ->
+          let below = _region_top anchor + _region_height anchor
+          in (_region_left anchor, if below + h <= vh then below else _region_top anchor - h)
+  in Region (clamp slackW x) (clamp slackH y) w h
 
 -- | Run one overlay layer exactly once: a separate 'Core.Input' with
 -- its own focus/layout manager (including 'tabNavigation'), capturing

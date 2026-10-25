@@ -301,6 +301,7 @@ inputInFocusedRegion = do
             trck@(Tracking _) -> Just (trck, Nothing)
             _ -> Just (WaitingForInput, if withinRegion reg x y then Just (V.EvMouseDown (x - l) (y - t) btn m) else Nothing)
           -- only do tracking for l/m/r mouse buttons
+          V.EvMouseDown _ _ btn _ | Tracking held <- tracking, held /= btn -> Nothing
           V.EvMouseDown x y btn m ->
             if tracking == Tracking btn || (tracking == WaitingForInput && withinRegion reg x y)
               then Just (Tracking btn, Just $ V.EvMouseDown (x - l) (y - t) btn m)
@@ -309,13 +310,12 @@ inputInFocusedRegion = do
             Nothing -> case tracking of
               Tracking _ -> Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
               _ -> Just (WaitingForInput, Nothing)
-            Just btn ->
-              if tracking == Tracking btn
-                -- NOTE we only report EvMouseUp for the button we are tracking
-                -- vty has mouse buttons override others (seems to be based on ordering of Button) when multiple are pressed.
-                -- so it IS possible for child widget to miss out on a 'EvMouseUp' event with this current implementation
-                then Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
-                else Just (WaitingForInput, Nothing)
+            Just btn -> case tracking of
+              Tracking held
+                | held == btn -> Just (WaitingForInput, Just $ V.EvMouseUp (x - l) (y - t) mbtn)
+                -- Another button cannot release this pane's captured gesture.
+                | otherwise -> Nothing
+              _ -> Just (WaitingForInput, Nothing)
           _ -> Just (tracking, Just e)
   dynInputEvTracking <- foldDynMaybeM trackMouse (WaitingForInput, Nothing) $ inp
   return (fmapMaybe snd $ updated dynInputEvTracking)
