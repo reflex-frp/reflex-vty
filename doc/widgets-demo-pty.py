@@ -24,6 +24,7 @@ The child's exit status is propagated.
 
 import errno
 import fcntl
+import math
 import os
 import pty
 import selectors
@@ -97,9 +98,19 @@ BG = b"\x1b[48;2;30;31;41m"
 TEXT = BG + b"\x1b[38;2;248;248;242m"
 SECONDARY = BG + b"\x1b[38;2;187;187;187m"
 DIM = BG + b"\x1b[38;2;98;114;164m"
-BADGE = b"\x1b[48;2;255;121;198m\x1b[38;2;30;31;41m"
 SAVE_CURSOR = b"\x1b7"
 RESTORE_CURSOR = b"\x1b8"
+
+# One gentle brightening per scene, then a stable badge. No blink or reflow.
+PULSE_INTERVAL = 0.05
+PULSE_FRAMES = 20
+
+
+def badge_style(frame):
+    amount = math.sin(math.pi * min(frame, PULSE_FRAMES) / PULSE_FRAMES)
+    green = round(121 + 100 * amount)
+    blue = round(198 + 40 * amount)
+    return f"\x1b[1;48;2;255;{green};{blue}m\x1b[38;2;30;31;41m".encode("ascii")
 
 
 def window_size():
@@ -141,7 +152,7 @@ def styled_line(row, cols, segments):
     return b"".join(parts)
 
 
-def render_band(cols, rows, child_rows, scene):
+def render_band(cols, rows, child_rows, scene, pulse_frame):
     """Three rows below the child viewport: rule, badge + title, explanation.
 
     The scroll region is set while the cursor is saved, so child scrolling can
@@ -158,7 +169,8 @@ def render_band(cols, rows, child_rows, scene):
             styled_line(
                 top + 1,
                 cols,
-                [(BG, "  "), (BADGE, f" {badge} "), (TEXT, f"  {title}")],
+                [(BG, "  "), (badge_style(pulse_frame), f" {badge} "),
+                 (b"\x1b[22m" + TEXT, f"  {title}")],
             ),
             styled_line(top + 2, cols, [(BG, "  "), (SECONDARY, explanation)]),
             # Leave a defined pen state for terminals whose DECRC restores only
@@ -343,6 +355,8 @@ def forward(executable):
             "rows": outer_rows,
             "child_rows": outer_rows - band_rows,
             "exited": False,
+            "pulse_start": None,
+            "pulse_frame": -1,
         }
 
         def band_if_safe():
@@ -354,14 +368,20 @@ def forward(executable):
                 and child_stream.ground()
                 and status is None
             ):
+                if state["pulse_start"] is None:
+                    state["pulse_start"] = time.monotonic()
+                frame = min(PULSE_FRAMES, int(
+                    (time.monotonic() - state["pulse_start"]) / PULSE_INTERVAL))
                 to_terminal.extend(
                     render_band(
                         state["cols"],
                         state["rows"],
                         state["child_rows"],
                         state["scene"],
+                        frame,
                     )
                 )
+                state["pulse_frame"] = frame
                 return True
             return False
 
@@ -392,6 +412,12 @@ def forward(executable):
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise TimeoutError(f"exceeded {TIMEOUT}-second recording deadline")
+                if (state["pulse_start"] is not None
+                        and state["pulse_frame"] < PULSE_FRAMES
+                        and len(to_terminal) < HIGH_WATER
+                        and int((time.monotonic() - state["pulse_start"])
+                                / PULSE_INTERVAL) > state["pulse_frame"]):
+                    band_if_safe()
                 if resized:
                     resized = False
                     outer = window_size()
@@ -416,7 +442,7 @@ def forward(executable):
                 watch(master, (selectors.EVENT_READ if not child_eof
                                and len(to_terminal) < HIGH_WATER else 0)
                       | (selectors.EVENT_WRITE if to_child and not child_eof else 0))
-                for key, events in selector.select(min(remaining, 0.1)):
+                for key, events in selector.select(min(remaining, PULSE_INTERVAL)):
                     fd = key.fd
                     if events & selectors.EVENT_READ:
                         try:
@@ -437,6 +463,8 @@ def forward(executable):
                                     scene = SCENES.get(byte)
                                     if scene is not None:
                                         state["scene"] = scene
+                                        state["pulse_start"] = None
+                                        state["pulse_frame"] = -1
                                         scene_changed = True
                                     else:
                                         forwarded.append(byte)

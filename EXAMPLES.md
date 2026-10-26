@@ -82,6 +82,8 @@ nix-shell -p vhs ttyd ffmpeg chromium python3 --run 'vhs doc/widgets-demo.tape'
 The recording changes Friday to Monday and cancels, reopens the original
 Friday text, then makes the same edit and saves. Short captions and visible
 key badges explain those two outcomes; no unrelated widgets share the screen.
+Each bold pink key badge brightens smoothly once over one second when its
+caption appears, then stays steady. The animation never blinks or shifts text.
 
 The tape uses [`widgets-demo-pty.py`](doc/widgets-demo-pty.py) only to select
 captions with recording control bytes and paint a three-row band outside the
