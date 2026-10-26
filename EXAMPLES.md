@@ -90,7 +90,8 @@ captions with recording control bytes and paint a three-row band outside the
 application viewport. All editing uses real keys and typed text. Caption
 output never interrupts a partial terminal escape sequence or follows
 application cleanup. The adapter propagates the child's exit status, which
-the tape checks.
+the tape checks. Recording stops before sending the quit key, so restoration
+of the pre-demo terminal stays off camera.
 
 Production-widget tests cover draft reset, save/cancel, input isolation,
 resizing, and shutdown. Direct-PTY checks run the executable without the

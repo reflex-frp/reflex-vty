@@ -79,11 +79,11 @@ Wait+Screen /Note: Ship on Monday/
 Wait+Screen /e: Edit \| q: Quit/
 Sleep 2000ms
 
-# q quits from the background and the adapter restores the terminal.
+# Stop recording before q restores the pre-demo terminal.
 Ctrl+K
 Sleep 500ms
-Type "q"
 Hide
+Type "q"
 Wait+Line /^WIDGETS_DEMO_READY> *$/
 # VHS 0.11 reads Screen from buffer row 0, including old scrollback.
 # Clear the hidden shell screen/scrollback without losing the demo's status.
