@@ -1,24 +1,29 @@
 {-# LANGUAGE PackageImports #-}
 
--- | Interactive Tier A widget showcase: a titled, sectioned
--- background with remappable keys and generated help, a labelled
--- state-preserving grid, an explicitly independent paginator, and a
--- dialog\/popover. All background controls are routed through one
--- 'withKeyMap' at the root so dialog text entry never sees them; @q@
--- exits only where the background layer owns input, and Ctrl+C exits
--- from any state.
+-- | A minimal note editor: one committed note on the background and one
+-- single-field dialog for editing a draft.
+--
+-- @e@ opens the dialog and @q@ quits, but only from the background. The
+-- dialog owns input while it is visible, so @e@, @q@, and every other
+-- printable character are ordinary text there. Ctrl+C quits from any
+-- state. Escape discards the draft; Enter commits it. Every open resets
+-- the draft from the committed note with the cursor at the end.
 module Example.TierA (runDemo, demoWidget) where
 
 import Control.Monad.Fix (MonadFix)
 import Data.Functor (void)
+import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Zipper (fromText)
+import Data.Text.Zipper (end, fromText, textWidth)
 import qualified Graphics.Vty as V
 import Reflex
 
 import "reflex-vty" Reflex.Vty
-
 import "reflex-vty-widgets" Reflex.Vty.Widget
+
+-- | The note shown before the user commits an edit.
+initialNote :: Text
+initialNote = "Ship on Friday"
 
 -- | The executable and regression harness share the same widget.
 runDemo :: IO ()
@@ -38,256 +43,121 @@ demoWidget = do
         V.EvKey (V.KChar 'c') [V.MCtrl] -> Just ()
         _ -> Nothing
   rec requested <- holdDyn False $ leftmost
-        [False <$ _overlay_dismissed outer, True <$ command CmdOpenDialog rootActions]
-      outer <- dialog
-        (def { _overlayConfig_size = pure (52,12)
-             , _overlayConfig_position = pure OverlayCentered
-             , _overlayConfig_backdrop = pure (SolidBackdrop def)
-             , _overlayConfig_childActive = nestedVisible })
-        (pure "Tier A dialog") requested
-        (do
-          rec remapped <- foldDyn (const not) False (command CmdRemap actions)
-              enabled <- foldDyn (const not) True (command CmdToggleEnabled actions)
-              increments <- count (command CmdIncrement actions)
-              let liveMap = rootKeyMap <$> remapped <*> enabled
-              (actions, ()) <- withKeyMap liveMap $ col $ do
-                grout (fixed (pure 1)) $ showcaseTitle
-                grout (fixed (pure 1)) $
-                  statusRow increments ((\r -> if r then 'i' else 'x') <$> remapped) enabled
-                grout (fixed (pure 1)) $ sectionHeading "Shortcuts (root key map)"
-                grout (fixed (pure 7)) $ void $
-                  rowWithSpacing (def { _spacingConfig_gap = pure 2 })
-                    [ grout flex $ keyHelp (KeyMap . take 7 . _keyMap_bindings <$> liveMap)
-                    , grout flex $ keyHelp (KeyMap . drop 7 . _keyMap_bindings <$> liveMap)
-                    ]
-                grout (fixed (pure 1)) $
-                  sectionHeading "Editable fields (F6 columns, +/- gap, F7 padding)"
-                grout flex $ gridSection actions
-                grout (fixed (pure 1)) $ sectionHeading "Paginator (independent of fields)"
-                grout (fixed (pure 1)) $ paginationRow actions
-                grout (fixed (pure 1)) $
-                  text
-                    ( pure
-                        "Tab/Shift+Tab: field focus | m: dialog | q: quit background | Ctrl+C: quit"
-                    )
-          pure actions)
-        dialogBody
-      let rootActions = _overlay_background outer
-          nestedVisible = _overlay_foreground outer
-  pure $ leftmost [ctrlC, command CmdQuit rootActions]
+        [ False <$ _overlay_dismissed outer
+        , True <$ openE
+        , False <$ commitE
+        ]
+      committedD <- holdDyn initialNote commitE
+      let openE = command CmdEdit backgroundActions
+      outer <-
+        dialog
+          ( def
+              { _overlayConfig_size = pure (40, 5)
+              , _overlayConfig_position = pure OverlayCentered
+              , _overlayConfig_backdrop = pure (SolidBackdrop def)
+              }
+          )
+          (pure "Edit note")
+          requested
+          (noteBackground committedD)
+          (noteDialog committedD openE)
+      let backgroundActions = _overlay_background outer
+          commitE = _overlay_foreground outer
+  pure $ leftmost [ctrlC, command CmdQuit backgroundActions]
 
-command :: Reflex t => RootCmd -> Event t RootCmd -> Event t ()
+-- | The background owns @e@ (open) and @q@ (quit).
+data NoteCmd
+  = CmdEdit
+  | CmdQuit
+  deriving (Eq, Show)
+
+noteKeyMap :: KeyMap NoteCmd
+noteKeyMap =
+  KeyMap
+    [ KeyBinding CmdEdit [(V.KChar 'e', [])] "edit" True
+    , KeyBinding CmdQuit [(V.KChar 'q', [])] "quit" True
+    ]
+
+command :: Reflex t => NoteCmd -> Event t NoteCmd -> Event t ()
 command cmd = void . ffilter (== cmd)
 
-dialogBody
-  :: ( Reflex t, MonadFix m, MonadHold t m, MonadNodeId m, PostBuild t m
+-- | Center the committed note and the two background controls vertically
+-- with equal slack above and below, and horizontally in the viewport.
+noteBackground
+  :: ( Reflex t, MonadFix m, MonadHold t m
      , HasInput t m, HasFocusReader t m, HasDisplayRegion t m
-     , HasImageWriter t m, HasTheme t m, HasCursor t m
+     , HasImageWriter t m, HasTheme t m, HasLayout t m
      )
-  => m (Dynamic t Bool)
-dialogBody = do
-  rec requested <- holdDyn False $ leftmost
-        [False <$ _overlay_dismissed popup, True <$ openPopup]
-      popup <- popover
-        (defaultPopoverConfig { _overlayConfig_size = pure (28,4) })
-        anchor requested
-        (withKeyMap
-          (pure (KeyMap [KeyBinding () [(V.KChar 'p', [])] "open popover" True]))
-          dialogForm)
-        (grout flex $ text (pure "Nested popover\nEscape closes this popup"))
-      let (openPopup, anchor) = _overlay_background popup
-  pure (_overlay_visible popup)
+  => Dynamic t Text
+  -> m (Event t NoteCmd)
+noteBackground committedD = do
+  (actions, ()) <-
+    withKeyMap (pure noteKeyMap) $
+      col $ do
+        grout flex blank
+        grout (fixed (pure 1)) $
+          centeredLine (("Note: " <>) <$> current committedD)
+        grout (fixed (pure 1)) $
+          centeredLine (pure "e: Edit | q: Quit")
+        grout flex blank
+  pure actions
 
-dialogForm
+-- | Center one line by padding its left edge. @textWithAlignment@ currently
+-- renders the wrapped text without its alignment offset, so the demo pads
+-- explicitly: floor the slack on the left, leaving the remainder blank on
+-- the right. This centers at any width without touching the text primitive.
+centeredLine
+  :: ( Reflex t, Monad m, HasDisplayRegion t m
+     , HasImageWriter t m, HasTheme t m
+     )
+  => Behavior t Text
+  -> m ()
+centeredLine value = do
+  width <- displayWidth
+  text $
+    ( \w s ->
+        T.replicate (max 0 ((w - textWidth s) `div` 2)) " " <> s
+    )
+      <$> current width
+      <*> value
+
+-- | One mounted, single-field dialog. Escape is the overlay's dismissal
+-- key, so it closes the dialog and discards the draft. Enter commits the
+-- current field value and closes the dialog. Opening resets the draft from
+-- the committed note and puts the cursor at the end.
+noteDialog
   :: ( Reflex t, MonadFix m, MonadHold t m, PostBuild t m
      , HasInput t m, HasFocusReader t m, HasDisplayRegion t m
      , HasImageWriter t m, HasTheme t m, HasFocus t m, HasLayout t m
      )
-  => m (Dynamic t Region)
-dialogForm = col $ do
-  (firstId, _) <- axis (pure Orientation_Row) (fixed (pure 1)) $ do
-    grout (fixed (pure 8)) $ text (pure "First:")
-    tile' flex (textInput def)
-  void $ axis (pure Orientation_Row) (fixed (pure 1)) $ do
-    grout (fixed (pure 8)) $ text (pure "Second:")
-    tile' flex (textInput def)
-  pb <- getPostBuild
-  requestFocus (Refocus_Id firstId <$ pb)
-  anchor <- region (fixed (pure 1))
-  pane anchor (pure True) $ text (pure "p: open popover")
-  grout (fixed (pure 1)) $ text (pure "Tab/Shift+Tab: switch field")
-  grout (fixed (pure 1)) $ text (pure "Escape: close dialog")
-  pure anchor
-
-data RootCmd
-  = CmdIncrement
-  | CmdRemap
-  | CmdToggleEnabled
-  | CmdColumns
-  | CmdGapUp
-  | CmdGapDown
-  | CmdPadding
-  | CmdPagePrev
-  | CmdPageNext
-  | CmdDisplay
-  | CmdTotal
-  | CmdOpenDialog
-  | CmdQuit
-  deriving (Eq, Show)
-
-rootKeyMap :: Bool -> Bool -> KeyMap RootCmd
-rootKeyMap remapped enabled =
-  setBindingEnabled CmdIncrement enabled $ KeyMap
-    [ KeyBinding CmdIncrement [(V.KChar (if remapped then 'i' else 'x'), [])] "increment counter" True
-    , KeyBinding CmdRemap [(V.KChar 'r', [])] "remap increment x/i" True
-    , KeyBinding CmdToggleEnabled [(V.KChar 'd', [])] "enable/disable increment" True
-    , KeyBinding CmdColumns [(V.KFun 6, [])] "toggle columns" True
-    , KeyBinding CmdGapUp [(V.KChar '+', [])] "increase gap" True
-    , KeyBinding CmdGapDown [(V.KChar '-', [])] "decrease gap" True
-    , KeyBinding CmdPadding [(V.KFun 7, [])] "toggle padding" True
-    , KeyBinding CmdPagePrev [(V.KLeft, [V.MCtrl])] "previous page" True
-    , KeyBinding CmdPageNext [(V.KRight, [V.MCtrl])] "next page" True
-    , KeyBinding CmdDisplay [(V.KFun 8, [])] "dots/numeric" True
-    , KeyBinding CmdTotal [(V.KFun 9, [])] "cycle total" True
-    , KeyBinding CmdOpenDialog [(V.KChar 'm', [])] "open dialog" True
-    , KeyBinding CmdQuit [(V.KChar 'q', [])] "quit" True
-    ]
-
--- | Bold left-aligned copy used for the showcase title, section
--- headings, and field labels. Rendering is text-only, so the screen
--- stays usable at the baseline 80x24 viewport.
-boldText
-  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m)
-  => Behavior t T.Text
-  -> m ()
-boldText =
-  richText
-    RichTextConfig
-      { _richTextConfig_attributes = pure (V.withStyle V.defAttr V.bold)
-      }
-
--- | The demo title on the first screen row.
-showcaseTitle
-  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m)
-  => m ()
-showcaseTitle = boldText (pure "Tier A widget showcase")
-
--- | A labelled section heading in the background.
-sectionHeading
-  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m)
-  => T.Text
-  -> m ()
-sectionHeading = boldText . pure
-
-statusRow
-  :: (Reflex t, Monad m, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m)
-  => Dynamic t Int -> Dynamic t Char -> Dynamic t Bool -> m ()
-statusRow countD actionD enabledD =
-  text
-    ( ( \c a e ->
-          T.pack
-            ( "count "
-                ++ show (c :: Int)
-                ++ " | increment key '"
-                ++ [a]
-                ++ "' "
-                ++ (if e then "enabled" else "DISABLED")
-            )
-      )
-        <$> current countD
-        <*> current actionD
-        <*> current enabledD
-    )
-
-gridSection
-  :: ( Reflex t, MonadHold t m, MonadFix m, MonadNodeId m, PostBuild t m
-     , HasInput t m, HasImageWriter t m, HasDisplayRegion t m
-     , HasFocusReader t m, HasTheme t m, HasFocus t m, HasLayout t m
-     )
-  => Event t RootCmd
-  -> m ()
-gridSection cmdE = do
-  let colsE = fforMaybe cmdE $ \case
-        CmdColumns -> Just ()
-        _ -> Nothing
-      gapUpE = fforMaybe cmdE $ \case
-        CmdGapUp -> Just ()
-        _ -> Nothing
-      gapDownE = fforMaybe cmdE $ \case
-        CmdGapDown -> Just ()
-        _ -> Nothing
-      padE = fforMaybe cmdE $ \case
-        CmdPadding -> Just ()
-        _ -> Nothing
-  colsD <- foldDyn (const (\c -> if c == 3 then 2 else 3)) 3 colsE
-  gapD <-
-    foldDyn
-      (\up g -> if up then g + 1 else max 0 (g - 1))
-      1
-      (leftmost [True <$ gapUpE, False <$ gapDownE])
-  padD <- foldDyn (const (\p -> if p == 1 then 0 else 1)) 1 padE
-  let cfg =
-        GridConfig
-          { _gridConfig_columns = colsD
-          , _gridConfig_columnGap = gapD
-          , _gridConfig_rowGap = gapD
-          , _gridConfig_padding = (\p -> Padding p p p p) <$> padD
-          }
-  results <-
-    grid cfg $
-      [ tile' flex $ col $ do
-          grout (fixed (pure 1)) $ boldText (pure ("Field " <> T.pack label))
-          grout (fixed (pure 1)) $
-            axis (pure Orientation_Row) (fixed (pure 1)) $ do
-              grout (fixed (pure 1)) $ text (pure "[")
-              void $ grout flex $
-                textInput def {_textInputConfig_initialValue = fromText (T.pack label)}
-              grout (fixed (pure 1)) $ text (pure "]")
-      | label <- ["A", "B", "C", "D", "E", "F"]
-      ]
-  pb <- getPostBuild
-  case results of
-    (firstId, _) : _ -> requestFocus (Refocus_Id firstId <$ pb)
-    [] -> pure ()
-
-paginationRow
-  :: ( Reflex t, MonadHold t m, MonadFix m
-     , HasInput t m, HasDisplayRegion t m, HasImageWriter t m, HasTheme t m
-     )
-  => Event t RootCmd
-  -> m ()
-paginationRow cmdE = do
-  let dispE = fforMaybe cmdE $ \case
-        CmdDisplay -> Just ()
-        _ -> Nothing
-      totalE = fforMaybe cmdE $ \case
-        CmdTotal -> Just ()
-        _ -> Nothing
-  dispD <- foldDyn (const toggleDisplay) PaginatorDots dispE
-  totalD <- foldDyn (const cycleTotal) 23 totalE
-  -- Apply the pre-frame command through movePage and feed the resulting
-  -- index back as an explicit set request.
-  let navCommandE = fforMaybe cmdE $ \case
-        CmdPagePrev -> Just PagePrevious
-        CmdPageNext -> Just PageNext
-        _ -> Nothing
-  rec stateD <- paginator
-        def
-          { _paginatorConfig_totalItems = totalD
-          , _paginatorConfig_pageSize = pure 5
-          , _paginatorConfig_keys = pure (KeyMap [])
-          , _paginatorConfig_setPage =
-              attachWith (\st cmd -> pageIndex (movePage cmd st)) (current stateD) navCommandE
-          , _paginatorConfig_display = current dispD
-          , _paginatorConfig_initialPage = 0
-          }
-  pure ()
+  => Dynamic t Text
+  -> Event t ()
+  -> m (Event t Text)
+noteDialog committedD openE = do
+  let resetE =
+        attachWith
+          (\committed () -> const (end (fromText committed)))
+          (current committedD)
+          openE
+  i <- input
+  let enterE = () <$ ffilter isEnter i
+  (fieldId, inputValue) <- col $ do
+    (fid, ti) <-
+      axis (pure Orientation_Row) (fixed (pure 1)) $
+        tile' flex $
+          textInput
+            def
+              { _textInputConfig_initialValue = fromText initialNote
+              , _textInputConfig_modify = resetE
+              }
+    grout (fixed (pure 1)) $
+      text (pure "Enter: Save | Escape: Cancel")
+    grout flex blank
+    pure (fid, _textInput_value ti)
+  postBuild <- getPostBuild
+  requestFocus $ Refocus_Id fieldId <$ postBuild
+  pure $ attachWith (\value () -> value) (current inputValue) enterE
   where
-    toggleDisplay d = case d of
-      PaginatorDots -> PaginatorNumeric
-      PaginatorNumeric -> PaginatorDots
-    cycleTotal t = case t of
-      23 -> 3
-      3 -> 0
-      _ -> 23
-
+    isEnter = \case
+      V.EvKey V.KEnter [] -> True
+      _ -> False

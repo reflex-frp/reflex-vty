@@ -1,33 +1,24 @@
-# VHS tape for the Tier A widgets demo.
+# VHS tape for the note demo: open, edit, cancel, reopen, save, quit.
 # Render with: nix-shell -p vhs ttyd ffmpeg chromium python3 --run 'vhs doc/widgets-demo.tape'
 # Docs: https://github.com/charmbracelet/vhs
 #
-# VHS has no caption/text-overlay command (see its command reference and
-# command.go), and its `Type` command does not decode hex escapes. The two
-# recording-only pieces below keep the demo's own bindings untouched:
-#
-# * doc/widgets-demo-pty.py gives the child the same viewport as before and
-#   reserves five outer terminal rows for a live caption band. It paints only
-#   between complete child escape/UTF-8 sequences and never after cleanup.
-# * Transport keys (recording controls, never application bindings):
-#     Ctrl+F -> F6      Ctrl+G -> F7      Ctrl+O -> F8      Ctrl+T -> F9
-#     Ctrl+A count 2    Ctrl+B type in grid    Ctrl+E F6 caption
-#     Ctrl+K F8 caption Ctrl+L next page       Ctrl+N dialog caption
-#     Ctrl+P form fields Ctrl+R popover        Ctrl+U first Escape caption
-#     Ctrl+V second Escape Ctrl+W quit caption
-#   The adapter strips the caption keys; they never reach the demo. The four
-#   F-key mappings replace VHS's missing function-key commands; this tape
-#   needs only Ctrl+F and Ctrl+O.
+# VHS has no caption/text-overlay command, so doc/widgets-demo-pty.py paints a
+# three-row caption band below the demo's viewport. It only repaints between
+# complete child escape/UTF-8 sequences and never after cleanup. Recording
+# control bytes are consumed by the adapter and never reach the demo:
+#   Ctrl+A open caption      Ctrl+B edit caption      Ctrl+D cancel caption
+#   Ctrl+E reopen caption    Ctrl+F retype caption    Ctrl+G save caption
+#   Ctrl+K quit caption
+# Every recorded action uses the demo's real keys and typed text; there are no
+# F-key transport mappings.
 
 Output doc/widgets-demo.gif
 
 Set Shell "bash"
 Set FontFamily "DejaVu Sans Mono"
 Set FontSize 20
-Set Width 1160
-# Five extra rows below the demo's viewport are reserved for captions; VHS
-# resolves the exact terminal grid from the font metrics at render time.
-Set Height 850
+Set Width 900
+Set Height 540
 Set Padding 15
 Set Theme "Dracula"
 Set TypingSpeed 45ms
@@ -40,82 +31,57 @@ Enter
 Wait+Line /^WIDGETS_DEMO_READY> *$/
 Type `nix-shell --run 'python3 doc/widgets-demo-pty.py "$(cabal list-bin widgets-demo)"'`
 Enter
-Wait+Screen /count 0/
+Wait+Screen /Note: Ship on Friday/
 Show
-Sleep 3s
+Sleep 2s
 
-# Root keys stay live while a grid field has focus: x twice increments the
-# counter, and the focused cell is not edited. Hold the result to read both.
-Type "xx"
-Wait+Screen /count 2/
-Ctrl+A
-Sleep 2500ms
+# Open the dialog with the real e binding. The caption band's intro scene
+# already describes this step.
+Type "e"
+Wait+Screen /Edit note/
+Wait+Screen /Enter: Save \| Escape: Cancel/
+Sleep 1200ms
 
-# Typing now goes to the focused cell. The F6 regroup must keep this text.
+# The draft opens at its end: six Backspaces replace Friday with Monday.
 Ctrl+B
-Sleep 300ms
-Type "note"
-Wait+Screen /Anote/
-Sleep 2500ms
+Sleep 800ms
+Backspace@60ms 6
+Type "Monday"
+Wait+Screen /Ship on Monday/
+Sleep 2000ms
 
+# Escape cancels. The committed background text must still say Friday.
+Ctrl+D
+Sleep 500ms
+Escape
+Wait+Screen /Note: Ship on Friday/
+Wait+Screen /e: Edit \| q: Quit/
+Sleep 1800ms
+
+# Reopening starts the draft again from the committed Friday text.
 Ctrl+E
-Sleep 300ms
+Sleep 500ms
+Type "e"
+Wait+Screen /Edit note/
+Wait+Screen /Ship on Friday/
+Sleep 1800ms
+
+# Edit again and save with Enter; the background becomes Monday.
 Ctrl+F
-Wait+Screen /Field C +Field D/
-Sleep 2500ms
+Sleep 800ms
+Backspace@60ms 6
+Type "Monday"
+Wait+Screen /Ship on Monday/
+Ctrl+G
+Sleep 800ms
+Enter
+Wait+Screen /Note: Ship on Monday/
+Wait+Screen /e: Edit \| q: Quit/
+Sleep 2000ms
 
-# The paginator is independent: only its representation and page change.
+# q quits from the background and the adapter restores the terminal.
 Ctrl+K
-Sleep 300ms
-Ctrl+O
-Wait+Screen /1\/5/
-Sleep 2500ms
-
-Ctrl+L
-Sleep 300ms
-Ctrl+Right
-Wait+Screen /2\/5/
-Sleep 2500ms
-
-# The dialog owns printable keys; the background counter stays at 2.
-Ctrl+N
-Sleep 300ms
-Type "m"
-Wait+Screen /Tier A dialog/
-Sleep 2500ms
-
-Ctrl+P
-Sleep 300ms
-Type "first"
-Tab
-Type "second"
-Wait+Screen /Second: second/
-Sleep 2500ms
-
-# The popover is a read-only topmost layer: typing does not reach the form.
-Ctrl+R
-Sleep 300ms
-Type "p"
-Wait+Screen /Nested popover/
-Sleep 2500ms
-
-# First Escape closes only the popover; the dialog remains.
-Ctrl+U
-Sleep 300ms
-Escape
-Wait+Screen /Escape: close dialog/
-Sleep 2500ms
-
-# Second Escape closes the dialog and restores the background.
-Ctrl+V
-Sleep 300ms
-Escape
-Wait+Screen /count 2/
-Sleep 2500ms
-
-# q is background-only; the demo exits and the adapter restores the terminal.
-Ctrl+W
-Sleep 1500ms
+Sleep 500ms
 Type "q"
 Hide
 Wait+Line /^WIDGETS_DEMO_READY> *$/

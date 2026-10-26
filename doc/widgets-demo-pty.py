@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
-"""VHS-only transport for the Tier A demo recording.
+"""VHS-only transport for the note demo recording.
 
-The demo's own bindings are untouched.  This adapter does two recording-only
-jobs:
-
-* It rewrites four transport bytes to the F6-F9 escape sequences (VHS has no
-  native F-key commands, and ``Type`` does not decode hex escapes).
-* It draws a five-row caption band below the child's viewport and selects its
-  scene from eleven more transport bytes.  Those bytes are stripped before
-  the demo sees them; they are recording controls, not application bindings.
-  The child PTY is five rows shorter than the outer terminal, so the band is
-  truly outside the demo's viewport.
+The demo's own bindings are untouched.  This adapter draws a three-row caption
+band below the child's viewport and selects its scene from seven control bytes.
+Those bytes are stripped before the demo sees them; they are recording
+controls, not application bindings.  The child PTY is three rows shorter than
+the outer terminal, so the band is truly outside the demo's viewport.
 
 The band is repainted only between complete child terminal sequences (and
 complete UTF-8 characters).  Read chunks are not sequence boundaries, so the
@@ -18,6 +13,10 @@ adapter tracks escape/OSC/string/UTF-8 state before injecting anything.  A
 scroll region matching the child viewport keeps child scrolling out of the
 band, and no band bytes are emitted after the child leaves the alternate
 screen or exits.
+
+Every recorded action uses the demo's real bindings (``e``, ``Backspace``,
+``Escape``, ``Enter``, ``q``) and ordinary typed text; there is
+no key transport mapping.
 
 Run it as ``widgets-demo-pty.py <widgets-demo-binary>`` inside the VHS tape.
 The child's exit status is propagated.
@@ -37,96 +36,60 @@ import tty
 
 TIMEOUT = 180
 HIGH_WATER = 65536
-BAND_ROWS = 5
-MIN_CHILD_ROWS = 24
+BAND_ROWS = 3
+MIN_CHILD_ROWS = 16
 
-# VHS transport bytes.  These select F-keys without adding bindings to the
-# demo.  Ctrl+C, Tab, Escape, paste, and ordinary text pass through unchanged.
-KEYS = {
-    0x06: b"\x1b[17~",  # Ctrl+F -> F6
-    0x07: b"\x1b[18~",  # Ctrl+G -> F7
-    0x0F: b"\x1b[19~",  # Ctrl+O -> F8
-    0x14: b"\x1b[20~",  # Ctrl+T -> F9
-}
-
-# Caption scenes.  The tape sends these control bytes deliberately at each
-# milestone; the adapter consumes them so neither the demo nor its text
-# fields ever see them.
-SCENES = {
-    0x01: (  # Ctrl+A: after the counter reaches 2
-        "x x",
-        "Count 2 - the grid field is unchanged",
-        "Root bindings fire while a grid field has focus: x increments the counter.",
-        "The focused cell still holds its own text; counter and grid are independent.",
-    ),
-    0x02: (  # Ctrl+B: before typing into the focused grid cell
-        "type",
-        "Edit the focused grid cell",
-        "Typed characters go to the cell, not to the counter, help, or paginator.",
-        "This text must survive regrouping the grid into two columns.",
-    ),
-    0x05: (  # Ctrl+E: before F6
-        "F6",
-        "Regroup the grid to two columns",
-        "Cell text and focus are preserved through the layout change.",
-        "The paginator is a separate widget and is not involved in this regroup.",
-    ),
-    0x0B: (  # Ctrl+K: before F8
-        "F8",
-        "Paginator: switch to numeric mode",
-        "This paginator is independent of the grid; only its display mode changes.",
-        "23 items at five per page means five pages.",
-    ),
-    0x0C: (  # Ctrl+L: before Ctrl+Right
-        "Ctrl+\u2192",
-        "Next page",
-        "Paginator navigation is handled by the paginator widget, not the grid.",
-        "Grid text and focus stay exactly as they were.",
-    ),
-    0x0E: (  # Ctrl+N: before m
-        "m",
-        "Open the modal dialog",
-        "The dialog owns printable keys; background bindings and q no longer fire.",
-        "Ctrl+C still quits from every layer.",
-    ),
-    0x10: (  # Ctrl+P: before typing in the form
-        "type first \u00b7 Tab \u00b7 type second",
-        "Edit both form fields",
-        "Typing goes to the focused field; Tab moves focus between First and Second.",
-        "The counter, map, paginator, and grid stay unchanged behind the dialog.",
-    ),
-    0x12: (  # Ctrl+R: before p
-        "p",
-        "Open the nested popover",
-        "The popover is a child overlay above the form and deliberately ignores typing.",
-        "Only Escape or an outside left click dismisses this topmost layer.",
-    ),
-    0x15: (  # Ctrl+U: before the first Escape
-        "Esc",
-        "Close only the popover",
-        "The first Escape removes the topmost layer and returns focus to the form.",
-        "The dialog remains open, so background input is still blocked.",
-    ),
-    0x16: (  # Ctrl+V: before the second Escape
-        "Esc",
-        "Close the dialog",
-        "The second Escape dismisses the dialog and restores the background layer.",
-        "Grid text and focus come back exactly as they were.",
-    ),
-    0x17: (  # Ctrl+W: before q
-        "q",
-        "Quit from the background",
-        "q quits here; inside the dialog it is ordinary text.",
-        "The demo exits cleanly and the terminal is restored.",
-    ),
-}
-
-INTRO_SCENE = (
-    "x x",
-    "Increment the counter without editing the grid",
-    "Press x twice: the root key map consumes it before the focused field can.",
-    "Root controls stay live while the grid owns focus; text goes only to the field.",
+# Caption scenes, keyed by the control byte the tape sends at each milestone.
+# The adapter consumes these bytes, so neither the demo nor its text field
+# ever sees them.  Every other byte, including Escape sequences and ordinary
+# text, passes through unchanged.
+SCENE_OPEN = (
+    "e",
+    "Open the note",
+    "The saved note appears in a small dialog.",
 )
+SCENE_EDIT = (
+    "Backspace \u00d76 \u00b7 Monday",
+    "Change Friday to Monday",
+    "Only the draft changes; the saved note is untouched.",
+)
+SCENE_CANCEL = (
+    "Escape",
+    "Cancel without saving",
+    "The committed note still says Friday.",
+)
+SCENE_REOPEN = (
+    "e",
+    "Reopen the note",
+    "The draft starts again from the saved Friday text.",
+)
+SCENE_RETYPE = (
+    "Backspace \u00d76 \u00b7 Monday",
+    "Type the new text",
+    "Change the draft to Monday, then save it with Enter."
+)
+SCENE_SAVE = (
+    "Enter",
+    "Save the note",
+    "The background now shows the committed Monday text.",
+)
+SCENE_QUIT = (
+    "q",
+    "Quit",
+    "q closes the demo and restores the terminal.",
+)
+
+SCENES = {
+    0x01: SCENE_OPEN,    # Ctrl+A: before opening the dialog
+    0x02: SCENE_EDIT,    # Ctrl+B: before writing the Monday draft
+    0x04: SCENE_CANCEL,  # Ctrl+D: before Escape
+    0x05: SCENE_REOPEN,  # Ctrl+E: before reopening
+    0x06: SCENE_RETYPE,  # Ctrl+F: before writing Monday again
+    0x07: SCENE_SAVE,    # Ctrl+G: before Enter
+    0x0B: SCENE_QUIT,    # Ctrl+K: before q
+}
+
+INTRO_SCENE = SCENE_OPEN
 
 # Dracula colours from VHS's theme file: background #1e1f29, foreground
 # #f8f8f2, magenta #ff79c6, plus the canonical comment colour for the rule.
@@ -179,12 +142,12 @@ def styled_line(row, cols, segments):
 
 
 def render_band(cols, rows, child_rows, scene):
-    """Five rows below the child viewport: rule, gap, badge, two captions.
+    """Three rows below the child viewport: rule, badge + title, explanation.
 
     The scroll region is set while the cursor is saved, so child scrolling can
     never move text into the band and the app's cursor is restored unchanged.
     """
-    badge, title, first, second = scene
+    badge, title, explanation = scene
     top = rows - BAND_ROWS + 1
     margin = b"\x1b[1;" + str(max(1, child_rows)).encode("ascii") + b"r"
     return b"".join(
@@ -192,14 +155,12 @@ def render_band(cols, rows, child_rows, scene):
             SAVE_CURSOR,
             margin,
             styled_line(top, cols, [(DIM, "\u2500" * cols)]),
-            styled_line(top + 1, cols, []),
             styled_line(
-                top + 2,
+                top + 1,
                 cols,
                 [(BG, "  "), (BADGE, f" {badge} "), (TEXT, f"  {title}")],
             ),
-            styled_line(top + 3, cols, [(BG, "  "), (TEXT, first)]),
-            styled_line(top + 4, cols, [(BG, "  "), (SECONDARY, second)]),
+            styled_line(top + 2, cols, [(BG, "  "), (SECONDARY, explanation)]),
             # Leave a defined pen state for terminals whose DECRC restores only
             # the cursor, and cancel any pending autowrap from the last row.
             b"\x1b[0m",
@@ -468,9 +429,9 @@ def forward(executable):
                             chunk = b""
                         if fd == 0:
                             if chunk:
-                                # Build complete sequences before forwarding, never
-                                # send a separately timed Escape as a function key.
-                                shortened = bytearray()
+                                # Caption controls are stripped; every other byte
+                                # (including complete Escape sequences) is forwarded.
+                                forwarded = bytearray()
                                 scene_changed = False
                                 for byte in chunk:
                                     scene = SCENES.get(byte)
@@ -478,11 +439,9 @@ def forward(executable):
                                         state["scene"] = scene
                                         scene_changed = True
                                     else:
-                                        shortened.extend(
-                                            KEYS.get(byte, bytes((byte,)))
-                                        )
-                                if shortened:
-                                    to_child.extend(shortened)
+                                        forwarded.append(byte)
+                                if forwarded:
+                                    to_child.extend(forwarded)
                                 if scene_changed:
                                     band_if_safe()
                             else:

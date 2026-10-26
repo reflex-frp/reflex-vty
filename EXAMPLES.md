@@ -51,28 +51,26 @@ policy, and moving away restores it. ([source](src-bin/Example/CanvasDemo.hs))
 
 <img src="https://vhs.charm.sh/vhs-4Pb8inOYo4dWwFvmYXf6ib.gif" alt="canvas board demo: a checkerboard with a wide glyph, a combining-mark glyph, an ellipsis-clipped glyph at the right edge, and a movable highlight overlay" width="560">
 
-## Tier A widgets
+## One note, one dialog
 
-The companion package has a separate executable:
+The companion package's small note editor runs with:
 
 ```bash
 nix-shell --run 'cabal run widgets-demo'
 ```
 
-[`Example.TierA`](reflex-vty-widgets/app/Example/TierA.hs) combines live key-map
-help, six labeled, bracketed grid fields, an independent paginator, and a
-two-field dialog with a nested read-only popover. The paginator demonstrates
-page state; it does not paginate the fields. The displayed bindings are authoritative: `r` remaps
-increment from `x` to `i`, and `d` disables it (the disabled key then edits the
-focused field). F6 changes columns, `+`/`-` change spacing, F7 changes padding,
-F8 changes the page indicator, and F9 cycles the item total. Ctrl+Left/Right
-change pages; Tab/Shift+Tab move between fields.
+[`Example.TierA`](reflex-vty-widgets/app/Example/TierA.hs) demonstrates one
+composition: a text field inside a dialog, with explicit save and cancel.
+The screen starts with `Note: Ship on Friday` and just two controls:
+`e` opens the editor; `q` quits.
 
-`m` opens the dialog; inside it, `p` opens the popover. Escape closes only the
-top active overlay. Form contents and focus survive dismissal and reopening.
-`q` quits only from the background; Ctrl+C quits from any layer.
+In the dialog, Enter saves the draft and Escape discards it. Reopening always
+starts from the saved note, not a canceled draft. Printable keys—including
+`e` and `q`—edit the draft instead of triggering background commands.
+Ctrl+C quits from either screen. Notes live only for the current process;
+this example does not write a file.
 
-![Tier A widgets demo](doc/widgets-demo.gif)
+![Editing, canceling, and saving a single note](doc/widgets-demo.gif)
 
 To regenerate the recording, prebuild the executable and run the tape:
 
@@ -81,16 +79,17 @@ nix-shell --run 'cabal build widgets-demo'
 nix-shell -p vhs ttyd ffmpeg chromium python3 --run 'vhs doc/widgets-demo.tape'
 ```
 
-The guided recording shows one change at a time, with longer reading pauses
-and a visible key badge and explanation below the application. It demonstrates
-typing, preserving field contents across reflow, independent pagination, and
-closing the popup and dialog separately, rather than racing through every control.
+The recording changes Friday to Monday and cancels, reopens the original
+Friday text, then makes the same edit and saves. Short captions and visible
+key badges explain those two outcomes; no unrelated widgets share the screen.
 
-The tape alone uses [`widgets-demo-pty.py`](doc/widgets-demo-pty.py) to translate
-four VHS transport keys into complete F6–F9 terminal sequences and select
-captions with recording-only control bytes. The adapter reserves five terminal
-rows outside the child's viewport for the caption band; it never inserts
-captions inside a partial terminal escape sequence or after application cleanup.
-It does not add application bindings. Production-widget harness scenarios cover the demo;
-direct-PTY acceptance runs the binary without that adapter to verify input,
-resizing, exit status, and terminal restoration independently of the GIF.
+The tape uses [`widgets-demo-pty.py`](doc/widgets-demo-pty.py) only to select
+captions with recording control bytes and paint a three-row band outside the
+application viewport. All editing uses real keys and typed text. Caption
+output never interrupts a partial terminal escape sequence or follows
+application cleanup. The adapter propagates the child's exit status, which
+the tape checks.
+
+Production-widget tests cover draft reset, save/cancel, input isolation,
+resizing, and shutdown. Direct-PTY checks run the executable without the
+recording adapter to verify the workflow and terminal restoration.
