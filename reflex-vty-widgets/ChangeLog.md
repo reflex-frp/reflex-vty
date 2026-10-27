@@ -10,3 +10,4 @@
 - Replace placeholder overlay checks with recording-terminal scenarios and add real paginator, nested-grid, and production-demo regressions. Verify terminal input, resizing, quit routing, and restoration separately in direct PTY sessions.
 - Add a recording-only PTY caption adapter with terminal restoration and child-status propagation; the tape checks normal exit status.
 - Focus the recording on editing Friday to Monday, canceling, reopening the original, and then saving. Use a smaller canvas, short captions, and visible real editing keys; remove unused function-key transport mappings and unrelated showcase scenes.
+- Add a keyed selectable list with keyboard and mouse selection, key-identity-preserving updates, and viewport following. Add an articles demo that opens a full-screen reading view and marks read articles. Parameterize the recording adapter with JSON scene files for the second demo.

@@ -29,7 +29,7 @@ Hide
 Type `PS1='WIDGETS_DEMO_READY> '`
 Enter
 Wait+Line /^WIDGETS_DEMO_READY> *$/
-Type `nix-shell --run 'python3 doc/widgets-demo-pty.py "$(cabal list-bin widgets-demo)"'`
+Type `nix-shell --run 'python3 doc/widgets-demo-pty.py doc/widgets-demo-scenes.json "$(cabal list-bin widgets-demo)"'`
 Enter
 Wait+Screen /Note: Ship on Friday/
 Show

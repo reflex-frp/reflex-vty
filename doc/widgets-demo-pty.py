@@ -2,7 +2,8 @@
 """VHS-only transport for the note demo recording.
 
 The demo's own bindings are untouched.  This adapter draws a three-row caption
-band below the child's viewport and selects its scene from seven control bytes.
+band below the child's viewport and selects its scene from the control bytes
+listed in a JSON scene file.
 Those bytes are stripped before the demo sees them; they are recording
 controls, not application bindings.  The child PTY is three rows shorter than
 the outer terminal, so the band is truly outside the demo's viewport.
@@ -18,12 +19,13 @@ Every recorded action uses the demo's real bindings (``e``, ``Backspace``,
 ``Escape``, ``Enter``, ``q``) and ordinary typed text; there is
 no key transport mapping.
 
-Run it as ``widgets-demo-pty.py <widgets-demo-binary>`` inside the VHS tape.
+Run it as ``widgets-demo-pty.py <scenes.json> <binary>`` inside the VHS tape.
 The child's exit status is propagated.
 """
 
 import errno
 import fcntl
+import json
 import math
 import os
 import pty
@@ -40,57 +42,80 @@ HIGH_WATER = 65536
 BAND_ROWS = 3
 MIN_CHILD_ROWS = 16
 
-# Caption scenes, keyed by the control byte the tape sends at each milestone.
-# The adapter consumes these bytes, so neither the demo nor its text field
-# ever sees them.  Every other byte, including Escape sequences and ordinary
-# text, passes through unchanged.
-SCENE_OPEN = (
-    "e",
-    "Open the note",
-    "The saved note appears in a small dialog.",
-)
-SCENE_EDIT = (
-    "Backspace \u00d76 \u00b7 Monday",
-    "Change Friday to Monday",
-    "Only the draft changes; the saved note is untouched.",
-)
-SCENE_CANCEL = (
-    "Escape",
-    "Cancel without saving",
-    "The committed note still says Friday.",
-)
-SCENE_REOPEN = (
-    "e",
-    "Reopen the note",
-    "The draft starts again from the saved Friday text.",
-)
-SCENE_RETYPE = (
-    "Backspace \u00d76 \u00b7 Monday",
-    "Type the new text",
-    "Change the draft to Monday, then save it with Enter."
-)
-SCENE_SAVE = (
-    "Enter",
-    "Save the note",
-    "The background now shows the committed Monday text.",
-)
-SCENE_QUIT = (
-    "q",
-    "Quit",
-    "q closes the demo and restores the terminal.",
-)
+class SceneError(Exception):
+    """The caption scene file is missing, unreadable, or malformed."""
 
-SCENES = {
-    0x01: SCENE_OPEN,    # Ctrl+A: before opening the dialog
-    0x02: SCENE_EDIT,    # Ctrl+B: before writing the Monday draft
-    0x04: SCENE_CANCEL,  # Ctrl+D: before Escape
-    0x05: SCENE_REOPEN,  # Ctrl+E: before reopening
-    0x06: SCENE_RETYPE,  # Ctrl+F: before writing Monday again
-    0x07: SCENE_SAVE,    # Ctrl+G: before Enter
-    0x0B: SCENE_QUIT,    # Ctrl+K: before q
-}
 
-INTRO_SCENE = SCENE_OPEN
+def parse_scene(value, where):
+    """Validate one [badge, title, explanation] triple."""
+    if not isinstance(value, list) or len(value) != 3:
+        raise SceneError(f"{where}: expected [badge, title, explanation]")
+    if not all(isinstance(part, str) for part in value):
+        raise SceneError(f"{where}: badge, title, and explanation must be strings")
+    badge, title, explanation = value
+    if not badge.strip():
+        raise SceneError(f"{where}: badge must not be empty")
+    if not title.strip():
+        raise SceneError(f"{where}: title must not be empty")
+    return (badge, title, explanation)
+
+
+def control_byte(path, name):
+    """Parse a "0xNN" key and reject bytes the demo itself needs."""
+    if (
+        not isinstance(name, str)
+        or len(name) != 4
+        or name[:2].lower() != "0x"
+        or any(c not in "0123456789abcdefABCDEF" for c in name[2:])
+    ):
+        raise SceneError(
+            f"{path}: scenes key {name!r} is not a two-digit hexadecimal "
+            'control byte such as "0x01"'
+        )
+    code = int(name[2:], 16)
+    if not (0x01 <= code <= 0x1F) or code in (0x09, 0x0A, 0x0D, 0x1B):
+        raise SceneError(
+            f"{path}: scenes key {name!r} is not a usable control byte "
+            "(expected 0x01-0x1F except Tab, Enter, and Escape)"
+        )
+    return code
+
+
+def load_scenes(path):
+    """Read and validate the caption scene file."""
+    try:
+        with open(path, "rb") as handle:
+            raw = handle.read(1 << 20)
+    except OSError as exc:
+        raise SceneError(f"{path}: {exc.strerror or exc}") from None
+    try:
+        document = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SceneError(f"{path}: invalid JSON: {exc}") from None
+    if not isinstance(document, dict):
+        raise SceneError(f'{path}: expected an object with "intro" and "scenes"')
+    unexpected = sorted(set(document) - {"intro", "scenes"})
+    if unexpected:
+        raise SceneError(f"{path}: unexpected top-level key {unexpected[0]!r}")
+    if "intro" not in document:
+        raise SceneError(f'{path}: missing "intro" scene')
+    if "scenes" not in document:
+        raise SceneError(f'{path}: missing "scenes" object')
+    intro = parse_scene(document["intro"], f"{path}: intro")
+    entries = document["scenes"]
+    if not isinstance(entries, dict):
+        raise SceneError(f'{path}: "scenes" must be an object keyed by control byte')
+    scenes = {}
+    names = {}
+    for name, value in entries.items():
+        code = control_byte(path, name)
+        if code in scenes:
+            raise SceneError(
+                f"{path}: scenes key {name!r} duplicates {names[code]!r}"
+            )
+        scenes[code] = parse_scene(value, f"{path}: scenes[{name!r}]")
+        names[code] = name
+    return intro, scenes
 
 # Dracula colours from VHS's theme file: background #1e1f29, foreground
 # #f8f8f2, magenta #ff79c6, plus the canonical comment colour for the rule.
@@ -315,7 +340,7 @@ def terminate(pid):
     os.waitpid(pid, 0)
 
 
-def forward(executable):
+def forward(executable, intro_scene, scenes):
     original_termios = termios.tcgetattr(0)
     outer = window_size()
     outer_rows, outer_cols = dimensions(outer)
@@ -350,7 +375,7 @@ def forward(executable):
         to_terminal = bytearray()
         child_stream = ChildStream()
         state = {
-            "scene": INTRO_SCENE,
+            "scene": intro_scene,
             "cols": outer_cols,
             "rows": outer_rows,
             "child_rows": outer_rows - band_rows,
@@ -460,7 +485,7 @@ def forward(executable):
                                 forwarded = bytearray()
                                 scene_changed = False
                                 for byte in chunk:
-                                    scene = SCENES.get(byte)
+                                    scene = scenes.get(byte)
                                     if scene is not None:
                                         state["scene"] = scene
                                         state["pulse_start"] = None
@@ -508,15 +533,23 @@ def forward(executable):
 
 
 def main():
-    if len(sys.argv) != 2:
-        print("usage: widgets-demo-pty.py <widgets-demo-binary>", file=sys.stderr)
+    if len(sys.argv) != 3:
+        print(
+            "usage: widgets-demo-pty.py <scenes.json> <binary>",
+            file=sys.stderr,
+        )
         return 2
-    executable = os.path.abspath(sys.argv[1])
+    try:
+        intro_scene, scenes = load_scenes(sys.argv[1])
+    except SceneError as exc:
+        print(f"widgets-demo-pty: {exc}", file=sys.stderr)
+        return 2
+    executable = os.path.abspath(sys.argv[2])
     if not os.path.isfile(executable) or not os.access(executable, os.X_OK):
         print("widgets-demo-pty: expected an executable file", file=sys.stderr)
         return 2
     try:
-        return forward(executable)
+        return forward(executable, intro_scene, scenes)
     except (OSError, TimeoutError) as exc:
         print(f"widgets-demo-pty: {exc}", file=sys.stderr)
         return 1

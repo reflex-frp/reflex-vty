@@ -1,0 +1,12 @@
+{
+  "intro": ["e", "Open the note", "The saved note appears in a small dialog."],
+  "scenes": {
+    "0x01": ["e", "Open the note", "The saved note appears in a small dialog."],
+    "0x02": ["Backspace ×6 · Monday", "Change Friday to Monday", "Only the draft changes; the saved note is untouched."],
+    "0x04": ["Escape", "Cancel without saving", "The committed note still says Friday."],
+    "0x05": ["e", "Reopen the note", "The draft starts again from the saved Friday text."],
+    "0x06": ["Backspace ×6 · Monday", "Type the new text", "Change the draft to Monday, then save it with Enter."],
+    "0x07": ["Enter", "Save the note", "The background now shows the committed Monday text."],
+    "0x0B": ["q", "Quit", "q closes the demo and restores the terminal."]
+  }
+}

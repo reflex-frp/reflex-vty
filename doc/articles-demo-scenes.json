@@ -1,0 +1,9 @@
+{
+  "intro": ["Down", "Move the selection", "Up and Down change the highlighted article; nothing opens yet."],
+  "scenes": {
+    "0x01": ["Enter", "Read the selected article", "Enter opens whichever article is highlighted."],
+    "0x02": ["Escape", "Return to the list", "The circle turns hollow, marking the article as read."],
+    "0x04": ["Down · Enter", "Read another article", "The selection survived the round trip; one Down moves it on."],
+    "0x05": ["q", "Quit from the list", "q quits here; the reading view ignores it."]
+  }
+}

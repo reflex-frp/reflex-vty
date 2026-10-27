@@ -9,6 +9,7 @@ module Reflex.Vty.Widget
   ( module Reflex.Vty.Widget.Grid
   , module Reflex.Vty.Widget.Key
   , module Reflex.Vty.Widget.Layout.Spacing
+  , module Reflex.Vty.Widget.List
   , module Reflex.Vty.Widget.Overlay
   , module Reflex.Vty.Widget.Paginator
   ) where
@@ -16,5 +17,6 @@ module Reflex.Vty.Widget
 import Reflex.Vty.Widget.Grid
 import Reflex.Vty.Widget.Key
 import Reflex.Vty.Widget.Layout.Spacing
+import Reflex.Vty.Widget.List
 import Reflex.Vty.Widget.Overlay
 import Reflex.Vty.Widget.Paginator
