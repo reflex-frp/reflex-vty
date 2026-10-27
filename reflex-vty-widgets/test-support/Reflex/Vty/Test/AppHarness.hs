@@ -1,4 +1,5 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE PackageImports #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -100,7 +101,7 @@ import Control.Monad.NodeId (MonadNodeId)
 import Reflex.Vty.Host (MonadVtyApp, VtyApp, VtyAppConfig)
 import qualified Reflex.Vty.Host as Host
 import Reflex.Vty.Test.Snapshot (Grid, pictureToGrid)
-import Reflex.Vty.Widget
+import "reflex-vty" Reflex.Vty.Widget
 
 -- | Exactly the constraint set 'Reflex.Vty.Widget.mainWidgetWithHandle'
 -- accepts for its child widget. This is a constraint alias only: the

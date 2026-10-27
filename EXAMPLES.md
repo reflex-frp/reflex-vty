@@ -50,3 +50,49 @@ highlight overlay; placing it over a glyph clips or covers it per the same
 policy, and moving away restores it. ([source](src-bin/Example/CanvasDemo.hs))
 
 <img src="https://vhs.charm.sh/vhs-4Pb8inOYo4dWwFvmYXf6ib.gif" alt="canvas board demo: a checkerboard with a wide glyph, a combining-mark glyph, an ellipsis-clipped glyph at the right edge, and a movable highlight overlay" width="560">
+
+## One note, one dialog
+
+The companion package's small note editor runs with:
+
+```bash
+nix-shell --run 'cabal run widgets-demo'
+```
+
+[`Example.TierA`](reflex-vty-widgets/app/Example/TierA.hs) demonstrates one
+composition: a text field inside a dialog, with explicit save and cancel.
+The screen starts with `Note: Ship on Friday` and just two controls:
+`e` opens the editor; `q` quits.
+
+In the dialog, Enter saves the draft and Escape discards it. Reopening always
+starts from the saved note, not a canceled draft. Printable keys—including
+`e` and `q`—edit the draft instead of triggering background commands.
+Ctrl+C quits from either screen. Notes live only for the current process;
+this example does not write a file.
+
+![Editing, canceling, and saving a single note](doc/widgets-demo.gif)
+
+To regenerate the recording, prebuild the executable and run the tape:
+
+```bash
+nix-shell --run 'cabal build widgets-demo'
+nix-shell -p vhs ttyd ffmpeg chromium python3 --run 'vhs doc/widgets-demo.tape'
+```
+
+The recording changes Friday to Monday and cancels, reopens the original
+Friday text, then makes the same edit and saves. Short captions and visible
+key badges explain those two outcomes; no unrelated widgets share the screen.
+Each bold pink key badge brightens smoothly once over one second when its
+caption appears, then stays steady. The animation never blinks or shifts text.
+
+The tape uses [`widgets-demo-pty.py`](doc/widgets-demo-pty.py) only to select
+captions with recording control bytes and paint a three-row band outside the
+application viewport. All editing uses real keys and typed text. Caption
+output never interrupts a partial terminal escape sequence or follows
+application cleanup. The adapter propagates the child's exit status, which
+the tape checks. Recording stops before sending the quit key, so restoration
+of the pre-demo terminal stays off camera.
+
+Production-widget tests cover draft reset, save/cancel, input isolation,
+resizing, and shutdown. Direct-PTY checks run the executable without the
+recording adapter to verify the workflow and terminal restoration.
